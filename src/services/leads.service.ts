@@ -2,6 +2,67 @@ import { supabase, veltzy } from '@/lib/supabase'
 import type { Lead, LeadWithDetails, CreateLeadInput, UpdateLeadInput } from '@/types/database'
 import { normalizePhoneBR } from '@/lib/phone'
 
+/**
+ * Resolve whatsapp_instance_name para leads criados manualmente ou importados.
+ * So roda quando a empresa usa Evolution API.
+ *
+ * Cadeia de fallback:
+ * 1. default_whatsapp_instance do vendedor atribuido (assigned_to)
+ * 2. sdr_instance_name do pipeline
+ * 3. primeira instancia com status 'connected' da empresa
+ * 4. null (empresa sem Evolution / sem instancias)
+ */
+export async function resolveWhatsAppInstance(
+  companyId: string,
+  assignedTo?: string | null,
+  pipelineId?: string | null,
+): Promise<string | null> {
+  // Verificar se empresa usa Evolution
+  const { data: company } = await supabase
+    .from('companies')
+    .select('active_whatsapp_provider')
+    .eq('id', companyId)
+    .single()
+
+  if (company?.active_whatsapp_provider !== 'evolution') return null
+
+  // 1. default_whatsapp_instance do vendedor atribuido
+  if (assignedTo) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('default_whatsapp_instance')
+      .eq('id', assignedTo)
+      .single()
+
+    if (profile?.default_whatsapp_instance) return profile.default_whatsapp_instance
+  }
+
+  // 2. sdr_instance_name do pipeline
+  if (pipelineId) {
+    const { data: pipeline } = await veltzy()
+      .from('pipelines')
+      .select('sdr_instance_name')
+      .eq('id', pipelineId)
+      .single()
+
+    if (pipeline?.sdr_instance_name) return pipeline.sdr_instance_name
+  }
+
+  // 3. primeira instancia connected da empresa
+  const { data: instances } = await supabase
+    .from('evolution_instances')
+    .select('instance_name')
+    .eq('company_id', companyId)
+    .eq('status', 'connected')
+    .order('created_at', { ascending: true })
+    .limit(1)
+
+  if (instances && instances.length > 0) return instances[0].instance_name
+
+  // 4. nenhuma instancia disponivel
+  return null
+}
+
 const LEAD_WITH_DETAILS_SELECT = `
   *,
   lead_sources:source_id(*),
@@ -85,6 +146,15 @@ export const createLead = async (companyId: string, input: CreateLeadInput): Pro
 
   const normalized = { ...input, company_id: companyId }
   if (normalized.phone) normalized.phone = normalizePhoneBR(normalized.phone)
+
+  // Resolver whatsapp_instance_name se nao foi fornecido
+  if (!normalized.whatsapp_instance_name) {
+    normalized.whatsapp_instance_name = await resolveWhatsAppInstance(
+      companyId,
+      normalized.assigned_to,
+      normalized.pipeline_id,
+    )
+  }
 
   const { data, error } = await veltzy()
     .from('leads')

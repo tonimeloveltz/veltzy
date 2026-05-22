@@ -221,6 +221,7 @@ export interface CreateLeadInput {
   observations?: string
   assigned_to?: string
   tags?: string[]
+  whatsapp_instance_name?: string | null
 }
 
 export interface UpdateLeadInput {
