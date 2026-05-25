@@ -2,7 +2,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/stores/auth.store'
 import * as agentProfileService from '@/services/agent-profile.service'
-import type { AgentProfile } from '@/types/sdr-v2'
 
 export const useAgentProfile = (pipelineId: string | undefined) => {
   return useQuery({

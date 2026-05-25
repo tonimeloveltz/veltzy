@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useAuthStore } from '@/stores/auth.store'
 import { usePipelines } from '@/hooks/use-pipelines'
 import { useAgentProfile } from '@/hooks/use-agent-profile'
 import { SdrV2Dashboard } from '@/components/sdr-v2/dashboard/SdrV2Dashboard'
@@ -14,11 +13,10 @@ import { useToggleAgentProfileActive } from '@/hooks/use-agent-profile'
 import type { AgentProfile } from '@/types/sdr-v2'
 
 const SdrIaPage = () => {
-  const company = useAuthStore((s) => s.company)
   const { data: pipelines } = usePipelines()
   const [selectedPipelineId, setSelectedPipelineId] = useState<string | undefined>()
   const [showWizard, setShowWizard] = useState(false)
-  const [showSandbox, setShowSandbox] = useState(false)
+  const [activeTab, setActiveTab] = useState('dashboard')
   const toggleActive = useToggleAgentProfileActive()
 
   const pipelineId = selectedPipelineId ?? pipelines?.[0]?.id
@@ -42,7 +40,7 @@ const SdrIaPage = () => {
 
   return (
     <div className="container max-w-7xl space-y-6 py-6">
-      <Tabs defaultValue="dashboard">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
           <TabsTrigger value="config">Configuracao</TabsTrigger>
@@ -81,7 +79,7 @@ const SdrIaPage = () => {
                   <Button variant="outline" size="sm" onClick={() => setShowWizard(true)} className="gap-1">
                     <Settings className="h-3.5 w-3.5" /> Editar
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => setShowSandbox(true)} className="gap-1">
+                  <Button variant="outline" size="sm" onClick={() => setActiveTab('sandbox')} className="gap-1">
                     <Play className="h-3.5 w-3.5" /> Testar
                   </Button>
                 </div>

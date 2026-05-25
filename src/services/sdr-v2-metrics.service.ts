@@ -86,7 +86,6 @@ export async function getSdrV2Metrics(filters: SdrV2MetricsFilters): Promise<Sdr
   }
 
   // Qualify count (leads com ai_score >= 60 que tiveram conversa no periodo)
-  const leadIds = [...new Set(convs.map((c) => c.id))]
   let qualifiedCount = 0
   if (conversationIds.length > 0) {
     // Buscar lead_ids das conversas

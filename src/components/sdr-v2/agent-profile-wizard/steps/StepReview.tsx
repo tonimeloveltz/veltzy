@@ -1,7 +1,7 @@
 import { useFormContext } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { Loader2, Save, Play } from 'lucide-react'
+import { Loader2, Save } from 'lucide-react'
 import type { WizardFormData } from '../AgentProfileWizard'
 
 const TONE_LABELS: Record<string, string> = {

@@ -6,7 +6,7 @@ import { useSdrV2Metrics, useSdrV2Conversations } from '@/hooks/use-sdr-v2-metri
 import { usePipelines } from '@/hooks/use-pipelines'
 import { USD_TO_BRL } from '@/types/sdr-v2'
 import {
-  MessageSquare, Users, Target, ArrowUpRight,
+  MessageSquare, Target, ArrowUpRight,
   DollarSign, Zap, Hash, Clock,
 } from 'lucide-react'
 
