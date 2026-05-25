@@ -11,6 +11,7 @@ import {
   LogOut,
   Users,
   User,
+  Zap,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/use-auth'
@@ -69,6 +70,7 @@ const AppSidebar = () => {
     { label: 'Inbox', href: '/inbox', icon: MessageSquare },
     { label: 'Tarefas', href: '/tarefas', icon: ListTodo },
     { label: 'Negócios', href: '/deals', icon: Handshake },
+    { label: 'SDR IA', href: '/sdr-ia', icon: Zap, visible: canAccessAdmin || isManager },
     { label: 'Gestão', href: '/gestao', icon: Users, visible: canAccessGestao },
     { label: 'Admin', href: '/admin', icon: Shield, visible: canAccessAdmin },
     { label: 'Super Admin', href: '/super-admin', icon: Crown, visible: isSuperAdmin },

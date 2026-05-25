@@ -113,18 +113,51 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
   const fnHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${params.supabaseKey}` }
 
   try {
-    const { data: leadFull } = await supabase.from('leads').select('is_ai_active').eq('id', lead.id).single()
+    const { data: leadFull } = await supabase
+      .from('leads')
+      .select('is_ai_active, pipeline_id')
+      .eq('id', lead.id)
+      .single()
+
     if (leadFull?.is_ai_active) {
-      fetch(`${params.supabaseUrl}/functions/v1/sdr-ai`, {
-        method: 'POST',
-        headers: fnHeaders,
-        body: JSON.stringify({
-          leadId: lead.id,
-          companyId: params.companyId,
-          messageContent: params.content,
-          conversationHistory: [],
-        }),
-      }).catch(() => {})
+      // Verificar se pipeline tem agent_profile v2 ativo
+      let useV2 = false
+      if (leadFull.pipeline_id) {
+        const { data: agentProfile } = await supabase
+          .from('agent_profiles')
+          .select('id, is_active')
+          .eq('pipeline_id', leadFull.pipeline_id)
+          .maybeSingle()
+        useV2 = !!agentProfile?.is_active
+      }
+
+      if (useV2) {
+        // SDR v2: sdr-engine (agent harness)
+        fetch(`${params.supabaseUrl}/functions/v1/sdr-engine`, {
+          method: 'POST',
+          headers: fnHeaders,
+          body: JSON.stringify({
+            leadId: lead.id,
+            companyId: params.companyId,
+            messageContent: params.content,
+            messageType: params.messageType,
+            pipelineId: leadFull.pipeline_id,
+            instanceName: params.instanceName,
+          }),
+        }).catch(() => {})
+      } else {
+        // SDR v1: sdr-ai (scoring + auto-reply)
+        fetch(`${params.supabaseUrl}/functions/v1/sdr-ai`, {
+          method: 'POST',
+          headers: fnHeaders,
+          body: JSON.stringify({
+            leadId: lead.id,
+            companyId: params.companyId,
+            messageContent: params.content,
+            conversationHistory: [],
+          }),
+        }).catch(() => {})
+      }
     }
   } catch { /* best-effort */ }
 
