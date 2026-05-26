@@ -8,7 +8,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { Plus, Settings, Play, Power } from 'lucide-react'
+import { Plus, Settings, Power } from 'lucide-react'
 import { useToggleAgentProfileActive } from '@/hooks/use-agent-profile'
 import type { AgentProfile } from '@/types/sdr-v2'
 
@@ -19,7 +19,7 @@ const SdrIaPage = () => {
   const [activeTab, setActiveTab] = useState('dashboard')
   const toggleActive = useToggleAgentProfileActive()
 
-  const pipelineId = selectedPipelineId ?? pipelines?.[0]?.id
+  const pipelineId = selectedPipelineId || pipelines?.[0]?.id
   const { data: agentProfile, refetch: refetchProfile } = useAgentProfile(pipelineId)
 
   // Lead de teste para sandbox (primeiro lead do pipeline)
@@ -57,7 +57,7 @@ const SdrIaPage = () => {
           <div className="space-y-4">
             {/* Pipeline selector */}
             <div className="flex items-center gap-3">
-              <Select value={pipelineId ?? ''} onValueChange={setSelectedPipelineId}>
+              <Select value={pipelineId || ''} onValueChange={setSelectedPipelineId}>
                 <SelectTrigger className="w-64"><SelectValue placeholder="Selecione um pipeline" /></SelectTrigger>
                 <SelectContent>
                   {pipelines?.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
@@ -78,9 +78,6 @@ const SdrIaPage = () => {
                   </Button>
                   <Button variant="outline" size="sm" onClick={() => setShowWizard(true)} className="gap-1">
                     <Settings className="h-3.5 w-3.5" /> Editar
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => setActiveTab('sandbox')} className="gap-1">
-                    <Play className="h-3.5 w-3.5" /> Testar
                   </Button>
                 </div>
               )}
