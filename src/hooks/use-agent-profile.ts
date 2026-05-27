@@ -98,8 +98,8 @@ export const useDeleteKnowledgeFile = () => {
   const companyId = useAuthStore((s) => s.company?.id)
 
   return useMutation({
-    mutationFn: ({ agentProfileId, fileName }: { agentProfileId: string; fileName: string }) =>
-      agentProfileService.deleteKnowledgeFile(companyId!, agentProfileId, fileName),
+    mutationFn: ({ agentProfileId, storageKey }: { agentProfileId: string; storageKey: string }) =>
+      agentProfileService.deleteKnowledgeFile(companyId!, agentProfileId, storageKey),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['knowledge-files'] })
       toast.success('Arquivo removido')

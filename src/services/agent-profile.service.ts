@@ -75,6 +75,7 @@ export async function toggleAgentProfileActive(id: string, isActive: boolean): P
 
 export interface KnowledgeFile {
   name: string
+  storageKey: string
   url: string
   size: number
   created_at: string
@@ -92,27 +93,28 @@ export async function getKnowledgeFiles(companyId: string, agentProfileId: strin
   return data
     .filter((f) => f.name !== '.emptyFolderPlaceholder')
     .map((f) => ({
-      name: f.name,
+      name: f.metadata?.originalName ?? f.name,
+      storageKey: f.name,
       url: supabase.storage.from('agent-knowledge').getPublicUrl(`${path}/${f.name}`).data.publicUrl,
       size: f.metadata?.size ?? 0,
       created_at: f.created_at ?? '',
     }))
 }
 
-export async function deleteKnowledgeFile(companyId: string, agentProfileId: string, fileName: string): Promise<void> {
-  const path = `${companyId}/${agentProfileId}/${fileName}`
+export async function deleteKnowledgeFile(companyId: string, agentProfileId: string, storageKey: string): Promise<void> {
+  const path = `${companyId}/${agentProfileId}/${storageKey}`
   const { error } = await supabase.storage
     .from('agent-knowledge')
     .remove([path])
 
   if (error) throw error
 
-  // Deletar chunks do arquivo
+  // Deletar chunks do arquivo (source_file_name usa o storageKey sanitizado)
   const { error: chunksError } = await veltzy()
     .from('agent_knowledge_chunks')
     .delete()
     .eq('agent_profile_id', agentProfileId)
-    .eq('source_file_name', fileName)
+    .eq('source_file_name', storageKey)
 
   if (chunksError) throw chunksError
 }

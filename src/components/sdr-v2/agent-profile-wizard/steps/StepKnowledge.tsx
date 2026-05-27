@@ -116,7 +116,7 @@ export const StepKnowledge = ({ agentProfileId }: StepKnowledgeProps) => {
                   type="button"
                   variant="ghost"
                   size="sm"
-                  onClick={() => deleteFile.mutate({ agentProfileId: agentProfileId!, fileName: file.name })}
+                  onClick={() => deleteFile.mutate({ agentProfileId: agentProfileId!, storageKey: file.storageKey })}
                   disabled={deleteFile.isPending}
                   className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
                 >

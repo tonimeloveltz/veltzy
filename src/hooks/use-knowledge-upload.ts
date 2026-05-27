@@ -32,11 +32,16 @@ export const useKnowledgeUpload = (agentProfileId: string | undefined) => {
     setState({ isUploading: true, isProcessing: false, progress: 'uploading', error: null })
 
     try {
-      // 1. Upload para Storage
-      const path = `${companyId}/${agentProfileId}/${file.name}`
+      const safeName = sanitizeFileName(file.name)
+
+      // 1. Upload para Storage (nome sanitizado, original no metadata)
+      const path = `${companyId}/${agentProfileId}/${safeName}`
       const { error: uploadError } = await supabase.storage
         .from('agent-knowledge')
-        .upload(path, file, { upsert: true })
+        .upload(path, file, {
+          upsert: true,
+          metadata: { originalName: file.name },
+        })
 
       if (uploadError) throw new Error(`Upload falhou: ${uploadError.message}`)
 
@@ -64,7 +69,7 @@ export const useKnowledgeUpload = (agentProfileId: string | undefined) => {
         body: JSON.stringify({
           agentProfileId,
           companyId,
-          fileName: file.name,
+          fileName: safeName,
           fileUrl: signedData.signedUrl,
           fileMimeType: file.type,
         }),
@@ -92,4 +97,18 @@ export const useKnowledgeUpload = (agentProfileId: string | undefined) => {
   }, [])
 
   return { ...state, upload, reset }
+}
+
+function sanitizeFileName(name: string): string {
+  const dotIdx = name.lastIndexOf('.')
+  const ext = dotIdx >= 0 ? name.slice(dotIdx) : ''
+  const base = dotIdx >= 0 ? name.slice(0, dotIdx) : name
+
+  const sanitized = base
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // remove acentos
+    .replace(/\s+/g, '_')           // espacos -> _
+    .replace(/[^a-zA-Z0-9._-]/g, '') // remove caracteres nao-alfanumericos
+
+  return (sanitized || 'documento') + ext.toLowerCase()
 }
