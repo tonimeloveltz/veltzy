@@ -128,7 +128,17 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
           .select('id, is_active')
           .eq('pipeline_id', leadFull.pipeline_id)
           .maybeSingle()
-        useV2 = !!agentProfile?.is_active
+
+        if (agentProfile?.is_active) {
+          // Agent profile ativo: checar feature flag sdr_agent_v2
+          const { data: flag } = await supabasePublic
+            .from('tenant_feature_flags')
+            .select('enabled')
+            .eq('company_id', params.companyId)
+            .eq('feature_key', 'sdr_agent_v2')
+            .maybeSingle()
+          useV2 = !!flag?.enabled
+        }
       }
 
       if (useV2) {

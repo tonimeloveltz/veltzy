@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { Navigate } from 'react-router-dom'
+import { useFeatureFlag } from '@/hooks/use-feature-flag'
 import { usePipelines } from '@/hooks/use-pipelines'
 import { useAgentProfile } from '@/hooks/use-agent-profile'
 import { SdrV2Dashboard } from '@/components/sdr-v2/dashboard/SdrV2Dashboard'
@@ -13,11 +15,14 @@ import { useToggleAgentProfileActive } from '@/hooks/use-agent-profile'
 import type { AgentProfile } from '@/types/sdr-v2'
 
 const SdrIaPage = () => {
+  const isSdrV2 = useFeatureFlag('sdr_agent_v2')
   const { data: pipelines } = usePipelines()
   const [selectedPipelineId, setSelectedPipelineId] = useState<string | undefined>()
   const [showWizard, setShowWizard] = useState(false)
   const [activeTab, setActiveTab] = useState('dashboard')
   const toggleActive = useToggleAgentProfileActive()
+
+  if (!isSdrV2) return <Navigate to="/dashboard" replace />
 
   const pipelineId = selectedPipelineId || pipelines?.[0]?.id
   const { data: agentProfile, refetch: refetchProfile } = useAgentProfile(pipelineId)
