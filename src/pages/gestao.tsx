@@ -4,7 +4,6 @@ import { SellersTab } from '@/components/admin/sellers-tab'
 import { GoalsManager } from '@/components/gestao/goals-manager'
 import { ScriptsManager } from '@/components/settings/scripts-manager'
 import { AutoReplySettings } from '@/components/settings/auto-reply-settings'
-import { SdrTab } from '@/components/admin/sdr-tab'
 import { ReportsTab } from '@/components/admin/reports-tab'
 import { ActivityLogsDashboard } from '@/components/admin/activity-logs-dashboard'
 
@@ -22,7 +21,6 @@ const GestaoPage = () => {
           <TabsTrigger value="metas">Metas</TabsTrigger>
           <TabsTrigger value="scripts">Scripts</TabsTrigger>
           <TabsTrigger value="auto-reply">Auto-Reply</TabsTrigger>
-          <TabsTrigger value="ia-sdr">IA SDR</TabsTrigger>
           <TabsTrigger value="relatorios">Relatórios</TabsTrigger>
           <TabsTrigger value="logs-comerciais">Logs comerciais</TabsTrigger>
         </TabsList>
@@ -30,7 +28,6 @@ const GestaoPage = () => {
         <TabsContent value="metas" className="mt-4"><GoalsManager /></TabsContent>
         <TabsContent value="scripts" className="mt-4"><ScriptsManager /></TabsContent>
         <TabsContent value="auto-reply" className="mt-4"><AutoReplySettings /></TabsContent>
-        <TabsContent value="ia-sdr" className="mt-4"><SdrTab /></TabsContent>
         <TabsContent value="relatorios" className="mt-4"><ReportsTab /></TabsContent>
         <TabsContent value="logs-comerciais" className="mt-4"><ActivityLogsDashboard /></TabsContent>
       </Tabs>

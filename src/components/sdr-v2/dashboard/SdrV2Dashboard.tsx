@@ -38,7 +38,7 @@ export const SdrV2Dashboard = () => {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">SDR IA</h2>
-          <p className="text-sm text-muted-foreground">Metricas do agente SDR v2</p>
+          <p className="text-sm text-muted-foreground">Metricas do agente SDR IA</p>
         </div>
         <div className="flex gap-2">
           <Select value={pipelineId ?? 'all'} onValueChange={(v) => setPipelineId(v === 'all' ? undefined : v)}>

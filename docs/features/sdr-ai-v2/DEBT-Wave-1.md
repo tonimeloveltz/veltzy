@@ -61,3 +61,14 @@
 **O que:** `schedule_followup` e `end_conversation` tools nao registradas. `sdr-followup-scheduler` cron nao existe.
 **Fix:** N/A -- Onda 3.
 **Prioridade:** N/A (roadmap).
+
+## 9. Renomeacao SDR v2 para SDR IA no codigo interno
+
+**Status:** Pendente
+**O que:** A renomeacao user-facing foi feita (Onda 1.5), mas codigo interno ainda usa "v2" em:
+- Pastas: `src/components/sdr-v2/`, `docs/features/sdr-ai-v2/`
+- Componentes: `SdrV2Dashboard`, `useSdrV2Metrics`, `sdr-v2.ts`
+- Feature key no banco: `sdr_agent_v2` (mudar implica migration de dados)
+- Arquivos de spec: `Spec-Wave-1.md`, `Spec-Wave-1.5.md`, `DEBT-Wave-1.md`
+**Fix:** Renomear pastas, componentes e types. Feature key `sdr_agent_v2` requer migration coordenada (UPDATE no banco + mudanca em Hub e Veltzy simultanea).
+**Prioridade:** Baixa (nao afeta usuario, so organizacao interna).
