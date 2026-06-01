@@ -1,6 +1,5 @@
 import { veltzy } from '@/lib/supabase'
 import type { SdrV2Metrics } from '@/types/sdr-v2'
-import { USD_TO_BRL } from '@/types/sdr-v2'
 
 // --- Types ---
 
@@ -47,7 +46,7 @@ export async function getSdrV2Metrics(filters: SdrV2MetricsFilters): Promise<Sdr
 
   let query = veltzy()
     .from('sdr_conversations')
-    .select('id, status, total_tokens_used, total_cost_usd')
+    .select('id, status')
     .eq('company_id', filters.companyId)
     .gte('started_at', sinceIso)
 
@@ -73,19 +72,8 @@ export async function getSdrV2Metrics(filters: SdrV2MetricsFilters): Promise<Sdr
 
   const { count: activeCount } = await activeQuery
 
-  // Tool calls count
-  const conversationIds = convs.map((c) => c.id)
-  let totalToolCalls = 0
-  if (conversationIds.length > 0) {
-    const { count } = await veltzy()
-      .from('sdr_tool_calls')
-      .select('id', { count: 'exact', head: true })
-      .in('conversation_id', conversationIds)
-
-    totalToolCalls = count ?? 0
-  }
-
   // Qualify count (leads com ai_score >= 60 que tiveram conversa no periodo)
+  const conversationIds = convs.map((c) => c.id)
   let qualifiedCount = 0
   if (conversationIds.length > 0) {
     // Buscar lead_ids das conversas
@@ -106,7 +94,6 @@ export async function getSdrV2Metrics(filters: SdrV2MetricsFilters): Promise<Sdr
     }
   }
 
-  const totalCostUsd = convs.reduce((sum, c) => sum + (c.total_cost_usd ?? 0), 0)
   const escalatedCount = convs.filter((c) => c.status === 'escalated').length
 
   return {
@@ -114,10 +101,6 @@ export async function getSdrV2Metrics(filters: SdrV2MetricsFilters): Promise<Sdr
     conversations_active: activeCount ?? 0,
     qualification_rate: convs.length > 0 ? qualifiedCount / convs.length : 0,
     escalation_count: escalatedCount,
-    total_cost_brl: totalCostUsd * USD_TO_BRL,
-    avg_cost_per_conversation_brl: convs.length > 0 ? (totalCostUsd / convs.length) * USD_TO_BRL : 0,
-    total_tokens: convs.reduce((sum, c) => sum + (c.total_tokens_used ?? 0), 0),
-    total_tool_calls: totalToolCalls,
   }
 }
 

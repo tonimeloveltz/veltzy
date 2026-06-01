@@ -4,10 +4,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton'
 import { useSdrV2Metrics, useSdrV2Conversations } from '@/hooks/use-sdr-v2-metrics'
 import { usePipelines } from '@/hooks/use-pipelines'
-import { USD_TO_BRL } from '@/types/sdr-v2'
 import {
-  MessageSquare, Target, ArrowUpRight,
-  DollarSign, Zap, Hash, Clock,
+  MessageSquare, Target, ArrowUpRight, Clock,
 } from 'lucide-react'
 
 const PERIOD_OPTIONS = [
@@ -62,7 +60,7 @@ export const SdrV2Dashboard = () => {
       {/* KPI Cards */}
       {metricsLoading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-24" />)}
+          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24" />)}
         </div>
       ) : metrics ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -70,10 +68,6 @@ export const SdrV2Dashboard = () => {
           <KpiCard icon={Clock} label="Conversas ativas" value={String(metrics.conversations_active)} />
           <KpiCard icon={Target} label="Taxa de qualificacao" value={`${(metrics.qualification_rate * 100).toFixed(0)}%`} />
           <KpiCard icon={ArrowUpRight} label="Escaladas p/ humano" value={String(metrics.escalation_count)} />
-          <KpiCard icon={DollarSign} label="Custo total" value={formatBRL(metrics.total_cost_brl)} />
-          <KpiCard icon={DollarSign} label="Custo medio/conversa" value={formatBRL(metrics.avg_cost_per_conversation_brl)} />
-          <KpiCard icon={Zap} label="Tokens consumidos" value={formatNumber(metrics.total_tokens)} />
-          <KpiCard icon={Hash} label="Tool calls" value={String(metrics.total_tool_calls)} />
         </div>
       ) : null}
 
@@ -98,8 +92,6 @@ export const SdrV2Dashboard = () => {
                     <th className="pb-2 font-medium">Pipeline</th>
                     <th className="pb-2 font-medium">Status</th>
                     <th className="pb-2 font-medium text-right">Iteracoes</th>
-                    <th className="pb-2 font-medium text-right">Tokens</th>
-                    <th className="pb-2 font-medium text-right">Custo</th>
                     <th className="pb-2 font-medium text-right">Ultima atividade</th>
                   </tr>
                 </thead>
@@ -115,8 +107,6 @@ export const SdrV2Dashboard = () => {
                         <StatusBadge status={conv.status} />
                       </td>
                       <td className="py-2 text-right">{conv.total_iterations}</td>
-                      <td className="py-2 text-right">{formatNumber(conv.total_tokens_used)}</td>
-                      <td className="py-2 text-right">{formatBRL(conv.total_cost_usd * USD_TO_BRL)}</td>
                       <td className="py-2 text-right text-xs text-muted-foreground">
                         {formatRelativeTime(conv.last_activity_at)}
                       </td>
@@ -161,16 +151,6 @@ const StatusBadge = ({ status }: { status: string }) => {
       {STATUS_LABELS[status] ?? status}
     </span>
   )
-}
-
-function formatBRL(value: number): string {
-  return `R$ ${value.toFixed(2).replace('.', ',')}`
-}
-
-function formatNumber(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`
-  return String(n)
 }
 
 function formatRelativeTime(iso: string): string {
