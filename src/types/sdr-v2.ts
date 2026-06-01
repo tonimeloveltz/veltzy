@@ -171,10 +171,6 @@ export interface SdrV2Metrics {
   conversations_active: number
   qualification_rate: number
   escalation_count: number
-  total_cost_brl: number
-  avg_cost_per_conversation_brl: number
-  total_tokens: number
-  total_tool_calls: number
 }
 
 // --- Presets ---
@@ -194,4 +190,3 @@ export const DEFAULT_BUSINESS_HOURS: BusinessHours = {
 
 export const DEFAULT_FOLLOWUP_CADENCE = [60, 1440, 4320, 10080, 20160]
 
-export const USD_TO_BRL = 5.0

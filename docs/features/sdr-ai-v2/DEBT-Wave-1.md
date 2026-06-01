@@ -72,3 +72,24 @@
 - Arquivos de spec: `Spec-Wave-1.md`, `Spec-Wave-1.5.md`, `DEBT-Wave-1.md`
 **Fix:** Renomear pastas, componentes e types. Feature key `sdr_agent_v2` requer migration coordenada (UPDATE no banco + mudanca em Hub e Veltzy simultanea).
 **Prioridade:** Baixa (nao afeta usuario, so organizacao interna).
+
+## 10. Flag ai_sdr_enabled no pipeline
+
+**Status:** Pendente
+**O que:** Pipelines tem campo `ai_sdr_enabled` (boolean) que nao e usado para gating de nenhuma feature. O SDR IA e ativado pela existencia de `agent_profile` vinculado ao pipeline.
+**Fix:** Remover coluna `ai_sdr_enabled` de `pipelines` e qualquer referencia no frontend, ou reutilizar como toggle master do agente.
+**Prioridade:** Baixa (nao causa bug, so confusao).
+
+## 11. Limites max_users e max_leads nao enforced
+
+**Status:** Pendente
+**O que:** `companies.max_users` e `companies.max_leads` existem no schema mas nenhum RLS policy ou service valida esses limites antes de criar user/lead.
+**Fix:** Adicionar check constraint ou trigger no banco, ou validar no service layer antes de INSERT.
+**Prioridade:** Media (necessario antes de GA para enforcement de planos).
+
+## 12. companies.features JSONB remanescente
+
+**Status:** Pendente
+**O que:** `companies.features` (JSONB) foi usado para feature flags ad-hoc (ex: `sdr_agent_v2`). Com a migracao para `company_feature_flags`, o campo JSONB pode ter dados orfaos ou conflitantes.
+**Fix:** Migrar qualquer flag restante para `company_feature_flags`, depois dropar coluna `companies.features` ou marcar como deprecated.
+**Prioridade:** Baixa (nao causa bug, mas gera confusao sobre source of truth).
