@@ -94,7 +94,7 @@ const CreateDealModal = ({ open, onClose, leadId, leadName, defaultPipelineId }:
             <Label htmlFor="deal-name">Nome do negocio *</Label>
             <Input
               id="deal-name"
-              placeholder="Ex: Proposta comercial"
+              placeholder="Ex: Orcamento de treinamento, Brindes fim de ano..."
               {...register('name')}
             />
             {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}

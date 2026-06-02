@@ -418,7 +418,9 @@ const DealsPage = () => {
 
                       {/* Negocio */}
                       <td className="py-3 text-left">
-                        <p className="text-xs font-medium truncate">{deal.name}</p>
+                        <p className="text-xs font-medium truncate">
+                          {deal.name && deal.name !== lead?.name ? deal.name : <span className="text-muted-foreground">-</span>}
+                        </p>
                       </td>
 
                       {/* Valor */}

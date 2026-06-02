@@ -69,6 +69,7 @@ const PipelineBoard = () => {
   const [fireOnly, setFireOnly] = useState(false)
   const [dealValuePending, setDealValuePending] = useState<{ dealId: string; stageId: string; dealName: string } | null>(null)
   const [activeDealId, setActiveDealId] = useState<string | null>(null)
+  const [editDealId, setEditDealId] = useState<string | null>(null)
 
   // For EditLeadModal: fetch lead data when editing
   const { data: selectedLeadData } = useQuery({
@@ -205,8 +206,9 @@ const PipelineBoard = () => {
     setCreateModalOpen(true)
   }, [])
 
-  const handleEditLead = useCallback((leadId: string) => {
+  const handleEditDeal = useCallback((leadId: string, dealId: string) => {
     setSelectedLeadId(leadId)
+    setEditDealId(dealId)
   }, [setSelectedLeadId])
 
   if (pipelinesLoading || (stagesLoading && !!activePipelineId) || (dealsLoading && !!activePipelineId)) {
@@ -290,7 +292,7 @@ const PipelineBoard = () => {
               </div>
               <div className="kanban-column flex-1 space-y-2 rounded-xl p-2 overflow-y-auto scrollbar-minimal">
                 {pendingDeals.map((deal) => (
-                  <DealCard key={deal.id} deal={deal} onEditLead={handleEditLead} onTransfer={setTransferDealId} onMovePipeline={setMovePipelineDeal} fireOnly={fireOnly} />
+                  <DealCard key={deal.id} deal={deal} onEditDeal={handleEditDeal} onTransfer={setTransferDealId} onMovePipeline={setMovePipelineDeal} fireOnly={fireOnly} />
                 ))}
               </div>
             </div>
@@ -302,7 +304,7 @@ const PipelineBoard = () => {
               stage={stage}
               deals={dealsByStage[stage.id] ?? []}
               onAddLead={handleAddLead}
-              onEditLead={handleEditLead}
+              onEditDeal={handleEditDeal}
               onTransferDeal={setTransferDealId}
               onMovePipeline={setMovePipelineDeal}
               fireOnly={fireOnly}
@@ -339,7 +341,8 @@ const PipelineBoard = () => {
       <EditLeadModal
         lead={selectedLeadData ?? null}
         open={!!selectedLeadId}
-        onClose={() => setSelectedLeadId(null)}
+        onClose={() => { setSelectedLeadId(null); setEditDealId(null) }}
+        dealId={editDealId}
       />
 
       <StageManagerModal

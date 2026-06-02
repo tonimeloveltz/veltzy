@@ -35,7 +35,7 @@ function needsDealValueWarning(deal: DealWithLead, stages: { id: string; slug: s
 
 interface DealCardProps {
   deal: DealWithLead
-  onEditLead?: (leadId: string) => void
+  onEditDeal?: (leadId: string, dealId: string) => void
   onTransfer?: (dealId: string) => void
   onMovePipeline?: (deal: DealWithLead) => void
   fireOnly?: boolean
@@ -60,7 +60,7 @@ const TemperatureBar = ({ temperature }: { temperature: LeadTemperature }) => {
   )
 }
 
-const DealCard = ({ deal, onEditLead, onTransfer, onMovePipeline, fireOnly }: DealCardProps) => {
+const DealCard = ({ deal, onEditDeal, onTransfer, onMovePipeline, fireOnly }: DealCardProps) => {
   const navigate = useNavigate()
   const { isAdmin, isManager } = useRoles()
   const lead = deal.leads
@@ -109,7 +109,7 @@ const DealCard = ({ deal, onEditLead, onTransfer, onMovePipeline, fireOnly }: De
         lead?.temperature === 'fire' && fireOnly && 'fire-card overflow-hidden',
         isPendingAssignment && 'ring-2 ring-amber-500/40',
       )}
-      onClick={() => onEditLead?.(deal.lead_id)}
+      onClick={() => onEditDeal?.(deal.lead_id, deal.id)}
     >
       <div className="space-y-2">
         {isPendingAssignment && (
@@ -129,8 +129,8 @@ const DealCard = ({ deal, onEditLead, onTransfer, onMovePipeline, fireOnly }: De
 
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium truncate">{leadName}</p>
-            {deal.name !== leadName && deal.name !== 'Negocio' && (
-              <p className="text-[10px] text-primary/70 truncate">{deal.name}</p>
+            {deal.name && deal.name !== leadName && (
+              <p className="text-[11px] text-muted-foreground truncate">{deal.name}</p>
             )}
             {lead?.name && lead.phone && (
               <p className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -155,7 +155,7 @@ const DealCard = ({ deal, onEditLead, onTransfer, onMovePipeline, fireOnly }: De
               <MoreVertical className="h-4 w-4" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-              <DropdownMenuItem onClick={() => onEditLead?.(deal.lead_id)}>
+              <DropdownMenuItem onClick={() => onEditDeal?.(deal.lead_id, deal.id)}>
                 <Pencil className="h-4 w-4" />
                 Editar contato
               </DropdownMenuItem>
