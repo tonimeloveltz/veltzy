@@ -2,23 +2,24 @@ import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { LeadCard } from '@/components/pipeline/lead-card'
+import { DealCard } from '@/components/pipeline/deal-card'
 import { Button } from '@/components/ui/button'
-import type { PipelineStage, LeadWithDetails } from '@/types/database'
+import type { PipelineStage, DealWithLead } from '@/types/database'
 
 interface StageColumnProps {
   stage: PipelineStage
-  leads: LeadWithDetails[]
+  deals: DealWithLead[]
   onAddLead: (stageId: string) => void
-  onTransferLead?: (leadId: string) => void
-  onMovePipeline?: (lead: LeadWithDetails) => void
+  onEditDeal?: (leadId: string, dealId: string) => void
+  onTransferDeal?: (dealId: string) => void
+  onMovePipeline?: (deal: DealWithLead) => void
   fireOnly?: boolean
 }
 
-const StageColumn = ({ stage, leads, onAddLead, onTransferLead, onMovePipeline, fireOnly }: StageColumnProps) => {
+const StageColumn = ({ stage, deals, onAddLead, onEditDeal, onTransferDeal, onMovePipeline, fireOnly }: StageColumnProps) => {
   const { setNodeRef, isOver } = useDroppable({ id: stage.id })
 
-  const leadIds = leads.map((l) => l.id)
+  const dealIds = deals.map((d) => d.id)
 
   return (
     <div className="flex w-[300px] min-w-[280px] max-w-[320px] flex-shrink-0 flex-col h-full">
@@ -45,12 +46,12 @@ const StageColumn = ({ stage, leads, onAddLead, onTransferLead, onMovePipeline, 
               color: '#fff',
             }}
           >
-            {leads.length}
+            {deals.length}
           </span>
         </div>
       </div>
 
-      <SortableContext items={leadIds} strategy={verticalListSortingStrategy}>
+      <SortableContext items={dealIds} strategy={verticalListSortingStrategy}>
         <div
           ref={setNodeRef}
           className={cn(
@@ -58,13 +59,13 @@ const StageColumn = ({ stage, leads, onAddLead, onTransferLead, onMovePipeline, 
             isOver && 'bg-primary/5 ring-2 ring-primary/20'
           )}
         >
-          {leads.map((lead) => (
-            <LeadCard key={lead.id} lead={lead} onTransfer={onTransferLead} onMovePipeline={onMovePipeline} fireOnly={fireOnly} />
+          {deals.map((deal) => (
+            <DealCard key={deal.id} deal={deal} onEditDeal={onEditDeal} onTransfer={onTransferDeal} onMovePipeline={onMovePipeline} fireOnly={fireOnly} />
           ))}
 
-          {leads.length === 0 && (
+          {deals.length === 0 && (
             <div className="flex h-24 items-center justify-center rounded-lg border-2 border-dashed border-border/50">
-              <p className="text-xs text-muted-foreground">Arraste leads aqui</p>
+              <p className="text-xs text-muted-foreground">Arraste negocios aqui</p>
             </div>
           )}
         </div>

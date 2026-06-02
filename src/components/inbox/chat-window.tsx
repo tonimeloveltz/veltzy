@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { WifiOff } from 'lucide-react'
 import { ChatHeader } from '@/components/inbox/chat-header'
+import { LeadDealsPanel } from '@/components/inbox/lead-deals-panel'
 import { MessageList } from '@/components/inbox/message-list'
 import { ChatInput } from '@/components/inbox/chat-input'
 import { AdContextCard } from '@/components/inbox/ad-context-card'
@@ -29,6 +30,7 @@ const ChatWindow = ({ lead }: ChatWindowProps) => {
   return (
     <div className="flex h-full flex-col">
       <ChatHeader lead={lead} />
+      <LeadDealsPanel leadId={lead.id} leadName={lead.name} />
 
       {waDisconnected && (
         <div className="flex items-center gap-2 border-b bg-destructive/10 px-4 py-2 text-sm text-destructive">

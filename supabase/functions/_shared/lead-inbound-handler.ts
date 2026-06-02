@@ -66,6 +66,9 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
     throw new Error('Failed to create lead')
   }
 
+  // 2.5. Criar deal para o lead (novo ou existente)
+  await createDealForLead(supabase, supabasePublic, params, lead, isNewLead)
+
   // 3. Buscar avatar do WhatsApp (se solicitado e lead sem avatar)
   if (!lead.avatar_url && params.fetchAvatar) {
     await fetchAndUploadAvatar(
@@ -113,18 +116,61 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
   const fnHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${params.supabaseKey}` }
 
   try {
-    const { data: leadFull } = await supabase.from('leads').select('is_ai_active').eq('id', lead.id).single()
+    const { data: leadFull } = await supabase
+      .from('leads')
+      .select('is_ai_active, pipeline_id')
+      .eq('id', lead.id)
+      .single()
+
     if (leadFull?.is_ai_active) {
-      fetch(`${params.supabaseUrl}/functions/v1/sdr-ai`, {
-        method: 'POST',
-        headers: fnHeaders,
-        body: JSON.stringify({
-          leadId: lead.id,
-          companyId: params.companyId,
-          messageContent: params.content,
-          conversationHistory: [],
-        }),
-      }).catch(() => {})
+      // Verificar se pipeline tem agent_profile v2 ativo
+      let useV2 = false
+      if (leadFull.pipeline_id) {
+        const { data: agentProfile } = await supabase
+          .from('agent_profiles')
+          .select('id, is_active')
+          .eq('pipeline_id', leadFull.pipeline_id)
+          .maybeSingle()
+
+        if (agentProfile?.is_active) {
+          // Agent profile ativo: checar feature flag sdr_agent_v2
+          const { data: flag } = await supabasePublic
+            .from('tenant_feature_flags')
+            .select('enabled')
+            .eq('company_id', params.companyId)
+            .eq('feature_key', 'sdr_agent_v2')
+            .maybeSingle()
+          useV2 = !!flag?.enabled
+        }
+      }
+
+      if (useV2) {
+        // SDR v2: sdr-engine (agent harness)
+        fetch(`${params.supabaseUrl}/functions/v1/sdr-engine`, {
+          method: 'POST',
+          headers: fnHeaders,
+          body: JSON.stringify({
+            leadId: lead.id,
+            companyId: params.companyId,
+            messageContent: params.content,
+            messageType: params.messageType,
+            pipelineId: leadFull.pipeline_id,
+            instanceName: params.instanceName,
+          }),
+        }).catch(() => {})
+      } else {
+        // SDR v1: sdr-ai (scoring + auto-reply)
+        fetch(`${params.supabaseUrl}/functions/v1/sdr-ai`, {
+          method: 'POST',
+          headers: fnHeaders,
+          body: JSON.stringify({
+            leadId: lead.id,
+            companyId: params.companyId,
+            messageContent: params.content,
+            conversationHistory: [],
+          }),
+        }).catch(() => {})
+      }
     }
   } catch { /* best-effort */ }
 
@@ -354,6 +400,159 @@ async function transcribeAudio(
     }
   } catch (err) {
     console.error('Transcription failed:', err)
+  }
+}
+
+async function createDealForLead(
+  supabase: SupabaseClient,
+  supabasePublic: SupabaseClient,
+  params: InboundParams,
+  lead: { id: string; assigned_to: string | null; avatar_url: string | null; name: string | null; whatsapp_instance_name: string | null },
+  isNewLead: boolean,
+): Promise<void> {
+  try {
+    // Buscar pipeline padrao e primeiro stage
+    const { data: defaultPipeline } = await supabase
+      .from('pipelines')
+      .select('id, name')
+      .eq('company_id', params.companyId)
+      .eq('is_default', true)
+      .eq('is_active', true)
+      .maybeSingle()
+
+    const pipeline = defaultPipeline ?? (await supabase
+      .from('pipelines')
+      .select('id, name')
+      .eq('company_id', params.companyId)
+      .eq('is_active', true)
+      .order('position')
+      .limit(1)
+      .single()).data
+
+    if (!pipeline) return
+
+    const { data: firstStage } = await supabase
+      .from('pipeline_stages')
+      .select('id')
+      .eq('pipeline_id', pipeline.id)
+      .order('position')
+      .limit(1)
+      .single()
+
+    if (!firstStage) return
+
+    if (isNewLead) {
+      // Lead novo: criar deal normal
+      await supabase.from('deals').insert({
+        company_id: params.companyId,
+        lead_id: lead.id,
+        name: `Negocio - ${pipeline.name}`,
+        pipeline_id: pipeline.id,
+        stage_id: firstStage.id,
+        status: 'open',
+        assigned_to: lead.assigned_to,
+      })
+      return
+    }
+
+    // Lead existente: verificar conflito de territorio
+    const { data: existingDeals } = await supabase
+      .from('deals')
+      .select('id, assigned_to, pipeline_id, status')
+      .eq('lead_id', lead.id)
+      .in('status', ['open', 'pending_assignment'])
+
+    const existingAssignee = existingDeals?.[0]?.assigned_to ?? null
+
+    const hasConflict = existingAssignee &&
+      existingDeals?.some((d) => d.pipeline_id !== pipeline.id)
+
+    if (hasConflict) {
+      // Conflito de territorio: criar deal pendente
+      const { data: newDeal } = await supabase.from('deals').insert({
+        company_id: params.companyId,
+        lead_id: lead.id,
+        name: `Negocio - ${pipeline.name}`,
+        pipeline_id: pipeline.id,
+        stage_id: firstStage.id,
+        status: 'pending_assignment',
+        assigned_to: null,
+      }).select('id').single()
+
+      if (newDeal) {
+        // Notificar gestores/admins sobre conflito
+        await notifyManagersAboutConflict(supabase, supabasePublic, {
+          companyId: params.companyId,
+          leadId: lead.id,
+          leadName: lead.name ?? params.phone,
+          dealId: newDeal.id,
+          existingAssigneeId: existingAssignee,
+          pipelineName: pipeline.name,
+        })
+      }
+    } else if (!existingDeals || existingDeals.length === 0) {
+      // Sem deals existentes: criar deal normal
+      await supabase.from('deals').insert({
+        company_id: params.companyId,
+        lead_id: lead.id,
+        name: `Negocio - ${pipeline.name}`,
+        pipeline_id: pipeline.id,
+        stage_id: firstStage.id,
+        status: 'open',
+        assigned_to: existingAssignee ?? lead.assigned_to,
+      })
+    }
+    // Se ja tem deals no mesmo pipeline, nao cria duplicata
+  } catch (err) {
+    console.error('[lead-inbound] Error creating deal:', err)
+    // Best-effort: nao bloqueia o fluxo de mensagem
+  }
+}
+
+async function notifyManagersAboutConflict(
+  supabase: SupabaseClient,
+  supabasePublic: SupabaseClient,
+  data: {
+    companyId: string
+    leadId: string
+    leadName: string
+    dealId: string
+    existingAssigneeId: string
+    pipelineName: string
+  },
+): Promise<void> {
+  try {
+    // Buscar nome do vendedor existente
+    const { data: assigneeProfile } = await supabasePublic
+      .from('profiles')
+      .select('name')
+      .eq('id', data.existingAssigneeId)
+      .single()
+
+    const assigneeName = assigneeProfile?.name ?? 'vendedor'
+
+    // Buscar gestores e admins da empresa
+    const { data: managerRoles } = await supabasePublic
+      .from('user_roles')
+      .select('user_id')
+      .eq('company_id', data.companyId)
+      .in('role', ['admin', 'manager'])
+
+    if (!managerRoles || managerRoles.length === 0) return
+
+    const notifications = managerRoles.map((r) => ({
+      company_id: data.companyId,
+      user_id: r.user_id,
+      type: 'territory_conflict',
+      title: 'Conflito de territorio',
+      body: `${data.leadName} ja e atendido por ${assigneeName}. Nova entrada em ${data.pipelineName}. Clique para atribuir.`,
+      action_type: 'assign_deal',
+      action_data: { deal_id: data.dealId, lead_id: data.leadId },
+    }))
+
+    await supabase.from('notifications').insert(notifications)
+  } catch (err) {
+    console.error('[lead-inbound] Error notifying managers:', err)
   }
 }
 

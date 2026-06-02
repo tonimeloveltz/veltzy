@@ -5,7 +5,7 @@ import {
   DollarSign, Users, TrendingUp, Plus, MessageSquare, Download, Upload,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useDashboardLeads } from '@/hooks/use-dashboard-leads'
+import { useDashboardDeals } from '@/hooks/use-deals'
 import { usePipelineStages } from '@/hooks/use-pipeline-stages'
 import { usePipelines } from '@/hooks/use-pipelines'
 import { useRoles } from '@/hooks/use-roles'
@@ -23,7 +23,10 @@ import { EditLeadModal } from '@/components/pipeline/edit-lead-modal'
 import { ImportLeadsModal } from '@/components/pipeline/import-leads-modal'
 import { BulkActionBar } from '@/components/deals/bulk-action-bar'
 import { exportToCsv, exportToPdf, exportToXlsx } from '@/lib/export-leads'
-import type { LeadWithDetails, LeadTemperature } from '@/types/database'
+import type { DealWithLead, DealStatus, LeadTemperature } from '@/types/database'
+import { getLeadById } from '@/services/leads.service'
+import { useAuthStore } from '@/stores/auth.store'
+import { useQuery } from '@tanstack/react-query'
 
 const periodOptions = [
   { label: 'Hoje', icon: Clock, days: 1 },
@@ -42,17 +45,26 @@ const tempConfig: Record<LeadTemperature, { label: string; dotColor: string }> =
   fire: { label: 'Pegando Fogo', dotColor: 'bg-red-500' },
 }
 
-const filterByPeriod = (leads: LeadWithDetails[], days: number | undefined) => {
-  if (!days) return leads
+const statusConfig: Record<DealStatus, { label: string; color: string }> = {
+  open: { label: 'Aberto', color: 'text-yellow-500' },
+  won: { label: 'Fechado', color: 'text-emerald-500' },
+  lost: { label: 'Perdido', color: 'text-red-500' },
+  archived: { label: 'Arquivado', color: 'text-muted-foreground' },
+  pending_assignment: { label: 'Sem dono', color: 'text-amber-500' },
+}
+
+const filterByPeriod = (deals: DealWithLead[], days: number | undefined) => {
+  if (!days) return deals
   const cutoff = new Date()
   cutoff.setDate(cutoff.getDate() - days)
-  return leads.filter((l) => new Date(l.created_at) >= cutoff)
+  return deals.filter((d) => new Date(d.created_at) >= cutoff)
 }
 
 const thClass = 'pb-3 text-xs font-medium text-muted-foreground uppercase tracking-wider'
 
 const DealsPage = () => {
   const navigate = useNavigate()
+  const companyId = useAuthStore((s) => s.company?.id)
   const { roles, isAdmin, isManager } = useRoles()
   const userRole = roles[0] ?? 'seller'
 
@@ -60,39 +72,44 @@ const DealsPage = () => {
   const [selectedPipelineId, setSelectedPipelineId] = useState<string | null>(null)
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [importModalOpen, setImportModalOpen] = useState(false)
-  const [selectedLead, setSelectedLead] = useState<LeadWithDetails | null>(null)
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showArchived, setShowArchived] = useState(false)
 
   const { data: pipelines } = usePipelines()
-  const { data: allLeads, isLoading, isError, refetch } = useDashboardLeads(selectedPipelineId, showArchived)
+  const { data: allDeals, isLoading, isError, refetch } = useDashboardDeals(selectedPipelineId, showArchived)
   const { data: stages } = usePipelineStages()
   const showPipelineColumn = (pipelines ?? []).filter((p) => p.is_active).length > 1
 
+  // Fetch lead for edit modal
+  const { data: selectedLeadData } = useQuery({
+    queryKey: ['lead-for-edit', selectedLeadId, companyId],
+    queryFn: () => getLeadById(companyId!, selectedLeadId!),
+    enabled: !!selectedLeadId && !!companyId,
+  })
+
   const pipelineMap = new Map((pipelines ?? []).map((p) => [p.id, p]))
-  const periodLeads = filterByPeriod(allLeads ?? [], selectedDays)
+  const periodDeals = filterByPeriod(allDeals ?? [], selectedDays)
 
-  // Filtrar arquivados na view padrao
-  const leads = useMemo(() => {
-    if (showArchived) return periodLeads
-    return periodLeads.filter((l) => l.status !== 'archived')
-  }, [periodLeads, showArchived])
+  const deals = useMemo(() => {
+    if (showArchived) return periodDeals
+    return periodDeals.filter((d) => d.status !== 'archived')
+  }, [periodDeals, showArchived])
 
-  const openLeads = leads.filter((l) => l.status === 'new' || l.status === 'qualifying' || l.status === 'open')
-  const closedLeads = leads.filter((l) => l.status === 'deal')
-  const lostLeads = leads.filter((l) => l.status === 'lost')
+  const openDeals = deals.filter((d) => d.status === 'open' || d.status === 'pending_assignment')
+  const closedDeals = deals.filter((d) => d.status === 'won')
+  const lostDeals = deals.filter((d) => d.status === 'lost')
 
-  const totalValue = leads.reduce((sum, l) => sum + (l.deal_value ?? 0), 0)
-  const openValue = openLeads.reduce((sum, l) => sum + (l.deal_value ?? 0), 0)
-  const closedValue = closedLeads.reduce((sum, l) => sum + (l.deal_value ?? 0), 0)
-  const lostValue = lostLeads.reduce((sum, l) => sum + (l.deal_value ?? 0), 0)
-  const avgTicket = closedLeads.length > 0 ? closedValue / closedLeads.length : 0
+  const totalValue = deals.reduce((sum, d) => sum + (d.value ?? 0), 0)
+  const openValue = openDeals.reduce((sum, d) => sum + (d.value ?? 0), 0)
+  const closedValue = closedDeals.reduce((sum, d) => sum + (d.value ?? 0), 0)
+  const lostValue = lostDeals.reduce((sum, d) => sum + (d.value ?? 0), 0)
+  const avgTicket = closedDeals.length > 0 ? closedValue / closedDeals.length : 0
 
   const stageMap = new Map(stages?.map((s) => [s.id, s]) ?? [])
 
   const cardBase = 'bg-card border border-border/30 rounded-2xl p-5'
 
-  // Selecao
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev)
@@ -103,17 +120,31 @@ const DealsPage = () => {
   }
 
   const toggleSelectAll = () => {
-    if (selectedIds.size === leads.length) {
+    if (selectedIds.size === deals.length) {
       setSelectedIds(new Set())
     } else {
-      setSelectedIds(new Set(leads.map((l) => l.id)))
+      setSelectedIds(new Set(deals.map((d) => d.id)))
     }
   }
 
   const clearSelection = () => setSelectedIds(new Set())
 
-  const allSelected = leads.length > 0 && selectedIds.size === leads.length
-  const someSelected = selectedIds.size > 0 && selectedIds.size < leads.length
+  const allSelected = deals.length > 0 && selectedIds.size === deals.length
+  const someSelected = selectedIds.size > 0 && selectedIds.size < deals.length
+
+  // Convert deals to lead-like objects for BulkActionBar + export compatibility
+  const dealsAsLeads = useMemo(() => {
+    return deals.map((d) => ({
+      ...(d.leads ?? {}),
+      id: d.id,
+      company_id: d.company_id,
+      pipeline_id: d.pipeline_id ?? '',
+      stage_id: d.stage_id ?? '',
+      deal_value: d.value,
+      assigned_to: d.assigned_to,
+      profiles: d.profiles,
+    }))
+  }, [deals])
 
   return (
     <div className="min-h-full p-6">
@@ -124,7 +155,7 @@ const DealsPage = () => {
           <div>
             <h1 className="text-2xl font-bold text-foreground">Negocios</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Gestao completa de leads e oportunidades
+              Gestao completa de negocios e oportunidades
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -159,22 +190,22 @@ const DealsPage = () => {
                 Importar
               </Button>
             )}
-            {leads.length > 0 && (
+            {deals.length > 0 && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="gap-1.5" title="Exportar leads">
+                  <Button variant="outline" size="sm" className="gap-1.5" title="Exportar negocios">
                     <Upload className="h-4 w-4" />
                     Exportar
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => exportToCsv(leads)}>
+                  <DropdownMenuItem onClick={() => exportToCsv(dealsAsLeads as never)}>
                     Exportar CSV
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => exportToXlsx(leads)}>
+                  <DropdownMenuItem onClick={() => exportToXlsx(dealsAsLeads as never)}>
                     Exportar Excel (.xlsx)
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => exportToPdf(leads)}>
+                  <DropdownMenuItem onClick={() => exportToPdf(dealsAsLeads as never)}>
                     Exportar PDF
                   </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -191,7 +222,7 @@ const DealsPage = () => {
         {selectedIds.size > 0 && (
           <BulkActionBar
             selectedIds={selectedIds}
-            leads={leads}
+            leads={dealsAsLeads as never}
             onClear={clearSelection}
             userRole={userRole}
           />
@@ -231,25 +262,25 @@ const DealsPage = () => {
                 <Users className="h-5 w-5 text-primary" />
               </div>
             </div>
-            <p className="text-3xl font-bold text-foreground mt-2">{leads.length}</p>
+            <p className="text-3xl font-bold text-foreground mt-2">{deals.length}</p>
             <div className="border-t border-border/30 my-3" />
             <div className="grid grid-cols-3 gap-2">
               <div className="flex flex-col items-center gap-0.5">
-                <span className="text-sm font-medium text-yellow-500">{openLeads.length}</span>
+                <span className="text-sm font-medium text-yellow-500">{openDeals.length}</span>
                 <span className="text-xs text-muted-foreground">
                   <span className="inline-block w-1.5 h-1.5 rounded-full mr-1 align-middle bg-yellow-500" />
                   Aberto
                 </span>
               </div>
               <div className="flex flex-col items-center gap-0.5">
-                <span className="text-sm font-medium text-emerald-500">{closedLeads.length}</span>
+                <span className="text-sm font-medium text-emerald-500">{closedDeals.length}</span>
                 <span className="text-xs text-muted-foreground">
                   <span className="inline-block w-1.5 h-1.5 rounded-full mr-1 align-middle bg-emerald-500" />
                   Fechado
                 </span>
               </div>
               <div className="flex flex-col items-center gap-0.5">
-                <span className="text-sm font-medium text-red-500">{lostLeads.length}</span>
+                <span className="text-sm font-medium text-red-500">{lostDeals.length}</span>
                 <span className="text-xs text-muted-foreground">
                   <span className="inline-block w-1.5 h-1.5 rounded-full mr-1 align-middle bg-red-500" />
                   Perdido
@@ -297,7 +328,6 @@ const DealsPage = () => {
 
         {/* TABELA */}
         <div className="glass-card rounded-xl p-5">
-          {/* Toggle arquivados */}
           {(isAdmin || isManager) && (
             <div className="flex items-center gap-2 mb-4 justify-end">
               <span className="text-sm text-muted-foreground">Mostrar arquivados</span>
@@ -315,46 +345,47 @@ const DealsPage = () => {
                       onCheckedChange={toggleSelectAll}
                     />
                   </th>
-                  <th className={cn(thClass, 'text-left w-[18%]')}>Contato</th>
-                  <th className={cn(thClass, 'text-left w-[5%]')}>Chat</th>
-                  <th className={cn(thClass, 'text-left w-[10%]')}>Valor</th>
-                  {showPipelineColumn && <th className={cn(thClass, 'text-left w-[10%]')}>Pipeline</th>}
-                  <th className={cn(thClass, 'text-left w-[10%]')}>Etapa</th>
-                  <th className={cn(thClass, 'text-left w-[11%]')}>Temperatura</th>
-                  <th className={cn(thClass, 'text-left w-[10%]')}>Origem</th>
-                  <th className={cn(thClass, 'text-left w-[11%]')}>Responsavel</th>
-                  <th className={cn(thClass, 'text-left w-[10%]')}>Criado em</th>
+                  <th className={cn(thClass, 'text-left w-[15%]')}>Contato</th>
+                  <th className={cn(thClass, 'text-left w-[4%]')}>Chat</th>
+                  <th className={cn(thClass, 'text-left w-[12%]')}>Negocio</th>
+                  <th className={cn(thClass, 'text-left w-[9%]')}>Valor</th>
+                  {showPipelineColumn && <th className={cn(thClass, 'text-left w-[9%]')}>Pipeline</th>}
+                  <th className={cn(thClass, 'text-left w-[9%]')}>Etapa</th>
+                  <th className={cn(thClass, 'text-left w-[8%]')}>Status</th>
+                  <th className={cn(thClass, 'text-left w-[9%]')}>Temperatura</th>
+                  <th className={cn(thClass, 'text-left w-[9%]')}>Responsavel</th>
+                  <th className={cn(thClass, 'text-left w-[9%]')}>Criado em</th>
                 </tr>
               </thead>
               <tbody>
-                {leads.map((lead) => {
-                  const stage = stageMap.get(lead.stage_id)
-                  const temp = tempConfig[lead.temperature]
-                  const initials = lead.name
+                {deals.map((deal) => {
+                  const lead = deal.leads
+                  const stage = deal.stage_id ? stageMap.get(deal.stage_id) : null
+                  const temp = lead ? tempConfig[lead.temperature] : null
+                  const initials = lead?.name
                     ?.split(' ')
                     .map((n) => n[0])
                     .join('')
                     .slice(0, 2)
                     .toUpperCase() ?? '?'
-                  const assignedName = (lead.profiles as { name?: string } | null)?.name
-                  const source = lead.lead_sources as { name?: string; color?: string } | null
-                  const isSelected = selectedIds.has(lead.id)
+                  const assignedName = (deal.profiles as { name?: string } | null)?.name
+                  const isSelected = selectedIds.has(deal.id)
+                  const status = statusConfig[deal.status]
 
                   return (
                     <tr
-                      key={lead.id}
-                      onClick={() => setSelectedLead(lead)}
+                      key={deal.id}
+                      onClick={() => setSelectedLeadId(deal.lead_id)}
                       className={cn(
                         'border-b border-border/10 last:border-0 hover:bg-muted/20 transition-smooth cursor-pointer',
                         isSelected && 'bg-primary/5',
-                        lead.status === 'archived' && 'opacity-60'
+                        deal.status === 'archived' && 'opacity-60'
                       )}
                     >
-                      {/* Checkbox */}
                       <td className="py-3 text-left" onClick={(e) => e.stopPropagation()}>
                         <Checkbox
                           checked={isSelected}
-                          onCheckedChange={() => toggleSelect(lead.id)}
+                          onCheckedChange={() => toggleSelect(deal.id)}
                         />
                       </td>
 
@@ -362,15 +393,15 @@ const DealsPage = () => {
                       <td className="py-3 text-left">
                         <div className="flex items-center gap-2.5">
                           <Avatar className="h-7 w-7">
-                            {lead.avatar_url ? (
-                              <img src={lead.avatar_url} alt={lead.name ?? ''} className="h-full w-full rounded-full object-cover" />
+                            {lead?.avatar_url ? (
+                              <img src={lead.avatar_url} alt={lead?.name ?? ''} className="h-full w-full rounded-full object-cover" />
                             ) : (
                               <AvatarFallback className="text-[9px] bg-primary/10 text-primary">{initials}</AvatarFallback>
                             )}
                           </Avatar>
                           <div className="min-w-0">
-                            <p className="font-medium truncate">{lead.name ?? 'Sem nome'}</p>
-                            <p className="text-[11px] text-muted-foreground truncate">{lead.email ?? lead.phone}</p>
+                            <p className="font-medium truncate">{lead?.name ?? 'Sem nome'}</p>
+                            <p className="text-[11px] text-muted-foreground truncate">{lead?.email ?? lead?.phone}</p>
                           </div>
                         </div>
                       </td>
@@ -378,21 +409,28 @@ const DealsPage = () => {
                       {/* Chat */}
                       <td className="py-3 text-left">
                         <button
-                          onClick={(e) => { e.stopPropagation(); navigate(`/inbox?lead=${lead.id}`) }}
+                          onClick={(e) => { e.stopPropagation(); navigate(`/inbox?lead=${deal.lead_id}`) }}
                           className="inline-flex items-center text-muted-foreground hover:text-primary transition-smooth cursor-pointer"
                         >
                           <MessageSquare className="h-4 w-4" />
                         </button>
                       </td>
 
+                      {/* Negocio */}
+                      <td className="py-3 text-left">
+                        <p className="text-xs font-medium truncate">
+                          {deal.name && deal.name !== lead?.name ? deal.name : <span className="text-muted-foreground">-</span>}
+                        </p>
+                      </td>
+
                       {/* Valor */}
-                      <td className={cn('py-3 text-left font-semibold', lead.status === 'deal' ? 'text-emerald-500' : 'text-primary')}>
-                        {lead.deal_value ? fmt(lead.deal_value) : '-'}
+                      <td className={cn('py-3 text-left font-semibold', deal.status === 'won' ? 'text-emerald-500' : 'text-primary')}>
+                        {deal.value ? fmt(deal.value) : '-'}
                       </td>
 
                       {/* Pipeline */}
                       {showPipelineColumn && (() => {
-                        const pipeline = pipelineMap.get(lead.pipeline_id)
+                        const pipeline = deal.pipeline_id ? pipelineMap.get(deal.pipeline_id) : null
                         return (
                           <td className="py-3 text-left">
                             {pipeline ? (
@@ -410,7 +448,7 @@ const DealsPage = () => {
                       {/* Etapa */}
                       <td className="py-3 text-left">
                         {stage && (
-                          lead.status === 'deal' ? (
+                          deal.status === 'won' ? (
                             <span className="inline-flex items-center gap-1.5 text-xs rounded-full bg-emerald-500/15 text-emerald-500 px-2 py-0.5 font-medium">
                               <span className="h-2 w-2 rounded-full shrink-0 bg-emerald-500" />
                               {stage.name}
@@ -424,46 +462,42 @@ const DealsPage = () => {
                         )}
                       </td>
 
-                      {/* Temperatura */}
+                      {/* Status */}
                       <td className="py-3 text-left">
-                        <span className="inline-flex items-center gap-1.5 text-xs">
-                          <span className={cn('h-2 w-2 rounded-full shrink-0', temp.dotColor)} />
-                          {temp.label}
+                        <span className={cn('text-xs font-medium', status.color)}>
+                          {status.label}
                         </span>
                       </td>
 
-                      {/* Origem */}
+                      {/* Temperatura */}
                       <td className="py-3 text-left">
-                        {source?.name ? (
-                          <span
-                            className="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium"
-                            style={{
-                              borderColor: source.color ?? 'currentColor',
-                              color: source.color ?? 'currentColor',
-                            }}
-                          >
-                            {source.name}
+                        {temp && (
+                          <span className="inline-flex items-center gap-1.5 text-xs">
+                            <span className={cn('h-2 w-2 rounded-full shrink-0', temp.dotColor)} />
+                            {temp.label}
                           </span>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">-</span>
                         )}
                       </td>
 
                       {/* Responsavel */}
                       <td className="py-3 text-left text-xs">
-                        {assignedName ?? <span className="text-muted-foreground/40">Sem responsavel</span>}
+                        {deal.status === 'pending_assignment' ? (
+                          <span className="text-amber-500 font-medium">Sem dono</span>
+                        ) : (
+                          assignedName ?? <span className="text-muted-foreground/40">Sem responsavel</span>
+                        )}
                       </td>
 
                       {/* Criado em */}
                       <td className="py-3 text-left text-xs text-muted-foreground">
-                        {new Date(lead.created_at).toLocaleDateString('pt-BR')}
+                        {new Date(deal.created_at).toLocaleDateString('pt-BR')}
                       </td>
                     </tr>
                   )
                 })}
-                {leads.length === 0 && (
+                {deals.length === 0 && (
                   <tr>
-                    <td colSpan={showPipelineColumn ? 10 : 9} className="py-12 text-center text-sm text-muted-foreground">
+                    <td colSpan={showPipelineColumn ? 11 : 10} className="py-12 text-center text-sm text-muted-foreground">
                       Nenhum negocio encontrado
                     </td>
                   </tr>
@@ -485,9 +519,9 @@ const DealsPage = () => {
       />
 
       <EditLeadModal
-        lead={selectedLead}
-        open={!!selectedLead}
-        onClose={() => setSelectedLead(null)}
+        lead={selectedLeadData ?? null}
+        open={!!selectedLeadId}
+        onClose={() => setSelectedLeadId(null)}
       />
     </div>
   )

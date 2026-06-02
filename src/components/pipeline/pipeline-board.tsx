@@ -15,7 +15,7 @@ import { toast } from 'sonner'
 import { AlertCircle, AlertTriangle, Loader2, Inbox } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { StageColumn } from '@/components/pipeline/stage-column'
-import { LeadCard } from '@/components/pipeline/lead-card'
+import { DealCard } from '@/components/pipeline/deal-card'
 import { CreateLeadModal } from '@/components/pipeline/create-lead-modal'
 import { EditLeadModal } from '@/components/pipeline/edit-lead-modal'
 import { PipelineHeader } from '@/components/pipeline/pipeline-header'
@@ -26,10 +26,13 @@ import { MovePipelineModal } from '@/components/pipeline/move-pipeline-modal'
 import { DealValueDialog } from '@/components/pipeline/deal-value-dialog'
 import { usePipelines } from '@/hooks/use-pipelines'
 import { usePipelineStages } from '@/hooks/use-pipeline-stages'
-import { useLeads, useMoveLeadToStage, useUpdateDealValueAndMove } from '@/hooks/use-leads'
+import { useDealsForKanban, useMoveDealStage, useUpdateDealValueAndMove } from '@/hooks/use-deals'
 import { usePipelineStore } from '@/stores/pipeline.store'
 import { triggerCelebration } from '@/lib/celebration'
-import type { LeadWithDetails } from '@/types/database'
+import type { DealWithLead } from '@/types/database'
+import { getLeadById } from '@/services/leads.service'
+import { useAuthStore } from '@/stores/auth.store'
+import { useQuery } from '@tanstack/react-query'
 
 function isProposalStage(slug: string) {
   return slug.includes('proposta') || slug.includes('proposal')
@@ -37,6 +40,7 @@ function isProposalStage(slug: string) {
 
 const PipelineBoard = () => {
   const queryClient = useQueryClient()
+  const companyId = useAuthStore((s) => s.company?.id)
   const { data: pipelines, isLoading: pipelinesLoading } = usePipelines()
   const { activePipelineId, setActivePipelineId } = usePipelineStore()
 
@@ -50,126 +54,164 @@ const PipelineBoard = () => {
   }, [pipelines, activePipelineId, setActivePipelineId])
 
   const { data: stages, isLoading: stagesLoading, isFetching: stagesFetching, isError: stagesError, refetch: refetchStages } = usePipelineStages()
-  const { data: leads, isLoading: leadsLoading, isFetching: leadsFetching, isError: leadsError, refetch: refetchLeads } = useLeads()
-  const isRefetching = (stagesFetching && !stagesLoading) || (leadsFetching && !leadsLoading)
-  const moveLeadToStage = useMoveLeadToStage()
+  const { data: deals, isLoading: dealsLoading, isFetching: dealsFetching, isError: dealsError, refetch: refetchDeals } = useDealsForKanban(activePipelineId)
+  const isRefetching = (stagesFetching && !stagesLoading) || (dealsFetching && !dealsLoading)
+  const moveDealStage = useMoveDealStage()
   const updateDealValueAndMove = useUpdateDealValueAndMove()
 
-  const { activeLeadId, setActiveLeadId, selectedLeadId, setSelectedLeadId, filters } = usePipelineStore()
+  const { selectedLeadId, setSelectedLeadId, filters } = usePipelineStore()
 
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [createModalStageId, setCreateModalStageId] = useState<string>()
   const [stageManagerOpen, setStageManagerOpen] = useState(false)
-  const [transferLeadId, setTransferLeadId] = useState<string | null>(null)
-  const [movePipelineLead, setMovePipelineLead] = useState<LeadWithDetails | null>(null)
+  const [transferDealId, setTransferDealId] = useState<string | null>(null)
+  const [movePipelineDeal, setMovePipelineDeal] = useState<DealWithLead | null>(null)
   const [fireOnly, setFireOnly] = useState(false)
-  const [dealValuePending, setDealValuePending] = useState<{ leadId: string; stageId: string; leadName: string } | null>(null)
+  const [dealValuePending, setDealValuePending] = useState<{ dealId: string; stageId: string; dealName: string } | null>(null)
+  const [activeDealId, setActiveDealId] = useState<string | null>(null)
+  const [editDealId, setEditDealId] = useState<string | null>(null)
+
+  // For EditLeadModal: fetch lead data when editing
+  const { data: selectedLeadData } = useQuery({
+    queryKey: ['lead-for-edit', selectedLeadId, companyId],
+    queryFn: () => getLeadById(companyId!, selectedLeadId!),
+    enabled: !!selectedLeadId && !!companyId,
+  })
+
+  // For the transfer modal: find the lead_id from the deal
+  const transferLeadId = useMemo(() => {
+    if (!transferDealId || !deals) return null
+    const deal = deals.find((d) => d.id === transferDealId)
+    return deal?.lead_id ?? null
+  }, [transferDealId, deals])
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   )
 
-  const filteredLeads = useMemo(() => {
-    if (!leads) return []
-    let result = leads
+  const filteredDeals = useMemo(() => {
+    if (!deals) return []
+    let result = deals
     if (filters.search) {
       const q = filters.search.toLowerCase()
       result = result.filter(
-        (l) =>
-          l.name?.toLowerCase().includes(q) ||
-          l.phone.includes(q) ||
-          l.email?.toLowerCase().includes(q)
+        (d) =>
+          d.leads?.name?.toLowerCase().includes(q) ||
+          d.leads?.phone?.includes(q) ||
+          d.leads?.email?.toLowerCase().includes(q) ||
+          d.name?.toLowerCase().includes(q)
       )
     }
     if (filters.temperature) {
-      result = result.filter((l) => l.temperature === filters.temperature)
+      result = result.filter((d) => d.leads?.temperature === filters.temperature)
     }
     if (filters.sourceId) {
-      result = result.filter((l) => l.source_id === filters.sourceId)
+      result = result.filter((d) => d.leads?.source_id === filters.sourceId)
     }
     return result
-  }, [leads, filters.search, filters.temperature, filters.sourceId])
+  }, [deals, filters.search, filters.temperature, filters.sourceId])
 
-  const leadsByStage = useMemo(() => {
-    const map: Record<string, LeadWithDetails[]> = {}
+  // Separate pending_assignment deals for special column
+  const pendingDeals = useMemo(
+    () => filteredDeals.filter((d) => d.status === 'pending_assignment'),
+    [filteredDeals]
+  )
+  const activeDeals = useMemo(
+    () => filteredDeals.filter((d) => d.status !== 'pending_assignment'),
+    [filteredDeals]
+  )
+
+  const dealsByStage = useMemo(() => {
+    const map: Record<string, DealWithLead[]> = {}
     stages?.forEach((s) => { map[s.id] = [] })
-    filteredLeads.forEach((l) => {
-      if (map[l.stage_id]) {
-        map[l.stage_id].push(l)
+    activeDeals.forEach((d) => {
+      if (d.stage_id && map[d.stage_id]) {
+        map[d.stage_id].push(d)
       }
     })
     return map
-  }, [filteredLeads, stages])
+  }, [activeDeals, stages])
 
-  const leadCounts = useMemo(() => {
+  const dealCounts = useMemo(() => {
     const map: Record<string, number> = {}
-    leads?.forEach((l) => { map[l.stage_id] = (map[l.stage_id] ?? 0) + 1 })
+    deals?.forEach((d) => {
+      if (d.stage_id) map[d.stage_id] = (map[d.stage_id] ?? 0) + 1
+    })
     return map
-  }, [leads])
+  }, [deals])
 
   const orphanedCount = useMemo(() => {
-    if (!leads || !stages) return 0
+    if (!activeDeals || !stages) return 0
     const stageIds = new Set(stages.map((s) => s.id))
-    return leads.filter((l) => !l.stage_id || !stageIds.has(l.stage_id)).length
-  }, [leads, stages])
+    return activeDeals.filter((d) => !d.stage_id || !stageIds.has(d.stage_id)).length
+  }, [activeDeals, stages])
 
-  const activeLead = useMemo(
-    () => leads?.find((l) => l.id === activeLeadId) ?? null,
-    [leads, activeLeadId]
+  const activeDeal = useMemo(
+    () => deals?.find((d) => d.id === activeDealId) ?? null,
+    [deals, activeDealId]
   )
 
-  const selectedLead = useMemo(
-    () => leads?.find((l) => l.id === selectedLeadId) ?? null,
-    [leads, selectedLeadId]
-  )
+  // Convert deals to lead-like array for PipelineHeader (search/filter counts)
+  const filteredLeadsForHeader = useMemo(() => {
+    return filteredDeals.map((d) => ({
+      ...d.leads,
+      id: d.id,
+      deal_value: d.value,
+    }))
+  }, [filteredDeals])
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
-    setActiveLeadId(event.active.id as string)
-  }, [setActiveLeadId])
+    setActiveDealId(event.active.id as string)
+  }, [])
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
-    setActiveLeadId(null)
+    setActiveDealId(null)
     try {
       const { active, over } = event
       if (!over) return
 
-      const leadId = active.id as string
+      const dealId = active.id as string
       const overId = over.id as string
 
       const targetStage = stages?.find((s) => s.id === overId)
-      const lead = leads?.find((l) => l.id === leadId)
+      const deal = deals?.find((d) => d.id === dealId)
 
-      if (!lead) return
+      if (!deal) return
 
-      const stageId = targetStage ? targetStage.id : leads?.find((l) => l.id === overId)?.stage_id
-      if (!stageId || stageId === lead.stage_id) return
+      const stageId = targetStage ? targetStage.id : deals?.find((d) => d.id === overId)?.stage_id
+      if (!stageId || stageId === deal.stage_id) return
 
       const destStage = stages?.find((s) => s.id === stageId)
 
-      // Interceptar: proposta sem deal_value
-      if (destStage && isProposalStage(destStage.slug) && (!lead.deal_value || lead.deal_value <= 0)) {
-        setDealValuePending({ leadId, stageId, leadName: lead.name || lead.phone })
+      // Interceptar: proposta sem valor
+      if (destStage && isProposalStage(destStage.slug) && (!deal.value || deal.value <= 0)) {
+        setDealValuePending({ dealId, stageId, dealName: deal.leads?.name || deal.leads?.phone || deal.name })
         return
       }
 
-      moveLeadToStage.mutate({ leadId, stageId })
+      moveDealStage.mutate({ dealId, stageId })
 
       if (destStage?.is_final && destStage?.is_positive) {
         triggerCelebration()
         toast.success('Negocio fechado! 🎉')
       }
     } catch {
-      queryClient.invalidateQueries({ queryKey: ['leads'] })
-      toast.error('Erro ao mover lead. Tente novamente.')
+      queryClient.invalidateQueries({ queryKey: ['deals'] })
+      toast.error('Erro ao mover negocio. Tente novamente.')
     }
-  }, [leads, stages, moveLeadToStage, setActiveLeadId, queryClient])
+  }, [deals, stages, moveDealStage, queryClient])
 
   const handleAddLead = useCallback((stageId?: string) => {
     setCreateModalStageId(stageId)
     setCreateModalOpen(true)
   }, [])
 
-  if (pipelinesLoading || (stagesLoading && !!activePipelineId) || (leadsLoading && !!activePipelineId)) {
+  const handleEditDeal = useCallback((leadId: string, dealId: string) => {
+    setSelectedLeadId(leadId)
+    setEditDealId(dealId)
+  }, [setSelectedLeadId])
+
+  if (pipelinesLoading || (stagesLoading && !!activePipelineId) || (dealsLoading && !!activePipelineId)) {
     return (
       <div className="flex h-full items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -177,12 +219,12 @@ const PipelineBoard = () => {
     )
   }
 
-  if (stagesError || leadsError) {
+  if (stagesError || dealsError) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3">
         <AlertCircle className="h-8 w-8 text-destructive" />
         <p className="text-sm text-muted-foreground">Erro ao carregar o pipeline</p>
-        <Button variant="outline" size="sm" onClick={() => { refetchStages(); refetchLeads() }}>
+        <Button variant="outline" size="sm" onClick={() => { refetchStages(); refetchDeals() }}>
           Tentar novamente
         </Button>
       </div>
@@ -204,7 +246,7 @@ const PipelineBoard = () => {
           onManageStages={() => setStageManagerOpen(true)}
           fireOnly={fireOnly}
           onToggleFireOnly={() => setFireOnly((v) => !v)}
-          leads={filteredLeads}
+          leads={filteredLeadsForHeader as never}
           pipelineName={pipelines && pipelines.length > 1 ? pipelines.find((p) => p.id === activePipelineId)?.name : undefined}
         />
       </div>
@@ -212,7 +254,7 @@ const PipelineBoard = () => {
       {orphanedCount > 0 && (
         <div className="mx-6 mb-2 flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
           <AlertTriangle className="h-4 w-4 shrink-0" />
-          <span>{orphanedCount} lead{orphanedCount > 1 ? 's' : ''} sem etapa definida (invisíve{orphanedCount > 1 ? 'is' : 'l'} no board). Mova-os para uma etapa pelo painel admin.</span>
+          <span>{orphanedCount} negocio{orphanedCount > 1 ? 's' : ''} sem etapa definida (invisive{orphanedCount > 1 ? 'is' : 'l'} no board). Mova-os para uma etapa pelo painel admin.</span>
         </div>
       )}
 
@@ -226,23 +268,54 @@ const PipelineBoard = () => {
           'flex-1 flex gap-4 overflow-x-auto overflow-y-hidden px-6 pb-4 transition-opacity duration-200',
           isRefetching && 'opacity-50 pointer-events-none'
         )}>
+          {/* Coluna especial: Sem dono (pending_assignment) */}
+          {pendingDeals.length > 0 && (
+            <div className="flex w-[300px] min-w-[280px] max-w-[320px] flex-shrink-0 flex-col h-full">
+              <div
+                className="mb-2 rounded-t-xl px-3 py-2.5"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.18), rgba(245, 158, 11, 0.04))',
+                  borderBottom: '1px solid rgba(245, 158, 11, 0.15)',
+                }}
+              >
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-amber-600 dark:text-amber-400">
+                    Sem dono
+                  </h3>
+                  <span
+                    className="flex items-center justify-center rounded-full text-[10px] font-semibold bg-amber-500 text-white"
+                    style={{ width: 22, height: 22 }}
+                  >
+                    {pendingDeals.length}
+                  </span>
+                </div>
+              </div>
+              <div className="kanban-column flex-1 space-y-2 rounded-xl p-2 overflow-y-auto scrollbar-minimal">
+                {pendingDeals.map((deal) => (
+                  <DealCard key={deal.id} deal={deal} onEditDeal={handleEditDeal} onTransfer={setTransferDealId} onMovePipeline={setMovePipelineDeal} fireOnly={fireOnly} />
+                ))}
+              </div>
+            </div>
+          )}
+
           {stages?.map((stage) => (
             <StageColumn
               key={stage.id}
               stage={stage}
-              leads={leadsByStage[stage.id] ?? []}
+              deals={dealsByStage[stage.id] ?? []}
               onAddLead={handleAddLead}
-              onTransferLead={setTransferLeadId}
-              onMovePipeline={setMovePipelineLead}
+              onEditDeal={handleEditDeal}
+              onTransferDeal={setTransferDealId}
+              onMovePipeline={setMovePipelineDeal}
               fireOnly={fireOnly}
             />
           ))}
         </div>
 
-        {!isRefetching && stages && stages.length > 0 && filteredLeads.length === 0 && !filters.search && !filters.sourceId && !filters.temperature && (
+        {!isRefetching && stages && stages.length > 0 && filteredDeals.length === 0 && !filters.search && !filters.sourceId && !filters.temperature && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 pointer-events-none" style={{ top: '40%' }}>
             <Inbox className="h-10 w-10 text-muted-foreground/40" />
-            <p className="text-sm text-muted-foreground">Nenhum lead neste pipeline</p>
+            <p className="text-sm text-muted-foreground">Nenhum negocio neste pipeline</p>
             <Button size="sm" className="pointer-events-auto" onClick={() => handleAddLead()}>
               Criar primeiro lead
             </Button>
@@ -250,9 +323,9 @@ const PipelineBoard = () => {
         )}
 
         <DragOverlay>
-          {activeLead ? (
+          {activeDeal ? (
             <div className="w-[280px] rotate-2 scale-105 opacity-90 shadow-2xl">
-              <LeadCard lead={activeLead} fireOnly={fireOnly} />
+              <DealCard deal={activeDeal} fireOnly={fireOnly} />
             </div>
           ) : null}
         </DragOverlay>
@@ -266,41 +339,42 @@ const PipelineBoard = () => {
       />
 
       <EditLeadModal
-        lead={selectedLead}
+        lead={selectedLeadData ?? null}
         open={!!selectedLeadId}
-        onClose={() => setSelectedLeadId(null)}
+        onClose={() => { setSelectedLeadId(null); setEditDealId(null) }}
+        dealId={editDealId}
       />
 
       <StageManagerModal
         open={stageManagerOpen}
         onClose={() => setStageManagerOpen(false)}
-        leadCounts={leadCounts}
+        leadCounts={dealCounts}
       />
 
       <TransferLeadModal
         leadId={transferLeadId}
-        open={!!transferLeadId}
-        onClose={() => setTransferLeadId(null)}
+        open={!!transferDealId}
+        onClose={() => setTransferDealId(null)}
       />
 
       <MovePipelineModal
-        leadId={movePipelineLead?.id ?? null}
-        leadName={movePipelineLead?.name || movePipelineLead?.phone || ''}
+        leadId={movePipelineDeal?.id ?? null}
+        leadName={movePipelineDeal?.leads?.name || movePipelineDeal?.leads?.phone || ''}
         currentPipelineId={activePipelineId ?? ''}
-        open={!!movePipelineLead}
-        onClose={() => setMovePipelineLead(null)}
+        open={!!movePipelineDeal}
+        onClose={() => setMovePipelineDeal(null)}
       />
 
       <DealValueDialog
         open={!!dealValuePending}
         onOpenChange={(open) => { if (!open) setDealValuePending(null) }}
-        leadName={dealValuePending?.leadName ?? ''}
+        leadName={dealValuePending?.dealName ?? ''}
         onConfirm={(value) => {
           if (!dealValuePending) return
           updateDealValueAndMove.mutate({
-            leadId: dealValuePending.leadId,
+            dealId: dealValuePending.dealId,
             stageId: dealValuePending.stageId,
-            dealValue: value,
+            value,
           })
           const destStage = stages?.find((s) => s.id === dealValuePending.stageId)
           if (destStage?.is_final && destStage?.is_positive) {

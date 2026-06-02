@@ -2,6 +2,7 @@ import { veltzy } from '@/lib/supabase'
 import type { LeadTemperature, PipelineStage, LeadSourceRecord, Pipeline, Profile } from '@/types/database'
 import type { LeadField } from '@/lib/csv-parser'
 import { normalizePhoneBR } from '@/lib/phone'
+import { resolveWhatsAppInstance } from '@/services/leads.service'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -242,8 +243,20 @@ export const importLeads = async (
     })
 
     if (toInsert.length > 0) {
-      const insertData = toInsert.map((row) => {
+      // Cache de resolucao de instancia por chave assigned_to|pipeline_id
+      const instanceCache = new Map<string, string | null>()
+      const resolveInstance = async (assignedTo?: string, pipelineId?: string): Promise<string | null> => {
+        const key = `${assignedTo ?? ''}|${pipelineId ?? ''}`
+        if (instanceCache.has(key)) return instanceCache.get(key)!
+        const result = await resolveWhatsAppInstance(companyId, assignedTo, pipelineId)
+        instanceCache.set(key, result)
+        return result
+      }
+
+      const insertData: Record<string, unknown>[] = []
+      for (const row of toInsert) {
         const status = stages ? resolveStatusFromStage(row.stage_id, stages) : 'new'
+        const instanceName = await resolveInstance(row.assigned_to, row.pipeline_id)
         const record: Record<string, unknown> = {
           company_id: companyId,
           name: row.name ?? null,
@@ -259,8 +272,9 @@ export const importLeads = async (
         }
         if (row.assigned_to) record.assigned_to = row.assigned_to
         record.pipeline_id = row.pipeline_id
-        return record
-      })
+        if (instanceName) record.whatsapp_instance_name = instanceName
+        insertData.push(record)
+      }
 
       const { error } = await veltzy()
         .from('leads')

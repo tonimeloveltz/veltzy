@@ -221,6 +221,7 @@ export interface CreateLeadInput {
   observations?: string
   assigned_to?: string
   tags?: string[]
+  whatsapp_instance_name?: string | null
 }
 
 export interface UpdateLeadInput {
@@ -238,6 +239,57 @@ export interface UpdateLeadInput {
   deal_value?: number | null
   observations?: string | null
   conversation_status?: ConversationStatus
+}
+
+// --- Deal (Negocio) ---
+
+export type DealStatus = 'open' | 'won' | 'lost' | 'archived' | 'pending_assignment'
+
+export interface Deal {
+  id: string
+  company_id: string
+  lead_id: string
+  name: string
+  value: number
+  stage_id: string | null
+  pipeline_id: string | null
+  assigned_to: string | null
+  status: DealStatus
+  created_at: string
+  updated_at: string
+  // joins
+  lead?: Lead
+  stage?: PipelineStage
+  pipeline?: Pipeline
+  assignee?: Partial<Profile> | null
+}
+
+export interface DealWithLead extends Deal {
+  leads?: Pick<Lead, 'id' | 'name' | 'phone' | 'email' | 'avatar_url' | 'temperature' | 'tags' | 'is_ai_active' | 'transfer_summary' | 'source_id' | 'created_at'> & {
+    lead_sources?: LeadSourceRecord | null
+  }
+  profiles?: Partial<Profile> | null
+  pipeline_stages?: PipelineStage | null
+  pipelines?: Pipeline | null
+}
+
+export interface CreateDealInput {
+  lead_id: string
+  name: string
+  pipeline_id: string
+  stage_id?: string
+  value?: number
+  assigned_to?: string | null
+  status?: DealStatus
+}
+
+export interface UpdateDealInput {
+  name?: string
+  value?: number
+  stage_id?: string | null
+  pipeline_id?: string | null
+  assigned_to?: string | null
+  status?: DealStatus
 }
 
 export type MessageType = 'text' | 'image' | 'audio' | 'video' | 'document' | 'sticker' | 'location' | 'contact'
@@ -311,7 +363,7 @@ export interface LeadWithLastMessage extends Lead {
 
 export type AutomationTrigger = 'lead_created' | 'lead_stage_changed' | 'lead_temperature_changed' | 'message_received' | 'no_response' | 'deal_closed' | 'lead_lost'
 export type AutomationAction = 'send_message' | 'change_stage' | 'assign_lead' | 'add_tag' | 'remove_tag' | 'update_temperature' | 'send_webhook' | 'notify_team'
-export type NotificationType = 'new_lead' | 'lead_assigned' | 'new_message' | 'lead_transferred' | 'system' | 'copilot'
+export type NotificationType = 'new_lead' | 'lead_assigned' | 'new_message' | 'lead_transferred' | 'system' | 'copilot' | 'territory_conflict'
 
 export interface AutomationCondition {
   field: string

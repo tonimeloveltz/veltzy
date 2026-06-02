@@ -11,6 +11,7 @@ import {
   LogOut,
   Users,
   User,
+  Zap,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/use-auth'
@@ -18,6 +19,7 @@ import { useRoles } from '@/hooks/use-roles'
 import { useToggleAvailability } from '@/hooks/use-sellers'
 import { useTeamMembers } from '@/hooks/use-team'
 import { useMyTaskCounts } from '@/hooks/use-tasks'
+import { useFeatureFlag } from '@/hooks/use-feature-flag'
 import { ThemeToggle } from '@/components/layout/theme-toggle'
 import { NotificationCenter } from '@/components/shared/notification-center'
 import { Separator } from '@/components/ui/separator'
@@ -53,6 +55,7 @@ const AppSidebar = () => {
   const toggle = useToggleAvailability()
   const { data: members } = useTeamMembers()
   const { data: taskCounts } = useMyTaskCounts()
+  const isSdrAgentV2 = useFeatureFlag('sdr_agent_v2')
 
   const available = profile?.is_available ?? false
   const onlineMembers = members?.filter((m) => {
@@ -69,6 +72,7 @@ const AppSidebar = () => {
     { label: 'Inbox', href: '/inbox', icon: MessageSquare },
     { label: 'Tarefas', href: '/tarefas', icon: ListTodo },
     { label: 'Negócios', href: '/deals', icon: Handshake },
+    { label: 'SDR IA', href: '/sdr-ia', icon: Zap, visible: (canAccessAdmin || isManager) && isSdrAgentV2 },
     { label: 'Gestão', href: '/gestao', icon: Users, visible: canAccessGestao },
     { label: 'Admin', href: '/admin', icon: Shield, visible: canAccessAdmin },
     { label: 'Super Admin', href: '/super-admin', icon: Crown, visible: isSuperAdmin },

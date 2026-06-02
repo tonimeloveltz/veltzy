@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/select'
 import { LeadTagsInput } from '@/components/pipeline/lead-tags-input'
 import { useUpdateLead, useDeleteLead } from '@/hooks/use-leads'
+import { useDealsByLead, useUpdateDeal } from '@/hooks/use-deals'
 import { usePipelineStages } from '@/hooks/use-pipeline-stages'
 import { useLeadSources } from '@/hooks/use-lead-sources'
 import { useLeadActivityLogs } from '@/hooks/use-activity-logs'
@@ -27,15 +28,18 @@ import type { LeadWithDetails, LeadTemperature, ActivityLog, TaskType } from '@/
 import { leadTemperatureConfig } from '@/lib/lead-config'
 
 const schema = z.object({
+  // Contato
   name: z.string().optional(),
   phone: z.string().min(8, 'Telefone invalido'),
   email: z.string().email('Email invalido').optional().or(z.literal('')),
-  stage_id: z.string().uuid(),
   source_id: z.string().optional(),
-  temperature: z.enum(['cold', 'warm', 'hot', 'fire']),
-  deal_value: z.number().nonnegative().optional(),
   observations: z.string().optional(),
   tags: z.array(z.string()),
+  // Negocio
+  deal_name: z.string().optional(),
+  deal_value: z.number().nonnegative().optional(),
+  stage_id: z.string().uuid(),
+  temperature: z.enum(['cold', 'warm', 'hot', 'fire']),
 })
 
 type FormValues = z.infer<typeof schema>
@@ -44,12 +48,16 @@ interface EditLeadModalProps {
   lead: LeadWithDetails | null
   open: boolean
   onClose: () => void
+  dealId?: string | null
 }
 
-const EditLeadModal = ({ lead, open, onClose }: EditLeadModalProps) => {
+const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
   const updateLead = useUpdateLead()
+  const updateDeal = useUpdateDeal()
   const deleteLead = useDeleteLead()
-  const { data: stages } = usePipelineStages(lead?.pipeline_id)
+  const { data: deals } = useDealsByLead(lead?.id)
+  const activeDeal = dealId ? deals?.find((d) => d.id === dealId) : deals?.[0]
+  const { data: stages } = usePipelineStages(activeDeal?.pipeline_id ?? lead?.pipeline_id)
   const { data: sources } = useLeadSources()
 
   const { register, handleSubmit, control, reset, formState: { errors } } = useForm<FormValues>({
@@ -62,33 +70,50 @@ const EditLeadModal = ({ lead, open, onClose }: EditLeadModalProps) => {
         name: lead.name ?? '',
         phone: lead.phone,
         email: lead.email ?? '',
-        stage_id: lead.stage_id,
         source_id: lead.source_id ?? undefined,
-        temperature: lead.temperature,
-        deal_value: lead.deal_value ?? 0,
         observations: lead.observations ?? '',
         tags: lead.tags,
+        deal_name: activeDeal?.name ?? '',
+        deal_value: activeDeal?.value ?? lead.deal_value ?? 0,
+        stage_id: activeDeal?.stage_id ?? lead.stage_id,
+        temperature: lead.temperature,
       })
     }
-  }, [lead, reset])
+  }, [lead, activeDeal, reset])
 
   const onSubmit = async (values: FormValues) => {
     if (!lead) return
 
-    const oldStageId = lead.stage_id
+    const oldStageId = activeDeal?.stage_id ?? lead.stage_id
     const newStageId = values.stage_id
 
+    // Atualizar contato
     await updateLead.mutateAsync({
       leadId: lead.id,
       data: {
-        ...values,
         name: values.name || null,
+        phone: values.phone,
         email: values.email || null,
         source_id: values.source_id || null,
-        deal_value: values.deal_value || null,
+        temperature: values.temperature,
         observations: values.observations || null,
+        tags: values.tags,
+        deal_value: values.deal_value || null,
+        stage_id: values.stage_id,
       },
     })
+
+    // Atualizar deal se existir
+    if (activeDeal) {
+      await updateDeal.mutateAsync({
+        dealId: activeDeal.id,
+        data: {
+          name: values.deal_name || activeDeal.name,
+          value: values.deal_value,
+          stage_id: values.stage_id,
+        },
+      })
+    }
 
     if (newStageId !== oldStageId) {
       const newStage = stages?.find((s) => s.id === newStageId)
@@ -115,7 +140,9 @@ const EditLeadModal = ({ lead, open, onClose }: EditLeadModalProps) => {
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{lead.name || lead.phone}</DialogTitle>
-          <DialogDescription>Editar informacoes do lead</DialogDescription>
+          <DialogDescription>
+            {activeDeal ? `Negocio: ${activeDeal.name}` : 'Editar contato'}
+          </DialogDescription>
         </DialogHeader>
 
         <Tabs defaultValue="info" className="w-full">
@@ -127,6 +154,76 @@ const EditLeadModal = ({ lead, open, onClose }: EditLeadModalProps) => {
 
           <TabsContent value="info" className="mt-4">
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+              {/* SECAO: NEGOCIO */}
+              {activeDeal && (
+                <>
+                  <div className="flex items-center gap-2">
+                    <div className="h-px flex-1 bg-border/50" />
+                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Negocio</span>
+                    <div className="h-px flex-1 bg-border/50" />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Nome do negocio</Label>
+                    <Input
+                      placeholder="Ex: Orcamento de treinamento, Brindes fim de ano..."
+                      {...register('deal_name')}
+                    />
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Valor (R$)</Label>
+                      <Input type="number" step="0.01" {...register('deal_value', { valueAsNumber: true })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Fase</Label>
+                      <Controller
+                        control={control}
+                        name="stage_id"
+                        render={({ field }) => (
+                          <Select value={field.value} onValueChange={field.onChange}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {stages?.map((s) => (
+                                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Temperatura</Label>
+                    <Controller
+                      control={control}
+                      name="temperature"
+                      render={({ field }) => (
+                        <Select value={field.value} onValueChange={(v) => field.onChange(v as LeadTemperature)}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {(Object.keys(leadTemperatureConfig) as LeadTemperature[]).map((t) => (
+                              <SelectItem key={t} value={t}>
+                                {leadTemperatureConfig[t].label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* SECAO: CONTATO */}
+              <div className="flex items-center gap-2">
+                <div className="h-px flex-1 bg-border/50" />
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Contato</span>
+                <div className="h-px flex-1 bg-border/50" />
+              </div>
+
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Telefone *</Label>
@@ -144,68 +241,69 @@ const EditLeadModal = ({ lead, open, onClose }: EditLeadModalProps) => {
                 <Input type="email" {...register('email')} />
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Fase</Label>
-                  <Controller
-                    control={control}
-                    name="stage_id"
-                    render={({ field }) => (
-                      <Select value={field.value} onValueChange={field.onChange}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {stages?.map((s) => (
-                            <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Origem</Label>
-                  <Controller
-                    control={control}
-                    name="source_id"
-                    render={({ field }) => (
-                      <Select value={field.value ?? ''} onValueChange={(v) => field.onChange(v || undefined)}>
-                        <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                        <SelectContent>
-                          {sources?.map((s) => (
-                            <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
-                </div>
+              <div className="space-y-2">
+                <Label>Origem</Label>
+                <Controller
+                  control={control}
+                  name="source_id"
+                  render={({ field }) => (
+                    <Select value={field.value ?? ''} onValueChange={(v) => field.onChange(v || undefined)}>
+                      <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                      <SelectContent>
+                        {sources?.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Temperatura</Label>
-                  <Controller
-                    control={control}
-                    name="temperature"
-                    render={({ field }) => (
-                      <Select value={field.value} onValueChange={(v) => field.onChange(v as LeadTemperature)}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {(Object.keys(leadTemperatureConfig) as LeadTemperature[]).map((t) => (
-                            <SelectItem key={t} value={t}>
-                              {leadTemperatureConfig[t].label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
+              {/* Campos que so aparecem se NAO tem deal (fallback para editar direto no lead) */}
+              {!activeDeal && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Fase</Label>
+                    <Controller
+                      control={control}
+                      name="stage_id"
+                      render={({ field }) => (
+                        <Select value={field.value} onValueChange={field.onChange}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {stages?.map((s) => (
+                              <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Temperatura</Label>
+                    <Controller
+                      control={control}
+                      name="temperature"
+                      render={({ field }) => (
+                        <Select value={field.value} onValueChange={(v) => field.onChange(v as LeadTemperature)}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {(Object.keys(leadTemperatureConfig) as LeadTemperature[]).map((t) => (
+                              <SelectItem key={t} value={t}>
+                                {leadTemperatureConfig[t].label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Valor (R$)</Label>
+                    <Input type="number" step="0.01" {...register('deal_value', { valueAsNumber: true })} />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Valor (R$)</Label>
-                  <Input type="number" step="0.01" {...register('deal_value', { valueAsNumber: true })} />
-                </div>
-              </div>
+              )}
 
               <div className="rounded-lg bg-muted/50 p-3 space-y-1">
                 <p className="text-xs text-muted-foreground">
@@ -253,8 +351,8 @@ const EditLeadModal = ({ lead, open, onClose }: EditLeadModalProps) => {
                 </Button>
                 <div className="flex gap-2">
                   <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
-                  <Button type="submit" disabled={updateLead.isPending}>
-                    {updateLead.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  <Button type="submit" disabled={updateLead.isPending || updateDeal.isPending}>
+                    {(updateLead.isPending || updateDeal.isPending) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Salvar
                   </Button>
                 </div>

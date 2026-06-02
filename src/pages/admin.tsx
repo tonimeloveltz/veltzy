@@ -6,7 +6,6 @@ import { IntegrationsTab } from '@/components/admin/integrations-tab'
 import { PipelineTab } from '@/components/admin/pipeline-tab'
 import { ThemeCustomizer } from '@/components/company/theme-customizer'
 import { ActivityLogsDashboard } from '@/components/admin/activity-logs-dashboard'
-import { SdrTab } from '@/components/admin/sdr-tab'
 import { BusinessRulesTab } from '@/components/admin/business-rules-tab'
 import { useAuthStore } from '@/stores/auth.store'
 
@@ -67,7 +66,6 @@ const AdminPage = () => {
           <TabsTrigger value="empresa">Empresa</TabsTrigger>
           <TabsTrigger value="aparencia">Aparência</TabsTrigger>
           <TabsTrigger value="logs-avancados">Logs avançados</TabsTrigger>
-          <TabsTrigger value="ia-sdr-avancado">IA SDR avancado</TabsTrigger>
         </TabsList>
         <TabsContent value="permissoes" className="mt-4"><PermissoesPlaceholder /></TabsContent>
         <TabsContent value="integracoes" className="mt-4"><IntegrationsTab /></TabsContent>
@@ -76,7 +74,6 @@ const AdminPage = () => {
         <TabsContent value="empresa" className="mt-4"><EmpresaTab /></TabsContent>
         <TabsContent value="aparencia" className="mt-4"><ThemeCustomizer /></TabsContent>
         <TabsContent value="logs-avancados" className="mt-4"><ActivityLogsDashboard /></TabsContent>
-        <TabsContent value="ia-sdr-avancado" className="mt-4"><SdrTab /></TabsContent>
       </Tabs>
     </div>
   )
