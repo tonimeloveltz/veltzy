@@ -16,7 +16,7 @@ import { useMoveDealStage, useUpdateDealValueAndMove } from '@/hooks/use-deals'
 import { timeAgo } from '@/lib/time'
 import type { DealWithLead } from '@/types/database'
 import { useNavigate } from 'react-router-dom'
-import { Phone, Mail, MoreVertical, Pencil, ArrowRightLeft, UserRoundPen, Clock, MessageSquare, Bot, CheckSquare, FolderInput, ArrowLeftRight, AlertTriangle, AlertCircle } from 'lucide-react'
+import { Phone, MoreVertical, Pencil, ArrowRightLeft, UserRoundPen, Clock, MessageSquare, Bot, CheckSquare, FolderInput, ArrowLeftRight, AlertTriangle, AlertCircle } from 'lucide-react'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import type { LeadTemperature } from '@/types/database'
 
@@ -136,12 +136,6 @@ const DealCard = ({ deal, onEditDeal, onTransfer, onMovePipeline, fireOnly }: De
               <p className="flex items-center gap-1 text-xs text-muted-foreground">
                 <Phone className="h-3 w-3" />
                 {lead.phone}
-              </p>
-            )}
-            {lead?.email && (
-              <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                <Mail className="h-3 w-3" />
-                <span className="truncate">{lead.email}</span>
               </p>
             )}
           </div>
