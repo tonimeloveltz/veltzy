@@ -194,6 +194,7 @@ export interface Lead {
   avatar_url: string | null
   ad_context: AdContext | null
   whatsapp_instance_name: string | null
+  company_name: string | null
   transfer_summary: string | null
   last_customer_message_at: string | null
   sla_breached: boolean
@@ -213,6 +214,7 @@ export interface CreateLeadInput {
   name?: string
   phone: string
   email?: string
+  company_name?: string
   source_id?: string
   stage_id: string
   pipeline_id: string
@@ -228,6 +230,7 @@ export interface UpdateLeadInput {
   name?: string | null
   phone?: string
   email?: string | null
+  company_name?: string | null
   source_id?: string | null
   stage_id?: string
   status?: LeadStatus
@@ -265,7 +268,7 @@ export interface Deal {
 }
 
 export interface DealWithLead extends Deal {
-  leads?: Pick<Lead, 'id' | 'name' | 'phone' | 'email' | 'avatar_url' | 'temperature' | 'tags' | 'is_ai_active' | 'transfer_summary' | 'source_id' | 'created_at'> & {
+  leads?: Pick<Lead, 'id' | 'name' | 'phone' | 'email' | 'avatar_url' | 'temperature' | 'tags' | 'is_ai_active' | 'transfer_summary' | 'source_id' | 'company_name' | 'created_at'> & {
     lead_sources?: LeadSourceRecord | null
   }
   profiles?: Partial<Profile> | null

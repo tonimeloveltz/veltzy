@@ -26,6 +26,7 @@ const schema = z.object({
   phone: z.string().min(8, 'Telefone invalido'),
   name: z.string().optional(),
   email: z.string().email('Email invalido').optional().or(z.literal('')),
+  company_name: z.string().optional(),
   pipeline_id: z.string().uuid('Selecione um pipeline'),
   stage_id: z.string().uuid('Selecione uma fase'),
   source_id: z.string().uuid().optional(),
@@ -101,6 +102,7 @@ const CreateLeadModal = ({ open, onClose, defaultStageId, pipelineId }: CreateLe
       deal_value: values.deal_value || undefined,
       email: values.email || undefined,
       name: values.name || undefined,
+      company_name: values.company_name || undefined,
       source_id: values.source_id || undefined,
       observations: values.observations || undefined,
     }
@@ -140,6 +142,14 @@ const CreateLeadModal = ({ open, onClose, defaultStageId, pipelineId }: CreateLe
             <Label>Email</Label>
             <Input type="email" placeholder="email@exemplo.com" {...register('email')} />
             {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
+          </div>
+
+          <div className="space-y-2">
+            <Label>Empresa do cliente</Label>
+            <Input
+              placeholder="Ex: Clinica Silva, Escritorio Martins..."
+              {...register('company_name')}
+            />
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">

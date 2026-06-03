@@ -41,6 +41,9 @@ const ChatHeader = ({ lead }: ChatHeaderProps) => {
 
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate">{lead.name || lead.phone}</p>
+        {lead.company_name && (
+          <p className="text-[11px] text-muted-foreground/70 truncate">{lead.company_name}</p>
+        )}
         <p className="text-xs text-muted-foreground">
           {lead.phone}
           {pipelineName && <span className="ml-1.5 text-muted-foreground/60">· {pipelineName}</span>}
