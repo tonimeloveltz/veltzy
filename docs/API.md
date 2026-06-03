@@ -8,23 +8,41 @@ POST https://{project}.supabase.co/functions/v1/zapi-webhook
 ```
 Configurar no painel Z-API como URL de webhook.
 
-### Source Webhook (Landing Pages)
+### Source Webhook (Landing Pages / Ads)
 ```
-POST https://{project}.supabase.co/functions/v1/source-webhook?company={slug}&source={source_slug}
+POST https://{project}.supabase.co/functions/v1/source-webhook
+Authorization: Bearer {webhook_token}
 Content-Type: application/json
+```
 
-{
-  "name": "Nome do Lead",
-  "phone": "11999999999",
-  "email": "lead@email.com",
-  "tags": ["landing-page", "promo"],
-  "observations": "Veio da campanha X"
-}
+Autenticacao por Bearer token (gerado no painel Admin > Integracoes > Webhooks).
+O token identifica empresa, origem e pipeline destino automaticamente.
+
+Payload depende do preset configurado:
+
+**Generico:**
+```json
+{ "phone": "11999999999", "name": "Joao Silva", "email": "joao@email.com", "tags": ["landing-page"] }
+```
+
+**Meta Lead Ads (via middleware):**
+```json
+{ "full_name": "Joao Silva", "phone_number": "+5511999999999", "email": "joao@email.com" }
+```
+
+**Google Lead Form:**
+```json
+{ "user_column_data": [{ "column_id": "FULL_NAME", "string_value": "Joao" }, { "column_id": "PHONE_NUMBER", "string_value": "+5511999999999" }] }
+```
+
+**RD Station:**
+```json
+{ "leads": [{ "name": "Joao", "personal_phone": "+5511999999999", "email": "joao@email.com" }] }
 ```
 
 Resposta:
 ```json
-{ "success": true, "leadId": "uuid" }
+{ "success": true, "leadId": "uuid", "isNewLead": true }
 ```
 
 ### Instagram Webhook

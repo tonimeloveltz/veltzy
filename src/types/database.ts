@@ -495,8 +495,35 @@ export interface SourceIntegration {
   integration_type: IntegrationType
   config: Record<string, unknown>
   is_active: boolean
+  webhook_token: string | null
   created_at: string
   updated_at: string
+}
+
+export type WebhookPreset = 'meta_lead_ads' | 'google_lead_form' | 'rd_station' | 'generic'
+
+export interface WebhookIntegrationConfig {
+  preset: WebhookPreset
+}
+
+export interface WebhookInboundLog {
+  id: string
+  company_id: string
+  source_integration_id: string | null
+  source_id: string | null
+  status: string
+  lead_id: string | null
+  raw_payload: Record<string, unknown>
+  parsed_payload: Record<string, unknown> | null
+  error_message: string | null
+  created_at: string
+}
+
+export interface WebhookIntegrationWithDetails extends SourceIntegration {
+  lead_source_name: string
+  lead_source_slug: string
+  pipeline_id: string | null
+  pipeline_name: string | null
 }
 
 export interface InstagramConnection {
