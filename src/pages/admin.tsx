@@ -9,18 +9,6 @@ import { ActivityLogsDashboard } from '@/components/admin/activity-logs-dashboar
 import { BusinessRulesTab } from '@/components/admin/business-rules-tab'
 import { useAuthStore } from '@/stores/auth.store'
 
-const PermissoesPlaceholder = () => (
-  <Card>
-    <CardHeader>
-      <CardTitle>Permissões</CardTitle>
-      <CardDescription>Gerenciamento de permissões e roles dos membros</CardDescription>
-    </CardHeader>
-    <CardContent>
-      <p className="text-sm text-muted-foreground">Em breve</p>
-    </CardContent>
-  </Card>
-)
-
 const EmpresaTab = () => {
   const company = useAuthStore((s) => s.company)
 
@@ -59,7 +47,6 @@ const AdminPage = () => {
 
       <Tabs value={tab} onValueChange={(v) => setSearchParams({ tab: v })}>
         <TabsList className="flex-wrap h-auto gap-1">
-          <TabsTrigger value="permissoes">Permissões</TabsTrigger>
           <TabsTrigger value="integracoes">Integrações</TabsTrigger>
           <TabsTrigger value="pipeline">Pipeline</TabsTrigger>
           <TabsTrigger value="regras">Regras</TabsTrigger>
@@ -67,7 +54,6 @@ const AdminPage = () => {
           <TabsTrigger value="aparencia">Aparência</TabsTrigger>
           <TabsTrigger value="logs-avancados">Logs avançados</TabsTrigger>
         </TabsList>
-        <TabsContent value="permissoes" className="mt-4"><PermissoesPlaceholder /></TabsContent>
         <TabsContent value="integracoes" className="mt-4"><IntegrationsTab /></TabsContent>
         <TabsContent value="pipeline" className="mt-4"><PipelineTab /></TabsContent>
         <TabsContent value="regras" className="mt-4"><BusinessRulesTab /></TabsContent>
