@@ -32,6 +32,7 @@ const schema = z.object({
   name: z.string().optional(),
   phone: z.string().min(8, 'Telefone invalido'),
   email: z.string().email('Email invalido').optional().or(z.literal('')),
+  company_name: z.string().optional(),
   source_id: z.string().optional(),
   observations: z.string().optional(),
   tags: z.array(z.string()),
@@ -70,6 +71,7 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
         name: lead.name ?? '',
         phone: lead.phone,
         email: lead.email ?? '',
+        company_name: lead.company_name ?? '',
         source_id: lead.source_id ?? undefined,
         observations: lead.observations ?? '',
         tags: lead.tags,
@@ -94,6 +96,7 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
         name: values.name || null,
         phone: values.phone,
         email: values.email || null,
+        company_name: values.company_name || null,
         source_id: values.source_id || null,
         temperature: values.temperature,
         observations: values.observations || null,
@@ -239,6 +242,14 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
               <div className="space-y-2">
                 <Label>Email</Label>
                 <Input type="email" {...register('email')} />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Empresa do cliente</Label>
+                <Input
+                  placeholder="Ex: Clinica Silva, Escritorio Martins..."
+                  {...register('company_name')}
+                />
               </div>
 
               <div className="space-y-2">

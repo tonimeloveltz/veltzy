@@ -129,6 +129,9 @@ const DealCard = ({ deal, onEditDeal, onTransfer, onMovePipeline, fireOnly }: De
 
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium truncate">{leadName}</p>
+            {lead?.company_name && (
+              <p className="text-[11px] text-muted-foreground/70 truncate">{lead.company_name}</p>
+            )}
             {deal.name && deal.name !== leadName && (
               <p className="text-[11px] text-muted-foreground truncate">{deal.name}</p>
             )}

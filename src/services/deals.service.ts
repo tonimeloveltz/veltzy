@@ -3,7 +3,7 @@ import type { DealWithLead, CreateDealInput, UpdateDealInput } from '@/types/dat
 
 const DEAL_WITH_LEAD_SELECT = `
   *,
-  leads:lead_id(id, name, phone, email, avatar_url, temperature, tags, is_ai_active, transfer_summary, source_id, created_at,
+  leads:lead_id(id, name, phone, email, avatar_url, temperature, tags, is_ai_active, transfer_summary, source_id, company_name, created_at,
     lead_sources:source_id(*)
   ),
   pipeline_stages:stage_id(*),

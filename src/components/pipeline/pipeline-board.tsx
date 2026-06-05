@@ -99,6 +99,7 @@ const PipelineBoard = () => {
           d.leads?.name?.toLowerCase().includes(q) ||
           d.leads?.phone?.includes(q) ||
           d.leads?.email?.toLowerCase().includes(q) ||
+          d.leads?.company_name?.toLowerCase().includes(q) ||
           d.name?.toLowerCase().includes(q)
       )
     }

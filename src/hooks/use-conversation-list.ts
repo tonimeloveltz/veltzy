@@ -35,7 +35,8 @@ export const useConversationList = () => {
         (l) =>
           l.name?.toLowerCase().includes(q) ||
           l.phone.includes(q) ||
-          l.email?.toLowerCase().includes(q)
+          l.email?.toLowerCase().includes(q) ||
+          l.company_name?.toLowerCase().includes(q)
       )
     }
 

@@ -345,9 +345,10 @@ const DealsPage = () => {
                       onCheckedChange={toggleSelectAll}
                     />
                   </th>
-                  <th className={cn(thClass, 'text-left w-[15%]')}>Contato</th>
+                  <th className={cn(thClass, 'text-left w-[14%]')}>Contato</th>
+                  <th className={cn(thClass, 'text-left w-[10%]')}>Empresa</th>
                   <th className={cn(thClass, 'text-left w-[4%]')}>Chat</th>
-                  <th className={cn(thClass, 'text-left w-[12%]')}>Negocio</th>
+                  <th className={cn(thClass, 'text-left w-[11%]')}>Negocio</th>
                   <th className={cn(thClass, 'text-left w-[9%]')}>Valor</th>
                   {showPipelineColumn && <th className={cn(thClass, 'text-left w-[9%]')}>Pipeline</th>}
                   <th className={cn(thClass, 'text-left w-[9%]')}>Etapa</th>
@@ -404,6 +405,11 @@ const DealsPage = () => {
                             <p className="text-[11px] text-muted-foreground truncate">{lead?.email ?? lead?.phone}</p>
                           </div>
                         </div>
+                      </td>
+
+                      {/* Empresa */}
+                      <td className="py-3 text-left text-xs text-muted-foreground truncate">
+                        {lead?.company_name || <span className="text-muted-foreground/40">-</span>}
                       </td>
 
                       {/* Chat */}
@@ -497,7 +503,7 @@ const DealsPage = () => {
                 })}
                 {deals.length === 0 && (
                   <tr>
-                    <td colSpan={showPipelineColumn ? 11 : 10} className="py-12 text-center text-sm text-muted-foreground">
+                    <td colSpan={showPipelineColumn ? 12 : 11} className="py-12 text-center text-sm text-muted-foreground">
                       Nenhum negocio encontrado
                     </td>
                   </tr>
