@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Mic2, Play, Pause, Sparkles } from 'lucide-react'
+import { Mic2, Play, Pause, Sparkles, ImageOff } from 'lucide-react'
 
 interface AudioBubbleProps {
   fileUrl: string
@@ -17,6 +17,7 @@ const AudioBubble = ({ fileUrl, transcription }: AudioBubbleProps) => {
   const [playing, setPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
+  const [loadError, setLoadError] = useState(false)
 
   const toggle = useCallback(() => {
     const el = audioRef.current
@@ -37,6 +38,7 @@ const AudioBubble = ({ fileUrl, transcription }: AudioBubbleProps) => {
     const onEnded = () => { setPlaying(false); setCurrentTime(0) }
     const onTime = () => setCurrentTime(el.currentTime)
     const onMeta = () => setDuration(el.duration || 0)
+    const onError = () => setLoadError(true)
 
     el.addEventListener('play', onPlay)
     el.addEventListener('pause', onPause)
@@ -44,6 +46,7 @@ const AudioBubble = ({ fileUrl, transcription }: AudioBubbleProps) => {
     el.addEventListener('timeupdate', onTime)
     el.addEventListener('loadedmetadata', onMeta)
     el.addEventListener('durationchange', onMeta)
+    el.addEventListener('error', onError)
 
     return () => {
       el.removeEventListener('play', onPlay)
@@ -52,10 +55,20 @@ const AudioBubble = ({ fileUrl, transcription }: AudioBubbleProps) => {
       el.removeEventListener('timeupdate', onTime)
       el.removeEventListener('loadedmetadata', onMeta)
       el.removeEventListener('durationchange', onMeta)
+      el.removeEventListener('error', onError)
     }
   }, [])
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0
+
+  if (loadError) {
+    return (
+      <div className="flex items-center gap-2 rounded-2xl bg-secondary p-3 text-xs text-muted-foreground">
+        <ImageOff className="h-4 w-4 shrink-0" />
+        <span>Audio indisponivel</span>
+      </div>
+    )
+  }
 
   const handleBarClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const el = audioRef.current

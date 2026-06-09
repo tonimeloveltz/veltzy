@@ -14,11 +14,17 @@ interface EvolutionInboundPayload {
   sender_name?: string
   message_id: string
   content: string
-  message_type: 'text' | 'image' | 'audio' | 'video' | 'document'
+  message_type: 'text' | 'image' | 'audio' | 'video' | 'document' | 'sticker' | 'location' | 'contact' | 'reaction'
   media_url?: string
   media_mime_type?: string
   file_name?: string
   timestamp: string
+  // Campos extras por tipo
+  latitude?: number
+  longitude?: number
+  contact_name?: string
+  contact_phone?: string
+  reaction_emoji?: string
   ad_context?: {
     ad_id?: string
     ad_title?: string
@@ -73,15 +79,42 @@ Deno.serve(async (req) => {
       )
     }
 
-    // 3. Delegar para handler compartilhado
+    // 3. Normalizar tipos especiais
+    let { content } = payload
+    let messageType = payload.message_type as string
+
+    // Location: salvar coordenadas no content para renderizacao
+    if (payload.message_type === 'location' && payload.latitude != null && payload.longitude != null) {
+      content = content || `${payload.latitude},${payload.longitude}`
+    }
+
+    // Contact: salvar nome e telefone no content
+    if (payload.message_type === 'contact' && payload.contact_name) {
+      content = content || `${payload.contact_name}${payload.contact_phone ? `\n${payload.contact_phone}` : ''}`
+    }
+
+    // Reaction: tratar como texto com emoji (DB nao tem tipo reaction)
+    if (payload.message_type === 'reaction') {
+      messageType = 'text'
+      content = payload.reaction_emoji ?? content ?? ''
+    }
+
+    // Tipos desconhecidos: mapear para texto para nao quebrar CHECK constraint do DB
+    const validTypes = ['text', 'image', 'audio', 'video', 'document', 'sticker', 'location', 'contact']
+    if (!validTypes.includes(messageType)) {
+      console.warn(`[evolution-inbound] Unknown message_type '${messageType}', falling back to text`)
+      messageType = 'text'
+    }
+
+    // 4. Delegar para handler compartilhado
     const result = await handleInboundMessage({
       supabaseUrl: url,
       supabaseKey: key,
       companyId: payload.company_id,
       phone: normalizePhoneBR(payload.phone),
       senderName: payload.sender_name ?? null,
-      content: payload.content,
-      messageType: payload.message_type,
+      content,
+      messageType,
       externalId: payload.message_id,
       fileUrl: payload.media_url ?? null,
       fileName: payload.file_name ?? null,
@@ -89,7 +122,6 @@ Deno.serve(async (req) => {
       source: 'whatsapp',
       instanceName: payload.instance_name,
       adContext: payload.ad_context ?? null,
-      // Evolution nao busca avatar via provider (Hub nao expoe essa API)
     })
 
     console.log(`[evolution-inbound] Processed: leadId=${result.leadId}, isNew=${result.isNewLead}`)

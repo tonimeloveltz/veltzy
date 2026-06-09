@@ -114,9 +114,25 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
       delivery_status: 'sent',
     }).select('id').single()
     savedMessage = data
+
+    // 5.1 Persistir midia no Storage (download + reupload)
+    // URLs externas do WhatsApp/Evolution expiram. Baixar e salvar no bucket proprio.
+    if (params.fileUrl && savedMessage?.id) {
+      fetchAndUploadMedia(
+        params.supabaseUrl,
+        params.supabaseKey,
+        supabase,
+        savedMessage.id,
+        params.companyId,
+        params.fileUrl,
+        params.fileMimeType,
+        params.fileName,
+      )
+    }
   }
 
   // 6. Transcricao de audio (async, nao bloqueia)
+  // Nota: transcricao usa fileUrl original (ainda valida neste momento)
   if ((params.messageType === 'audio') && params.fileUrl && savedMessage?.id) {
     const openaiKey = Deno.env.get('OPENAI_API_KEY')
     if (openaiKey) {
@@ -399,6 +415,73 @@ async function fetchAndUploadAvatar(
   } catch (err) {
     console.error('Avatar fetch failed:', err instanceof Error ? err.message : JSON.stringify(err))
   }
+}
+
+/** Baixa midia de URL externa e re-upa para chat-attachments. Atualiza file_url da mensagem. */
+async function fetchAndUploadMedia(
+  supabaseUrl: string,
+  supabaseKey: string,
+  supabase: SupabaseClient,
+  messageId: string,
+  companyId: string,
+  externalUrl: string,
+  mimeType: string | null,
+  fileName: string | null,
+): Promise<void> {
+  try {
+    const res = await fetch(externalUrl)
+    if (!res.ok) {
+      console.error(`[media-upload] Download failed (${res.status}) for message ${messageId}`)
+      return
+    }
+
+    const buffer = await res.arrayBuffer()
+    const contentType = mimeType ?? res.headers.get('content-type') ?? 'application/octet-stream'
+
+    // Extensao: do fileName, do mimeType, ou fallback
+    const ext = fileName
+      ? fileName.split('.').pop() ?? extensionFromMime(contentType)
+      : extensionFromMime(contentType)
+
+    const path = `${companyId}/${messageId}.${ext}`
+
+    const storageClient = createClient(supabaseUrl, supabaseKey)
+    const { error: uploadError } = await storageClient.storage
+      .from('chat-attachments')
+      .upload(path, buffer, { contentType, upsert: true })
+
+    if (uploadError) {
+      console.error('[media-upload] Upload error:', JSON.stringify(uploadError))
+      return
+    }
+
+    const { data: urlData } = storageClient.storage
+      .from('chat-attachments')
+      .getPublicUrl(path)
+
+    await supabase
+      .from('messages')
+      .update({ file_url: urlData.publicUrl })
+      .eq('id', messageId)
+
+    console.log(`[media-upload] Persisted media for message ${messageId}`)
+  } catch (err) {
+    console.error('[media-upload] Failed:', err instanceof Error ? err.message : JSON.stringify(err))
+  }
+}
+
+function extensionFromMime(mime: string): string {
+  const map: Record<string, string> = {
+    'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif',
+    'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp4': 'mp4', 'audio/webm': 'webm',
+    'video/mp4': 'mp4', 'video/3gpp': '3gp', 'video/webm': 'webm',
+    'application/pdf': 'pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+  }
+  // Tentar match exato, depois match parcial (audio/ogg; codecs=opus -> audio/ogg)
+  const base = mime.split(';')[0].trim()
+  return map[base] ?? base.split('/')[1]?.replace(/[^a-z0-9]/g, '') ?? 'bin'
 }
 
 async function transcribeAudio(
