@@ -4,19 +4,14 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { useReplyTemplates, useCreateTemplate, useDeleteTemplate } from '@/hooks/use-reply-templates'
-import { updateTemplate } from '@/services/reply-templates.service'
-import { useQueryClient } from '@tanstack/react-query'
-import { useAuthStore } from '@/stores/auth.store'
-import { toast } from 'sonner'
+import { useReplyTemplates, useCreateTemplate, useUpdateTemplate, useDeleteTemplate } from '@/hooks/use-reply-templates'
 import type { ReplyTemplate } from '@/types/database'
 
 const ScriptsManager = () => {
-  const companyId = useAuthStore((s) => s.company?.id)
   const { data: templates, isLoading } = useReplyTemplates()
   const createTemplate = useCreateTemplate()
+  const updateTemplateMutation = useUpdateTemplate()
   const deleteTemplate = useDeleteTemplate()
-  const queryClient = useQueryClient()
 
   const [search, setSearch] = useState('')
   const [catFilter, setCatFilter] = useState('')
@@ -53,12 +48,12 @@ const ScriptsManager = () => {
     setEditContent(t.content)
   }
 
-  const saveEdit = async () => {
+  const saveEdit = () => {
     if (!editingId) return
-    await updateTemplate(companyId!, editingId, { title: editTitle, content: editContent, category: editCategory })
-    queryClient.invalidateQueries({ queryKey: ['reply-templates'] })
-    setEditingId(null)
-    toast.success('Template atualizado!')
+    updateTemplateMutation.mutate(
+      { id: editingId, input: { title: editTitle, content: editContent, category: editCategory } },
+      { onSuccess: () => setEditingId(null) },
+    )
   }
 
   const handleDelete = (id: string) => {
