@@ -9,7 +9,7 @@
 
 | Card | Metrica | Tabela | Coluna usada | Filtro de periodo | Calculo |
 |------|---------|--------|-------------|-------------------|---------|
-| Taxa de Conversao | `conversionRate` | `leads` + `deals` | leads.created_at | Sim (created_at dos leads) | `deals won / total leads * 100` |
+| Taxa de Conversao | `conversionRate` | `deals` | closed_at / created_at | Sim (mesma base de totalDeals) | `deals won / total deals no periodo * 100` |
 | Score Medio IA | `avgAiScore` | `leads` | ai_score | Sim (created_at) | `media de ai_score dos leads no periodo` |
 | Deals Fechados | `dealsClosed` | `deals` | closed_at | Sim (closed_at) | `contagem de deals com status=won fechados no periodo` |
 | Negocios (total) | `totalDeals` | `deals` | created_at / closed_at | Sim (varia por status) | `soma dos 5 status filtrados` |
@@ -207,10 +207,11 @@ O trigger 059 seta `status = 'open'` e `closed_at = NULL` quando um deal sai de 
 
 ### Taxa de Conversao
 ```
-conversionRate = (deals com status=won no periodo) / (total leads criados no periodo) * 100
+conversionRate = (deals won no periodo) / (total deals no periodo) * 100
 ```
-Numerador: tabela `deals`, filtrado por `closed_at` no periodo
-Denominador: tabela `leads`, filtrado por `created_at` no periodo
+Numerador: `closedCount` (deals com status=won, filtrados por closed_at)
+Denominador: `totalDeals` (soma de todos os status filtrados pelo periodo)
+Usa os mesmos valores dos cards Negocios e Deals Fechados, garantindo que a conta bate visualmente.
 
 ### Score Medio IA
 ```

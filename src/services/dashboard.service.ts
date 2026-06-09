@@ -134,7 +134,7 @@ export const getDashboardKpis = async (companyId: string, days?: number, pipelin
   const totalValue = openValue + closedValue + lostValue
 
   const avgScore = totalLeads > 0 ? Math.round(allLeads.reduce((s, l) => s + (l.ai_score ?? 0), 0) / totalLeads) : 0
-  const conversionRate = totalLeads > 0 ? Math.round((closed.length / totalLeads) * 100) : 0
+  const conversionRate = totalDeals > 0 ? Math.round((closed.length / totalDeals) * 100) : 0
   const avgTicket = closed.length > 0 ? closedValue / closed.length : 0
 
   let prevConversionRate = 0
@@ -169,7 +169,7 @@ export const getDashboardKpis = async (companyId: string, days?: number, pipelin
     const pLeads = prevLeads ?? []
     const pDeals = prevDeals ?? []
     const pClosed = pDeals.filter((d) => d.status === 'won')
-    prevConversionRate = pLeads.length > 0 ? Math.round((pClosed.length / pLeads.length) * 100) : 0
+    prevConversionRate = pDeals.length > 0 ? Math.round((pClosed.length / pDeals.length) * 100) : 0
     prevAvgAiScore = pLeads.length > 0 ? Math.round(pLeads.reduce((s, l) => s + (l.ai_score ?? 0), 0) / pLeads.length) : 0
     prevDealsClosed = pClosed.length
   }
