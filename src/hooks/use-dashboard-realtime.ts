@@ -29,29 +29,24 @@ export const useDashboardRealtime = () => {
       })
     }
 
+    // Usar eventos especificos (INSERT/UPDATE/DELETE) em vez de '*',
+    // seguindo o padrao do useMessages (inbox) que funciona.
     const channel = supabase
       .channel(`dashboard:${companyId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'veltzy',
-          table: 'leads',
-          filter: `company_id=eq.${companyId}`,
-        },
-        invalidateAll
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'veltzy',
-          table: 'deals',
-          filter: `company_id=eq.${companyId}`,
-        },
-        invalidateAll
-      )
-      .subscribe()
+      .on('postgres_changes', { event: 'INSERT', schema: 'veltzy', table: 'deals', filter: `company_id=eq.${companyId}` }, invalidateAll)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'veltzy', table: 'deals', filter: `company_id=eq.${companyId}` }, invalidateAll)
+      .on('postgres_changes', { event: 'DELETE', schema: 'veltzy', table: 'deals', filter: `company_id=eq.${companyId}` }, invalidateAll)
+      .on('postgres_changes', { event: 'INSERT', schema: 'veltzy', table: 'leads', filter: `company_id=eq.${companyId}` }, invalidateAll)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'veltzy', table: 'leads', filter: `company_id=eq.${companyId}` }, invalidateAll)
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.debug('[Dashboard Realtime] Subscribed to leads + deals')
+        } else if (status === 'CHANNEL_ERROR') {
+          console.warn('[Dashboard Realtime] Channel error — falling back to polling')
+        } else if (status === 'TIMED_OUT') {
+          console.warn('[Dashboard Realtime] Timed out — falling back to polling')
+        }
+      })
 
     return () => {
       supabase.removeChannel(channel)
