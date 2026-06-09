@@ -258,6 +258,7 @@ export interface Deal {
   pipeline_id: string | null
   assigned_to: string | null
   status: DealStatus
+  closed_at: string | null
   created_at: string
   updated_at: string
   // joins

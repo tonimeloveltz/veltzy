@@ -83,9 +83,9 @@ export interface DashboardKpis {
 }
 
 export const getDashboardKpis = async (companyId: string, days?: number, pipelineId?: string, sellerProfileId?: string): Promise<DashboardKpis> => {
-  // Deals query — sem filtro de periodo para mostrar estado real do funil.
-  // O filtro de periodo se aplica apenas ao comparativo anterior.
-  let dealsQuery = veltzy().from('deals').select('status, value').eq('company_id', companyId)
+  // Deals: buscar com created_at E closed_at para filtrar por periodo no JS.
+  // Abertos filtram por created_at, fechados/perdidos por closed_at.
+  let dealsQuery = veltzy().from('deals').select('status, value, created_at, closed_at').eq('company_id', companyId)
   if (pipelineId) dealsQuery = dealsQuery.eq('pipeline_id', pipelineId)
   if (sellerProfileId) dealsQuery = dealsQuery.eq('assigned_to', sellerProfileId)
   const { data: deals, error: dealsError } = await dealsQuery
@@ -106,12 +106,26 @@ export const getDashboardKpis = async (companyId: string, days?: number, pipelin
   const allDeals = deals ?? []
   const allLeads = leads ?? []
   const totalLeads = allLeads.length
-  const totalDeals = allDeals.length
-  const open = allDeals.filter((d) => d.status === 'open')
-  const closed = allDeals.filter((d) => d.status === 'won')
-  const lost = allDeals.filter((d) => d.status === 'lost')
-  const pending = allDeals.filter((d) => d.status === 'pending_assignment')
-  const archived = allDeals.filter((d) => d.status === 'archived')
+
+  // Filtro de periodo por status:
+  // - open/pending: created_at (entraram no funil no periodo)
+  // - won/lost: closed_at (fechados no periodo)
+  // - archived: created_at
+  // - Sem periodo (Total): mostra tudo
+  const periodStart = days ? new Date(Date.now() - days * 86400000).toISOString() : null
+
+  const inPeriod = (dateStr: string | null) => {
+    if (!periodStart) return true
+    if (!dateStr) return false
+    return dateStr >= periodStart
+  }
+
+  const open = allDeals.filter((d) => d.status === 'open' && inPeriod(d.created_at))
+  const closed = allDeals.filter((d) => d.status === 'won' && inPeriod(d.closed_at ?? d.created_at))
+  const lost = allDeals.filter((d) => d.status === 'lost' && inPeriod(d.closed_at ?? d.created_at))
+  const pending = allDeals.filter((d) => d.status === 'pending_assignment' && inPeriod(d.created_at))
+  const archived = allDeals.filter((d) => d.status === 'archived' && inPeriod(d.created_at))
+  const totalDeals = open.length + closed.length + lost.length + pending.length + archived.length
 
   const sumVal = (arr: typeof allDeals) => arr.reduce((s, d) => s + (Number(d.value) || 0), 0)
   const openValue = sumVal(open)
