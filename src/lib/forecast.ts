@@ -1,4 +1,4 @@
-import type { Lead, PipelineStage } from '@/types/database'
+import type { DealWithLead, PipelineStage } from '@/types/database'
 import type { HistoricalConversionRate } from '@/services/dashboard.service'
 
 const DEFAULT_RATES: Record<number, number> = {
@@ -22,37 +22,38 @@ interface ForecastResult {
 }
 
 export const calculateForecast = (
-  leads: Lead[],
+  deals: DealWithLead[],
   stages: PipelineStage[],
   historicalRates: HistoricalConversionRate[],
 ): ForecastResult => {
   const finalStageIds = new Set(stages.filter((s) => s.is_final).map((s) => s.id))
-  const activeLeads = leads.filter((l) => !finalStageIds.has(l.stage_id))
+  const activeDeals = deals.filter((d) => d.stage_id && !finalStageIds.has(d.stage_id) && d.status === 'open')
 
   const rateMap = new Map(historicalRates.map((r) => [r.stage_id, r.rate]))
   const stageMap = new Map(stages.map((s) => [s.id, s]))
 
   const byStageMap = new Map<string, ForecastByStage>()
 
-  for (const lead of activeLeads) {
-    const stage = stageMap.get(lead.stage_id)
+  for (const deal of activeDeals) {
+    if (!deal.stage_id) continue
+    const stage = stageMap.get(deal.stage_id)
     if (!stage) continue
 
-    const historicalRate = rateMap.get(lead.stage_id)
+    const historicalRate = rateMap.get(deal.stage_id)
     const probability = historicalRate != null && historicalRate > 0
       ? historicalRate
       : DEFAULT_RATES[stage.position] ?? 10
 
-    const dealValue = lead.deal_value ?? 0
+    const dealValue = deal.value ?? 0
     const weighted = dealValue * (probability / 100)
 
-    const existing = byStageMap.get(lead.stage_id)
+    const existing = byStageMap.get(deal.stage_id)
     if (existing) {
       existing.leads_count++
       existing.value += weighted
     } else {
-      byStageMap.set(lead.stage_id, {
-        stage_id: lead.stage_id,
+      byStageMap.set(deal.stage_id, {
+        stage_id: deal.stage_id,
         stage_name: stage.name,
         leads_count: 1,
         probability,

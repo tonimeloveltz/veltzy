@@ -4,19 +4,18 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { useReplyTemplates, useCreateTemplate, useDeleteTemplate } from '@/hooks/use-reply-templates'
-import { updateTemplate } from '@/services/reply-templates.service'
-import { useQueryClient } from '@tanstack/react-query'
+import { useReplyTemplates, useCreateTemplate, useUpdateTemplate, useDeleteTemplate } from '@/hooks/use-reply-templates'
 import { useAuthStore } from '@/stores/auth.store'
-import { toast } from 'sonner'
 import type { ReplyTemplate } from '@/types/database'
 
 const ScriptsManager = () => {
-  const companyId = useAuthStore((s) => s.company?.id)
+  const roles = useAuthStore((s) => s.roles)
+  const canManage = roles.some((r) => ['admin', 'manager', 'super_admin'].includes(r))
+
   const { data: templates, isLoading } = useReplyTemplates()
   const createTemplate = useCreateTemplate()
+  const updateTemplateMutation = useUpdateTemplate()
   const deleteTemplate = useDeleteTemplate()
-  const queryClient = useQueryClient()
 
   const [search, setSearch] = useState('')
   const [catFilter, setCatFilter] = useState('')
@@ -53,12 +52,12 @@ const ScriptsManager = () => {
     setEditContent(t.content)
   }
 
-  const saveEdit = async () => {
+  const saveEdit = () => {
     if (!editingId) return
-    await updateTemplate(companyId!, editingId, { title: editTitle, content: editContent, category: editCategory })
-    queryClient.invalidateQueries({ queryKey: ['reply-templates'] })
-    setEditingId(null)
-    toast.success('Template atualizado!')
+    updateTemplateMutation.mutate(
+      { id: editingId, input: { title: editTitle, content: editContent, category: editCategory } },
+      { onSuccess: () => setEditingId(null) },
+    )
   }
 
   const handleDelete = (id: string) => {
@@ -74,10 +73,12 @@ const ScriptsManager = () => {
             <CardTitle>Scripts de Resposta</CardTitle>
             <CardDescription>Templates rapidos para usar no chat</CardDescription>
           </div>
-          <Button size="sm" onClick={() => setShowNew(!showNew)}>
-            <Plus className="mr-1 h-4 w-4" />
-            Novo Template
-          </Button>
+          {canManage && (
+            <Button size="sm" onClick={() => setShowNew(!showNew)}>
+              <Plus className="mr-1 h-4 w-4" />
+              Novo Template
+            </Button>
+          )}
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -160,10 +161,12 @@ const ScriptsManager = () => {
                     </div>
                     <p className="text-xs text-muted-foreground truncate mt-0.5">{t.content}</p>
                   </div>
-                  <div className="flex gap-0.5 shrink-0">
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => startEdit(t)}><Pencil className="h-3 w-3" /></Button>
-                    <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => handleDelete(t.id)}><Trash2 className="h-3 w-3" /></Button>
-                  </div>
+                  {canManage && (
+                    <div className="flex gap-0.5 shrink-0">
+                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => startEdit(t)}><Pencil className="h-3 w-3" /></Button>
+                      <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => handleDelete(t.id)}><Trash2 className="h-3 w-3" /></Button>
+                    </div>
+                  )}
                 </>
               )}
             </div>

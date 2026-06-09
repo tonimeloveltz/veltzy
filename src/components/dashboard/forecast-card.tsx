@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { TrendingUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useDashboardLeads } from '@/hooks/use-dashboard-leads'
+import { useDashboardDeals } from '@/hooks/use-deals'
 import { useDashboardStages } from '@/hooks/use-dashboard-stages'
 import { useHistoricalConversionRates } from '@/hooks/use-dashboard-metrics'
 import { useGoals } from '@/hooks/use-goals'
@@ -12,17 +12,17 @@ const fmt = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value)
 
 const ForecastCard = ({ pipelineId }: { pipelineId?: string | null }) => {
-  const { data: leads, isLoading: leadsLoading } = useDashboardLeads(pipelineId)
+  const { data: deals, isLoading: dealsLoading } = useDashboardDeals(pipelineId)
   const { data: stages, isLoading: stagesLoading } = useDashboardStages(pipelineId)
   const { data: rates, isLoading: ratesLoading } = useHistoricalConversionRates(90, pipelineId)
   const { data: goals, isLoading: goalsLoading } = useGoals()
 
-  const isLoading = leadsLoading || stagesLoading || ratesLoading || goalsLoading
+  const isLoading = dealsLoading || stagesLoading || ratesLoading || goalsLoading
 
   const forecast = useMemo(() => {
-    if (!leads || !stages || !rates) return null
-    return calculateForecast(leads, stages, rates)
-  }, [leads, stages, rates])
+    if (!deals || !stages || !rates) return null
+    return calculateForecast(deals, stages, rates)
+  }, [deals, stages, rates])
 
   const revenueGoal = useMemo(() => {
     if (!goals) return null

@@ -8,7 +8,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { usePipelines } from '@/hooks/use-pipelines'
-import { useBulkMovePipeline } from '@/hooks/use-bulk-leads'
+import { useBulkMoveDealsPipeline } from '@/hooks/use-bulk-deals'
 
 interface BulkMovePipelineModalProps {
   open: boolean
@@ -20,7 +20,7 @@ interface BulkMovePipelineModalProps {
 export const BulkMovePipelineModal = ({ open, onClose, leadIds, onSuccess }: BulkMovePipelineModalProps) => {
   const [targetPipelineId, setTargetPipelineId] = useState<string>('')
   const { data: pipelines } = usePipelines()
-  const bulkMove = useBulkMovePipeline(() => {
+  const bulkMove = useBulkMoveDealsPipeline(() => {
     onSuccess()
     handleClose()
   })
@@ -34,7 +34,7 @@ export const BulkMovePipelineModal = ({ open, onClose, leadIds, onSuccess }: Bul
 
   const handleMove = async () => {
     if (!targetPipelineId) return
-    await bulkMove.mutateAsync({ leadIds, targetPipelineId })
+    await bulkMove.mutateAsync({ dealIds: leadIds, targetPipelineId })
   }
 
   return (

@@ -2,10 +2,10 @@ import { useMemo } from 'react'
 import { Activity, AlertCircle, TrendingDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useDashboardLeads } from '@/hooks/use-dashboard-leads'
+import { useDashboardDeals } from '@/hooks/use-deals'
 import { useDashboardStages } from '@/hooks/use-dashboard-stages'
 import { useHistoricalConversionRates } from '@/hooks/use-dashboard-metrics'
-import type { LeadWithDetails, PipelineStage } from '@/types/database'
+import type { DealWithLead, PipelineStage } from '@/types/database'
 import type { HistoricalConversionRate } from '@/services/dashboard.service'
 
 interface Insight {
@@ -20,29 +20,29 @@ interface Insight {
 const MIN_LEADS_FOR_ANALYSIS = 10
 
 const detectBottlenecks = (
-  leads: LeadWithDetails[],
+  deals: DealWithLead[],
   stages: PipelineStage[],
   rates: HistoricalConversionRate[],
 ): Insight[] => {
   const finalStageIds = new Set(stages.filter((s) => s.is_final).map((s) => s.id))
   const nonFinalStages = stages.filter((s) => !s.is_final)
-  const activeLeads = leads.filter((l) => !finalStageIds.has(l.stage_id))
+  const activeDeals = deals.filter((d) => d.stage_id && !finalStageIds.has(d.stage_id) && d.status === 'open')
 
-  if (activeLeads.length < MIN_LEADS_FOR_ANALYSIS) return []
+  if (activeDeals.length < MIN_LEADS_FOR_ANALYSIS) return []
 
   const now = Date.now()
   const stageAvgDays: { stage: PipelineStage; avgDays: number }[] = []
 
   for (const stage of nonFinalStages) {
-    const stageLeads = activeLeads.filter((l) => l.stage_id === stage.id)
-    if (stageLeads.length === 0) continue
+    const stageDeals = activeDeals.filter((d) => d.stage_id === stage.id)
+    if (stageDeals.length === 0) continue
 
-    const totalDays = stageLeads.reduce((sum, l) => {
-      const diff = (now - new Date(l.updated_at).getTime()) / (1000 * 60 * 60 * 24)
+    const totalDays = stageDeals.reduce((sum, d) => {
+      const diff = (now - new Date(d.updated_at).getTime()) / (1000 * 60 * 60 * 24)
       return sum + diff
     }, 0)
 
-    stageAvgDays.push({ stage, avgDays: totalDays / stageLeads.length })
+    stageAvgDays.push({ stage, avgDays: totalDays / stageDeals.length })
   }
 
   const insights: Insight[] = []
@@ -85,16 +85,16 @@ const detectBottlenecks = (
 }
 
 const BottleneckDetector = ({ pipelineId }: { pipelineId?: string | null }) => {
-  const { data: leads, isLoading: leadsLoading } = useDashboardLeads(pipelineId)
+  const { data: deals, isLoading: dealsLoading } = useDashboardDeals(pipelineId)
   const { data: stages, isLoading: stagesLoading } = useDashboardStages(pipelineId)
   const { data: rates, isLoading: ratesLoading } = useHistoricalConversionRates(90, pipelineId)
 
-  const isLoading = leadsLoading || stagesLoading || ratesLoading
+  const isLoading = dealsLoading || stagesLoading || ratesLoading
 
   const insights = useMemo(() => {
-    if (!leads || !stages || !rates) return []
-    return detectBottlenecks(leads, stages, rates)
-  }, [leads, stages, rates])
+    if (!deals || !stages || !rates) return []
+    return detectBottlenecks(deals, stages, rates)
+  }, [deals, stages, rates])
 
   const totalHistorical = (rates ?? []).reduce((sum, r) => sum + r.entered, 0)
 

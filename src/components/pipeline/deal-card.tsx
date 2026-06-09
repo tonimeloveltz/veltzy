@@ -171,7 +171,10 @@ const DealCard = ({ deal, onEditDeal, onTransfer, onMovePipeline, fireOnly }: De
                         setDealValuePending({ stageId: s.id })
                         return
                       }
-                      moveDealStage.mutate({ dealId: deal.id, stageId: s.id })
+                      const status = s.is_final
+                        ? s.is_positive ? 'won' as const : 'lost' as const
+                        : undefined
+                      moveDealStage.mutate({ dealId: deal.id, stageId: s.id, status })
                     }}
                   >
                     <ArrowRightLeft className="h-4 w-4" />

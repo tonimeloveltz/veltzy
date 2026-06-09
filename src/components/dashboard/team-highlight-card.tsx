@@ -3,41 +3,41 @@ import { Users } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
-import { useDashboardLeads } from '@/hooks/use-dashboard-leads'
+import { useDashboardDeals } from '@/hooks/use-deals'
 import { useTeamMembers } from '@/hooks/use-team'
-import type { LeadWithDetails } from '@/types/database'
+import type { DealWithLead } from '@/types/database'
 
-const filterByPeriod = (leads: LeadWithDetails[], days: number | undefined) => {
-  if (!days) return leads
+const filterByPeriod = (deals: DealWithLead[], days: number | undefined) => {
+  if (!days) return deals
   const cutoff = new Date()
   cutoff.setDate(cutoff.getDate() - days)
-  return leads.filter((l) => new Date(l.created_at) >= cutoff)
+  return deals.filter((d) => new Date(d.created_at) >= cutoff)
 }
 
 const getInitials = (name: string) =>
   name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
 
 const TeamHighlightCard = ({ days, pipelineId }: { days?: number; pipelineId?: string | null }) => {
-  const { data: allLeads, isLoading: leadsLoading } = useDashboardLeads(pipelineId)
+  const { data: allDeals, isLoading: dealsLoading } = useDashboardDeals(pipelineId)
   const { data: members, isLoading: membersLoading } = useTeamMembers()
 
   const sellers = useMemo(() => {
-    if (!allLeads || !members) return []
-    const leads = filterByPeriod(allLeads, days)
+    if (!allDeals || !members) return []
+    const deals = filterByPeriod(allDeals, days)
 
     return members
       .map((m) => {
-        const myLeads = leads.filter((l) => l.assigned_to === m.id)
-        const deals = myLeads.filter((l) => l.status === 'deal').length
-        const conversion = myLeads.length > 0 ? Math.round((deals / myLeads.length) * 100) : 0
-        return { id: m.id, name: m.name, deals, conversion, leadsCount: myLeads.length, isAvailable: m.is_available }
+        const myDeals = deals.filter((d) => d.assigned_to === m.id)
+        const won = myDeals.filter((d) => d.status === 'won').length
+        const conversion = myDeals.length > 0 ? Math.round((won / myDeals.length) * 100) : 0
+        return { id: m.id, name: m.name, deals: won, conversion, leadsCount: myDeals.length, isAvailable: m.is_available }
       })
       .filter((s) => s.leadsCount > 0)
       .sort((a, b) => b.deals - a.deals)
       .slice(0, 5)
-  }, [allLeads, members, days])
+  }, [allDeals, members, days])
 
-  const isLoading = leadsLoading || membersLoading
+  const isLoading = dealsLoading || membersLoading
 
   if (isLoading) {
     return (

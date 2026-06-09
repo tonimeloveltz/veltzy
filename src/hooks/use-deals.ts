@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/stores/auth.store'
-import { usePipelineStore } from '@/stores/pipeline.store'
 import { useTeamMembers } from '@/hooks/use-team'
 import * as dealsService from '@/services/deals.service'
 import type { CreateDealInput, UpdateDealInput, DealWithLead } from '@/types/database'
@@ -113,28 +112,22 @@ export const useUpdateDeal = () => {
 export const useMoveDealStage = () => {
   const queryClient = useQueryClient()
   const companyId = useAuthStore((s) => s.company?.id)
-  const activePipelineId = usePipelineStore((s) => s.activePipelineId)
 
-  const queryKey = ['deals', 'kanban', companyId, activePipelineId] as const
+  const kanbanFilter = { queryKey: ['deals', 'kanban'] }
 
   return useMutation({
-    mutationFn: ({ dealId, stageId, pipelineId }: { dealId: string; stageId: string; pipelineId?: string }) =>
-      dealsService.moveDealStage(companyId!, dealId, stageId, pipelineId),
-    onMutate: async ({ dealId, stageId }) => {
-      await queryClient.cancelQueries({ queryKey })
-      const previous = queryClient.getQueryData<DealWithLead[]>(queryKey)
+    mutationFn: ({ dealId, stageId, pipelineId, status }: { dealId: string; stageId: string; pipelineId?: string; status?: DealWithLead['status'] }) =>
+      dealsService.moveDealStage(companyId!, dealId, stageId, pipelineId, status),
+    onMutate: async ({ dealId, stageId, status }) => {
+      await queryClient.cancelQueries(kanbanFilter)
 
-      queryClient.setQueryData<DealWithLead[]>(
-        queryKey,
-        (old) => old?.map((d) => (d.id === dealId ? { ...d, stage_id: stageId } : d))
+      queryClient.setQueriesData<DealWithLead[]>(
+        kanbanFilter,
+        (old) => old?.map((d) => (d.id === dealId ? { ...d, stage_id: stageId, ...(status ? { status } : {}) } : d))
       )
-
-      return { previous }
     },
-    onError: (_err, _vars, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(queryKey, context.previous)
-      }
+    onError: () => {
+      queryClient.invalidateQueries({ queryKey: ['deals'] })
       toast.error('Erro ao mover negocio. Tente novamente.')
     },
     onSettled: () => {
@@ -146,32 +139,43 @@ export const useMoveDealStage = () => {
 export const useUpdateDealValueAndMove = () => {
   const queryClient = useQueryClient()
   const companyId = useAuthStore((s) => s.company?.id)
-  const activePipelineId = usePipelineStore((s) => s.activePipelineId)
 
-  const queryKey = ['deals', 'kanban', companyId, activePipelineId] as const
+  const kanbanFilter = { queryKey: ['deals', 'kanban'] }
 
   return useMutation({
     mutationFn: ({ dealId, stageId, value }: { dealId: string; stageId: string; value: number }) =>
       dealsService.updateDealValueAndMove(companyId!, dealId, stageId, value),
     onMutate: async ({ dealId, stageId, value }) => {
-      await queryClient.cancelQueries({ queryKey })
-      const previous = queryClient.getQueryData<DealWithLead[]>(queryKey)
+      await queryClient.cancelQueries(kanbanFilter)
 
-      queryClient.setQueryData<DealWithLead[]>(
-        queryKey,
+      queryClient.setQueriesData<DealWithLead[]>(
+        kanbanFilter,
         (old) => old?.map((d) => (d.id === dealId ? { ...d, stage_id: stageId, value } : d))
       )
-
-      return { previous }
     },
-    onError: (_err, _vars, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(queryKey, context.previous)
-      }
+    onError: () => {
+      queryClient.invalidateQueries({ queryKey: ['deals'] })
       toast.error('Erro ao mover negocio. Tente novamente.')
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['deals'] })
+    },
+  })
+}
+
+export const useMoveDealToPipeline = () => {
+  const queryClient = useQueryClient()
+  const companyId = useAuthStore((s) => s.company?.id)
+
+  return useMutation({
+    mutationFn: ({ dealId, targetPipelineId }: { dealId: string; targetPipelineId: string }) =>
+      dealsService.moveDealToPipeline(companyId!, dealId, targetPipelineId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['deals'] })
+      toast.success('Negocio movido para o novo pipeline!')
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || 'Erro ao mover negocio de pipeline')
     },
   })
 }

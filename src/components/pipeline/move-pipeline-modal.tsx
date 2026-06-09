@@ -5,27 +5,27 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { usePipelines } from '@/hooks/use-pipelines'
-import { useMoveLeadToPipeline } from '@/hooks/use-leads'
+import { useMoveDealToPipeline } from '@/hooks/use-deals'
 import { cn } from '@/lib/utils'
 
 interface MovePipelineModalProps {
-  leadId: string | null
-  leadName: string
+  dealId: string | null
+  dealName: string
   currentPipelineId: string
   open: boolean
   onClose: () => void
 }
 
-const MovePipelineModal = ({ leadId, leadName, currentPipelineId, open, onClose }: MovePipelineModalProps) => {
+const MovePipelineModal = ({ dealId, dealName, currentPipelineId, open, onClose }: MovePipelineModalProps) => {
   const { data: pipelines } = usePipelines()
-  const moveLeadToPipeline = useMoveLeadToPipeline()
+  const moveDealToPipeline = useMoveDealToPipeline()
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
   const availablePipelines = pipelines?.filter((p) => p.id !== currentPipelineId) ?? []
 
   const handleConfirm = async () => {
-    if (!leadId || !selectedId) return
-    await moveLeadToPipeline.mutateAsync({ leadId, targetPipelineId: selectedId })
+    if (!dealId || !selectedId) return
+    await moveDealToPipeline.mutateAsync({ dealId, targetPipelineId: selectedId })
     setSelectedId(null)
     onClose()
   }
@@ -43,7 +43,7 @@ const MovePipelineModal = ({ leadId, leadName, currentPipelineId, open, onClose 
         <DialogHeader>
           <DialogTitle>Mover para pipeline</DialogTitle>
           <DialogDescription>
-            Selecione o pipeline destino para {leadName || 'este lead'}. O lead ira para o primeiro estagio.
+            Selecione o pipeline destino para {dealName || 'este negocio'}. O negocio ira para o primeiro estagio.
           </DialogDescription>
         </DialogHeader>
 
@@ -74,9 +74,9 @@ const MovePipelineModal = ({ leadId, leadName, currentPipelineId, open, onClose 
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
           <Button
             onClick={handleConfirm}
-            disabled={!selectedId || moveLeadToPipeline.isPending}
+            disabled={!selectedId || moveDealToPipeline.isPending}
           >
-            {moveLeadToPipeline.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {moveDealToPipeline.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Mover
           </Button>
         </div>

@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/stores/auth.store'
 import * as templatesService from '@/services/reply-templates.service'
+import type { ReplyTemplate } from '@/types/database'
 
 export const useReplyTemplates = () => {
   const companyId = useAuthStore((s) => s.company?.id)
@@ -24,6 +25,21 @@ export const useCreateTemplate = () => {
       queryClient.invalidateQueries({ queryKey: ['reply-templates'] })
       toast.success('Template criado!')
     },
+  })
+}
+
+export const useUpdateTemplate = () => {
+  const queryClient = useQueryClient()
+  const companyId = useAuthStore((s) => s.company?.id)
+
+  return useMutation({
+    mutationFn: (data: { id: string; input: Partial<Pick<ReplyTemplate, 'title' | 'content' | 'category' | 'is_active'>> }) =>
+      templatesService.updateTemplate(companyId!, data.id, data.input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reply-templates'] })
+      toast.success('Template atualizado!')
+    },
+    onError: () => toast.error('Erro ao atualizar template'),
   })
 }
 
