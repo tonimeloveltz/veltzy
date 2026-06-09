@@ -18,6 +18,7 @@ export const useDashboardMetrics = (days = 30, pipelineId?: string | null) => {
     queryFn: () => dashboardService.getConversionMetrics(companyId!, days, pipelineId ?? undefined, sellerProfileId),
     enabled: !!companyId,
     staleTime: 1000 * 60 * 5,
+    refetchInterval: 1000 * 30,
   })
 }
 
@@ -29,6 +30,7 @@ export const useDashboardKpis = (days?: number, pipelineId?: string | null) => {
     queryFn: () => dashboardService.getDashboardKpis(companyId!, days, pipelineId ?? undefined, sellerProfileId),
     enabled: !!companyId,
     staleTime: 1000 * 60 * 5,
+    refetchInterval: 1000 * 30,
   })
 }
 
@@ -40,6 +42,7 @@ export const useLeadsBySource = (days?: number, pipelineId?: string | null) => {
     queryFn: () => dashboardService.getLeadsBySource(companyId!, days, pipelineId ?? undefined, sellerProfileId),
     enabled: !!companyId,
     staleTime: 1000 * 60 * 5,
+    refetchInterval: 1000 * 30,
   })
 }
 
@@ -51,6 +54,7 @@ export const usePipelineOverview = (days?: number, pipelineId?: string | null) =
     queryFn: () => dashboardService.getPipelineOverview(companyId!, days, pipelineId ?? undefined, sellerProfileId),
     enabled: !!companyId,
     staleTime: 1000 * 60 * 5,
+    refetchInterval: 1000 * 30,
   })
 }
 
@@ -62,6 +66,7 @@ export const useMonthlyComparison = (days?: number, pipelineId?: string | null) 
     queryFn: () => dashboardService.getMonthlyComparison(companyId!, days, pipelineId ?? undefined, sellerProfileId),
     enabled: !!companyId,
     staleTime: 1000 * 60 * 5,
+    refetchInterval: 1000 * 30,
   })
 }
 
@@ -73,6 +78,7 @@ export const useMonthlyComparisonGrid = (months = 6, pipelineId?: string | null)
     queryFn: () => dashboardService.getMonthlyComparisonGrid(companyId!, months, pipelineId ?? undefined, sellerProfileId),
     enabled: !!companyId,
     staleTime: 1000 * 60 * 5,
+    refetchInterval: 1000 * 30,
   })
 }
 
@@ -84,6 +90,7 @@ export const useHistoricalConversionRates = (days = 90, pipelineId?: string | nu
     queryFn: () => dashboardService.getHistoricalConversionRates(companyId!, days, pipelineId ?? undefined, sellerProfileId),
     enabled: !!companyId,
     staleTime: 1000 * 60 * 5,
+    refetchInterval: 1000 * 30,
   })
 }
 
@@ -95,5 +102,6 @@ export const useSellerPerformance = (days?: number, pipelineId?: string | null) 
     queryFn: () => dashboardService.getSellerPerformance(companyId!, days, pipelineId ?? undefined, sellerProfileId),
     enabled: !!companyId,
     staleTime: 1000 * 60 * 5,
+    refetchInterval: 1000 * 30,
   })
 }

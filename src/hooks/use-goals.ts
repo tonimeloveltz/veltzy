@@ -40,8 +40,8 @@ export const useCreateGoalWithMetrics = () => {
   return useMutation({
     mutationFn: ({ goalInput, metrics }: { goalInput: CreateGoalInput; metrics: Omit<CreateGoalMetricInput, 'goal_id'>[] }) =>
       goalsService.createGoalWithMetrics(companyId!, goalInput, metrics),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['goals'] })
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['goals'] })
       toast.success('Meta criada!')
     },
     onError: (err: Error) => toast.error(err.message),
