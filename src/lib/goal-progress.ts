@@ -1,10 +1,5 @@
 import type { GoalMetric, MetricType } from '@/services/goals.service'
-import type { Lead } from '@/types/database'
-import type { PipelineStage } from '@/types/database'
-
-interface LeadWithStage extends Lead {
-  pipeline_stages?: PipelineStage | null
-}
+import type { Deal } from '@/types/database'
 
 interface ProgressResult {
   current: number | null
@@ -12,35 +7,32 @@ interface ProgressResult {
   percentage: number | null
 }
 
-const isInPeriod = (createdAt: string, startDate: string, endDate: string): boolean => {
-  const date = new Date(createdAt)
+const isInPeriod = (dateStr: string, startDate: string, endDate: string): boolean => {
+  const date = new Date(dateStr)
   return date >= new Date(startDate) && date <= new Date(endDate)
 }
 
-const isClosedWon = (lead: LeadWithStage): boolean =>
-  !!lead.pipeline_stages?.is_final && !!lead.pipeline_stages?.is_positive
-
-const filterByScope = (leads: LeadWithStage[], metric: GoalMetric): LeadWithStage[] => {
+const filterByScope = (deals: Deal[], metric: GoalMetric): Deal[] => {
   if (metric.applies_to === 'individual' && metric.profile_id) {
-    return leads.filter((l) => l.assigned_to === metric.profile_id)
+    return deals.filter((d) => d.assigned_to === metric.profile_id)
   }
-  return leads
+  return deals
 }
 
 export const calculateProgress = (
   metric: GoalMetric,
-  leads: LeadWithStage[],
+  deals: Deal[],
   startDate: string,
   endDate: string
 ): ProgressResult => {
-  const scopedLeads = filterByScope(leads, metric)
-  const periodLeads = scopedLeads.filter((l) => isInPeriod(l.created_at, startDate, endDate))
+  const scopedDeals = filterByScope(deals, metric)
+  const periodDeals = scopedDeals.filter((d) => isInPeriod(d.created_at, startDate, endDate))
 
   const calculators: Record<MetricType, () => ProgressResult> = {
     revenue: () => {
-      const current = periodLeads
-        .filter(isClosedWon)
-        .reduce((sum, l) => sum + (l.deal_value ?? 0), 0)
+      const current = periodDeals
+        .filter((d) => d.status === 'won')
+        .reduce((sum, d) => sum + (d.value ?? 0), 0)
       return {
         current,
         target: metric.target_value,
@@ -49,7 +41,7 @@ export const calculateProgress = (
     },
 
     deals_closed: () => {
-      const current = periodLeads.filter(isClosedWon).length
+      const current = periodDeals.filter((d) => d.status === 'won').length
       return {
         current,
         target: metric.target_value,
@@ -58,7 +50,7 @@ export const calculateProgress = (
     },
 
     leads_attended: () => {
-      const current = periodLeads.filter((l) => l.assigned_to !== null).length
+      const current = periodDeals.filter((d) => d.assigned_to !== null).length
       return {
         current,
         target: metric.target_value,
@@ -67,9 +59,9 @@ export const calculateProgress = (
     },
 
     conversion_rate: () => {
-      const attended = periodLeads.filter((l) => l.assigned_to !== null).length
-      const closed = periodLeads.filter(isClosedWon).length
-      const current = attended > 0 ? Math.round((closed / attended) * 100) : 0
+      const total = periodDeals.length
+      const won = periodDeals.filter((d) => d.status === 'won').length
+      const current = total > 0 ? Math.round((won / total) * 100) : 0
       return {
         current,
         target: metric.target_value,

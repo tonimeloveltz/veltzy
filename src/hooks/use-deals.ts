@@ -176,6 +176,23 @@ export const useUpdateDealValueAndMove = () => {
   })
 }
 
+export const useMoveDealToPipeline = () => {
+  const queryClient = useQueryClient()
+  const companyId = useAuthStore((s) => s.company?.id)
+
+  return useMutation({
+    mutationFn: ({ dealId, targetPipelineId }: { dealId: string; targetPipelineId: string }) =>
+      dealsService.moveDealToPipeline(companyId!, dealId, targetPipelineId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['deals'] })
+      toast.success('Negocio movido para o novo pipeline!')
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || 'Erro ao mover negocio de pipeline')
+    },
+  })
+}
+
 export const useAssignDeal = () => {
   const queryClient = useQueryClient()
   const companyId = useAuthStore((s) => s.company?.id)

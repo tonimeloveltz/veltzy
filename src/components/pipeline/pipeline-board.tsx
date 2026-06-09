@@ -359,8 +359,8 @@ const PipelineBoard = () => {
       />
 
       <MovePipelineModal
-        leadId={movePipelineDeal?.id ?? null}
-        leadName={movePipelineDeal?.leads?.name || movePipelineDeal?.leads?.phone || ''}
+        dealId={movePipelineDeal?.id ?? null}
+        dealName={movePipelineDeal?.leads?.name || movePipelineDeal?.leads?.phone || movePipelineDeal?.name || ''}
         currentPipelineId={activePipelineId ?? ''}
         open={!!movePipelineDeal}
         onClose={() => setMovePipelineDeal(null)}

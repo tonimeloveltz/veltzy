@@ -210,6 +210,27 @@ export const bulkDelete = async (companyId: string, dealIds: string[], userId: s
   if (logError) throw logError
 }
 
+export const moveDealToPipeline = async (companyId: string, dealId: string, targetPipelineId: string): Promise<DealWithLead> => {
+  const { data: firstStage, error: stageError } = await veltzy()
+    .from('pipeline_stages')
+    .select('id')
+    .eq('pipeline_id', targetPipelineId)
+    .order('position')
+    .limit(1)
+    .single()
+  if (stageError) throw stageError
+
+  const { data, error } = await veltzy()
+    .from('deals')
+    .update({ pipeline_id: targetPipelineId, stage_id: firstStage.id })
+    .eq('id', dealId)
+    .eq('company_id', companyId)
+    .select(DEAL_WITH_LEAD_SELECT)
+    .single()
+  if (error) throw error
+  return data
+}
+
 export const bulkMoveToPipeline = async (companyId: string, dealIds: string[], targetPipelineId: string): Promise<void> => {
   const { data: firstStage, error: stageError } = await veltzy()
     .from('pipeline_stages')
