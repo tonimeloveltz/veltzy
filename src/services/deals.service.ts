@@ -1,5 +1,5 @@
 import { veltzy } from '@/lib/supabase'
-import type { DealWithLead, CreateDealInput, UpdateDealInput } from '@/types/database'
+import type { DealWithLead, DealStatus, CreateDealInput, UpdateDealInput } from '@/types/database'
 
 const DEAL_WITH_LEAD_SELECT = `
   *,
@@ -109,9 +109,11 @@ export const moveDealStage = async (
   dealId: string,
   stageId: string,
   pipelineId?: string,
+  status?: DealStatus,
 ): Promise<DealWithLead> => {
   const payload: Record<string, unknown> = { stage_id: stageId }
   if (pipelineId) payload.pipeline_id = pipelineId
+  if (status) payload.status = status
 
   const { data, error } = await veltzy()
     .from('deals')

@@ -118,15 +118,15 @@ export const useMoveDealStage = () => {
   const queryKey = ['deals', 'kanban', companyId, activePipelineId] as const
 
   return useMutation({
-    mutationFn: ({ dealId, stageId, pipelineId }: { dealId: string; stageId: string; pipelineId?: string }) =>
-      dealsService.moveDealStage(companyId!, dealId, stageId, pipelineId),
-    onMutate: async ({ dealId, stageId }) => {
+    mutationFn: ({ dealId, stageId, pipelineId, status }: { dealId: string; stageId: string; pipelineId?: string; status?: DealWithLead['status'] }) =>
+      dealsService.moveDealStage(companyId!, dealId, stageId, pipelineId, status),
+    onMutate: async ({ dealId, stageId, status }) => {
       await queryClient.cancelQueries({ queryKey })
       const previous = queryClient.getQueryData<DealWithLead[]>(queryKey)
 
       queryClient.setQueryData<DealWithLead[]>(
         queryKey,
-        (old) => old?.map((d) => (d.id === dealId ? { ...d, stage_id: stageId } : d))
+        (old) => old?.map((d) => (d.id === dealId ? { ...d, stage_id: stageId, ...(status ? { status } : {}) } : d))
       )
 
       return { previous }

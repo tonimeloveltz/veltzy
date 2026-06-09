@@ -190,11 +190,17 @@ const PipelineBoard = () => {
         return
       }
 
-      moveDealStage.mutate({ dealId, stageId })
+      const status = destStage?.is_final
+        ? destStage.is_positive ? 'won' as const : 'lost' as const
+        : undefined
 
-      if (destStage?.is_final && destStage?.is_positive) {
+      moveDealStage.mutate({ dealId, stageId, status })
+
+      if (status === 'won') {
         triggerCelebration()
         toast.success('Negocio fechado! 🎉')
+      } else if (status === 'lost') {
+        toast.info('Negocio marcado como perdido')
       }
     } catch {
       queryClient.invalidateQueries({ queryKey: ['deals'] })

@@ -1,8 +1,11 @@
+import { useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/stores/auth.store'
 import * as goalsService from '@/services/goals.service'
-import type { CreateGoalInput, UpdateGoalInput } from '@/services/goals.service'
+import type { CreateGoalInput, UpdateGoalInput, GoalMetric } from '@/services/goals.service'
+import { useDashboardDeals } from '@/hooks/use-deals'
+import { calculateProgress } from '@/lib/goal-progress'
 
 export const useGoals = () => {
   const companyId = useAuthStore((s) => s.company?.id)
@@ -43,6 +46,34 @@ export const useUpdateGoal = () => {
     },
     onError: (err: Error) => toast.error(err.message),
   })
+}
+
+/** Calcula o progresso de cada metrica da meta ativa, usando dados de deals */
+export const useGoalProgress = (pipelineId?: string | null) => {
+  const { data: goals } = useGoals()
+  const { data: deals, isLoading: dealsLoading } = useDashboardDeals(pipelineId)
+
+  return useMemo(() => {
+    if (!goals || !deals) return { isLoading: dealsLoading, progress: null }
+
+    const now = new Date()
+    const activeGoal = goals.find((g) => {
+      if (!g.is_active) return false
+      return new Date(g.start_date) <= now && new Date(g.end_date) >= now
+    })
+
+    if (!activeGoal?.goal_metrics?.length) return { isLoading: false, progress: null }
+
+    const metrics = activeGoal.goal_metrics.map((metric: GoalMetric) => ({
+      ...metric,
+      ...calculateProgress(metric, deals, activeGoal.start_date, activeGoal.end_date),
+    }))
+
+    return {
+      isLoading: false,
+      progress: { goal: activeGoal, metrics },
+    }
+  }, [goals, deals, dealsLoading])
 }
 
 export const useDeleteGoal = () => {
