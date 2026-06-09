@@ -66,9 +66,12 @@ export interface DashboardKpis {
   avgAiScore: number
   dealsClosed: number
   totalLeads: number
+  totalDeals: number
   openCount: number
   closedCount: number
   lostCount: number
+  pendingCount: number
+  archivedCount: number
   openValue: number
   closedValue: number
   lostValue: number
@@ -80,15 +83,11 @@ export interface DashboardKpis {
 }
 
 export const getDashboardKpis = async (companyId: string, days?: number, pipelineId?: string, sellerProfileId?: string): Promise<DashboardKpis> => {
-  // Deals query for financial/status metrics
+  // Deals query — sem filtro de periodo para mostrar estado real do funil.
+  // O filtro de periodo se aplica apenas ao comparativo anterior.
   let dealsQuery = veltzy().from('deals').select('status, value').eq('company_id', companyId)
   if (pipelineId) dealsQuery = dealsQuery.eq('pipeline_id', pipelineId)
   if (sellerProfileId) dealsQuery = dealsQuery.eq('assigned_to', sellerProfileId)
-  if (days) {
-    const start = new Date()
-    start.setDate(start.getDate() - days)
-    dealsQuery = dealsQuery.gte('created_at', start.toISOString())
-  }
   const { data: deals, error: dealsError } = await dealsQuery
   if (dealsError) throw dealsError
 
@@ -107,9 +106,12 @@ export const getDashboardKpis = async (companyId: string, days?: number, pipelin
   const allDeals = deals ?? []
   const allLeads = leads ?? []
   const totalLeads = allLeads.length
+  const totalDeals = allDeals.length
   const open = allDeals.filter((d) => d.status === 'open')
   const closed = allDeals.filter((d) => d.status === 'won')
   const lost = allDeals.filter((d) => d.status === 'lost')
+  const pending = allDeals.filter((d) => d.status === 'pending_assignment')
+  const archived = allDeals.filter((d) => d.status === 'archived')
 
   const sumVal = (arr: typeof allDeals) => arr.reduce((s, d) => s + (Number(d.value) || 0), 0)
   const openValue = sumVal(open)
@@ -163,9 +165,12 @@ export const getDashboardKpis = async (companyId: string, days?: number, pipelin
     avgAiScore: avgScore,
     dealsClosed: closed.length,
     totalLeads,
+    totalDeals,
     openCount: open.length,
     closedCount: closed.length,
     lostCount: lost.length,
+    pendingCount: pending.length,
+    archivedCount: archived.length,
     openValue,
     closedValue,
     lostValue,

@@ -289,12 +289,14 @@ const DashboardPage = () => {
                 </div>
               </div>
               <p className="text-3xl font-bold text-foreground mt-2">
-                {kpis?.totalLeads ?? 0}
+                {kpis?.totalDeals ?? 0}
               </p>
               <Breakdown items={[
                 { value: String(kpis?.openCount ?? 0), color: 'text-yellow-500', dotColor: 'bg-yellow-500', label: 'Aberto' },
                 { value: String(kpis?.closedCount ?? 0), color: 'text-emerald-500', dotColor: 'bg-emerald-500', label: 'Fechado' },
                 { value: String(kpis?.lostCount ?? 0), color: 'text-red-500', dotColor: 'bg-red-500', label: 'Perdido' },
+                ...((kpis?.pendingCount ?? 0) > 0 ? [{ value: String(kpis?.pendingCount ?? 0), color: 'text-amber-500', dotColor: 'bg-amber-500', label: 'Sem dono' }] : []),
+                ...((kpis?.archivedCount ?? 0) > 0 ? [{ value: String(kpis?.archivedCount ?? 0), color: 'text-muted-foreground', dotColor: 'bg-muted-foreground', label: 'Arquivado' }] : []),
               ]} />
             </div>
 
