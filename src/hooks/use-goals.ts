@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/stores/auth.store'
 import * as goalsService from '@/services/goals.service'
-import type { CreateGoalInput, UpdateGoalInput, GoalMetric } from '@/services/goals.service'
+import type { CreateGoalInput, UpdateGoalInput, GoalMetric, CreateGoalMetricInput } from '@/services/goals.service'
 import { useDashboardDeals } from '@/hooks/use-deals'
 import { calculateProgress } from '@/lib/goal-progress'
 
@@ -25,6 +25,21 @@ export const useCreateGoal = () => {
   return useMutation({
     mutationFn: (input: CreateGoalInput) =>
       goalsService.createGoal(companyId!, input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['goals'] })
+      toast.success('Meta criada!')
+    },
+    onError: (err: Error) => toast.error(err.message),
+  })
+}
+
+export const useCreateGoalWithMetrics = () => {
+  const queryClient = useQueryClient()
+  const companyId = useAuthStore((s) => s.company?.id)
+
+  return useMutation({
+    mutationFn: ({ goalInput, metrics }: { goalInput: CreateGoalInput; metrics: Omit<CreateGoalMetricInput, 'goal_id'>[] }) =>
+      goalsService.createGoalWithMetrics(companyId!, goalInput, metrics),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['goals'] })
       toast.success('Meta criada!')

@@ -21,10 +21,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { useGoals, useCreateGoal, useUpdateGoal, useDeleteGoal } from '@/hooks/use-goals'
+import { useGoals, useCreateGoalWithMetrics, useUpdateGoal, useDeleteGoal } from '@/hooks/use-goals'
 import { useTeamMembers } from '@/hooks/use-team'
 import { useAuthStore } from '@/stores/auth.store'
-import { createGoalWithMetrics } from '@/services/goals.service'
 import type { CreateGoalInput, MetricType, Goal } from '@/services/goals.service'
 
 interface MetricRow {
@@ -59,7 +58,7 @@ export const GoalsManager = () => {
   const companyId = useAuthStore((s) => s.company?.id)
   const { data: goals, isLoading } = useGoals()
   const { data: members } = useTeamMembers()
-  const createGoal = useCreateGoal()
+  const createGoalWithMetrics = useCreateGoalWithMetrics()
   const updateGoal = useUpdateGoal()
   const deleteGoal = useDeleteGoal()
 
@@ -173,7 +172,7 @@ export const GoalsManager = () => {
       if (editingGoal) {
         await updateGoal.mutateAsync({ id: editingGoal.id, data: goalInput })
       } else {
-        await createGoalWithMetrics(companyId!, goalInput, validMetrics)
+        await createGoalWithMetrics.mutateAsync({ goalInput, metrics: validMetrics })
       }
       setOpen(false)
     } catch (err) {
