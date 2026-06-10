@@ -89,13 +89,10 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
     )
   }
 
-  // 4. Atualizar timestamp SLA + temperatura por atividade (mensagem recebida = fire)
-  await supabase
-    .from('leads')
-    .update({ last_customer_message_at: new Date().toISOString(), temperature: 'fire' })
-    .eq('id', lead.id)
-
-  // 5. Salvar mensagem
+  // 4. Salvar mensagem
+  // Temperatura: o trigger trg_lead_temperature_on_message (migration 063)
+  // seta last_customer_message_at + temperature='fire' automaticamente
+  // ao inserir mensagem com sender_type='lead'. Nao precisa fazer aqui.
   // Webhook: nao cria mensagem (lead de formulario, sem conversa)
   let savedMessage: { id: string } | null = null
   if (params.source !== 'webhook') {
