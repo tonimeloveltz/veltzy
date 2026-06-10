@@ -1,11 +1,19 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Briefcase, Plus, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react'
+import { Briefcase, Plus, ChevronDown, ChevronUp, ExternalLink, Trophy, XCircle, MoreHorizontal } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { useDealsByLead } from '@/hooks/use-deals'
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { useDealsByLead, useCloseDeal } from '@/hooks/use-deals'
 import { CreateDealModal } from '@/components/deals/create-deal-modal'
-import type { DealStatus } from '@/types/database'
+import { triggerCelebration } from '@/lib/celebration'
+import type { DealStatus, DealWithLead } from '@/types/database'
 
 const fmt = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
@@ -26,12 +34,27 @@ interface LeadDealsPanelProps {
 const LeadDealsPanel = ({ leadId, leadName }: LeadDealsPanelProps) => {
   const navigate = useNavigate()
   const { data: deals } = useDealsByLead(leadId)
+  const closeDeal = useCloseDeal()
   const [expanded, setExpanded] = useState(true)
   const [createOpen, setCreateOpen] = useState(false)
+  const [confirmLost, setConfirmLost] = useState<DealWithLead | null>(null)
 
   const activeDeals = deals?.filter((d) => d.status === 'open' || d.status === 'pending_assignment') ?? []
   const otherDeals = deals?.filter((d) => d.status !== 'open' && d.status !== 'pending_assignment') ?? []
   const allDeals = [...activeDeals, ...otherDeals]
+
+  const handleWon = (deal: DealWithLead) => {
+    if (!deal.pipeline_id) return
+    closeDeal.mutate(
+      { dealId: deal.id, pipelineId: deal.pipeline_id, outcome: 'won' },
+      { onSuccess: () => triggerCelebration() },
+    )
+  }
+
+  const handleLost = (deal: DealWithLead) => {
+    if (!deal.pipeline_id) return
+    closeDeal.mutate({ dealId: deal.id, pipelineId: deal.pipeline_id, outcome: 'lost' })
+  }
 
   if (!deals) return null
 
@@ -56,22 +79,58 @@ const LeadDealsPanel = ({ leadId, leadName }: LeadDealsPanelProps) => {
             )}
             {allDeals.map((deal) => {
               const status = statusLabel[deal.status]
+              const isActive = deal.status === 'open' || deal.status === 'pending_assignment'
               return (
-                <button
+                <div
                   key={deal.id}
-                  onClick={() => navigate('/pipeline')}
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-accent transition-smooth group"
+                  className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent transition-smooth group"
                 >
-                  <span className={cn('h-2 w-2 rounded-full shrink-0', status.color)} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium truncate">{deal.name}</p>
-                    <p className="text-[10px] text-muted-foreground">
-                      {deal.pipeline_stages?.name ?? 'Sem etapa'}
-                      {deal.value ? ` · ${fmt(deal.value)}` : ''}
-                    </p>
-                  </div>
-                  <ExternalLink className="h-3 w-3 text-muted-foreground/40 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-                </button>
+                  <button
+                    onClick={() => navigate('/pipeline')}
+                    className="flex flex-1 items-center gap-2 text-left min-w-0"
+                  >
+                    <span className={cn('h-2 w-2 rounded-full shrink-0', status.color)} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate">{deal.name}</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {deal.pipeline_stages?.name ?? 'Sem etapa'}
+                        {deal.value ? ` · ${fmt(deal.value)}` : ''}
+                      </p>
+                    </div>
+                  </button>
+
+                  {isActive ? (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-accent-foreground/10 transition-opacity shrink-0">
+                          <MoreHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-40">
+                        <DropdownMenuItem
+                          onClick={() => handleWon(deal)}
+                          disabled={closeDeal.isPending}
+                        >
+                          <Trophy className="h-3.5 w-3.5 mr-2 text-emerald-500" />
+                          Marcar ganho
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => setConfirmLost(deal)}
+                          disabled={closeDeal.isPending}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          <XCircle className="h-3.5 w-3.5 mr-2" />
+                          Marcar perdido
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ) : (
+                    <ExternalLink
+                      className="h-3 w-3 text-muted-foreground/40 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 cursor-pointer"
+                      onClick={() => navigate('/pipeline')}
+                    />
+                  )}
+                </div>
               )
             })}
 
@@ -94,6 +153,29 @@ const LeadDealsPanel = ({ leadId, leadName }: LeadDealsPanelProps) => {
         leadId={leadId}
         leadName={leadName ?? undefined}
       />
+
+      <AlertDialog open={!!confirmLost} onOpenChange={(open) => !open && setConfirmLost(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Marcar como perdido?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O negocio "{confirmLost?.name}" sera marcado como perdido. Essa acao pode ser revertida no kanban.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (confirmLost) handleLost(confirmLost)
+                setConfirmLost(null)
+              }}
+            >
+              Marcar perdido
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   )
 }

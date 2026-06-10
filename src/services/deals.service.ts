@@ -143,6 +143,39 @@ export const updateDealValueAndMove = async (
   return data
 }
 
+export const closeDeal = async (
+  companyId: string,
+  dealId: string,
+  pipelineId: string,
+  outcome: 'won' | 'lost',
+): Promise<DealWithLead> => {
+  // Buscar stage final do pipeline (is_positive=true para won, false para lost)
+  const { data: finalStage } = await veltzy()
+    .from('pipeline_stages')
+    .select('id')
+    .eq('pipeline_id', pipelineId)
+    .eq('is_final', true)
+    .eq('is_positive', outcome === 'won')
+    .limit(1)
+    .maybeSingle()
+
+  if (finalStage) {
+    // Mover para stage final — trigger popula status + closed_at
+    return moveDealStage(companyId, dealId, finalStage.id, undefined, outcome)
+  }
+
+  // Fallback: sem stage final definido, setar status + closed_at direto
+  const { data, error } = await veltzy()
+    .from('deals')
+    .update({ status: outcome, closed_at: new Date().toISOString() })
+    .eq('id', dealId)
+    .eq('company_id', companyId)
+    .select(DEAL_WITH_LEAD_SELECT)
+    .single()
+  if (error) throw error
+  return data
+}
+
 export const assignDeal = async (companyId: string, dealId: string, userId: string): Promise<DealWithLead> => {
   const { data, error } = await veltzy()
     .from('deals')
