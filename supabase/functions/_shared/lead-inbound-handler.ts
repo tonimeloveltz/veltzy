@@ -89,13 +89,10 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
     )
   }
 
-  // 4. Atualizar timestamp SLA + temperatura por atividade (mensagem recebida = fire)
-  await supabase
-    .from('leads')
-    .update({ last_customer_message_at: new Date().toISOString(), temperature: 'fire' })
-    .eq('id', lead.id)
-
-  // 5. Salvar mensagem
+  // 4. Salvar mensagem
+  // Temperatura: o trigger trg_lead_temperature_on_message (migration 063)
+  // seta last_customer_message_at + temperature='fire' automaticamente
+  // ao inserir mensagem com sender_type='lead'. Nao precisa fazer aqui.
   // Webhook: nao cria mensagem (lead de formulario, sem conversa)
   let savedMessage: { id: string } | null = null
   if (params.source !== 'webhook') {
@@ -565,6 +562,18 @@ async function createDealForLead(
 
     if (!firstStage) return
 
+    // Guard global: lead ja tem deal (qualquer status) neste pipeline?
+    // Opcao B: 1 contato = max 1 deal automatico por pipeline.
+    // Vendedor cria nova oportunidade manualmente se quiser (via UI).
+    const { data: anyDealInPipeline } = await supabase
+      .from('deals')
+      .select('id')
+      .eq('lead_id', lead.id)
+      .eq('pipeline_id', pipeline.id)
+      .limit(1)
+
+    if (anyDealInPipeline && anyDealInPipeline.length > 0) return
+
     if (isNewLead) {
       // Lead novo: criar deal normal
       await supabase.from('deals').insert({
@@ -586,7 +595,8 @@ async function createDealForLead(
       .eq('lead_id', lead.id)
       .in('status', ['open', 'pending_assignment'])
 
-    const existingAssignee = existingDeals?.[0]?.assigned_to ?? null
+    // Buscar assignee de um deal open (nao pending_assignment que tem assigned_to=null)
+    const existingAssignee = existingDeals?.find((d) => d.status === 'open' && d.assigned_to)?.assigned_to ?? null
 
     const hasConflict = existingAssignee &&
       existingDeals?.some((d) => d.pipeline_id !== pipeline.id)
@@ -615,7 +625,7 @@ async function createDealForLead(
         })
       }
     } else if (!existingDeals || existingDeals.length === 0) {
-      // Sem deals existentes: criar deal normal
+      // Sem deals existentes (em qualquer pipeline): criar deal normal
       await supabase.from('deals').insert({
         company_id: params.companyId,
         lead_id: lead.id,

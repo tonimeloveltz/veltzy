@@ -4,7 +4,11 @@
 -- Aplicar via Dashboard SQL Editor (nao CLI)
 -- ============================================================
 
--- 1. Funcao que computa temperatura a partir de um timestamp
+-- 1. Criar coluna para armazenar timestamp da ultima mensagem do lead
+ALTER TABLE veltzy.leads
+ADD COLUMN IF NOT EXISTS last_customer_message_at TIMESTAMPTZ;
+
+-- 2. Funcao que computa temperatura a partir de um timestamp
 CREATE OR REPLACE FUNCTION veltzy.compute_lead_temperature(last_msg_at TIMESTAMPTZ)
 RETURNS veltzy.lead_temperature
 LANGUAGE sql STABLE AS $$
@@ -17,7 +21,7 @@ LANGUAGE sql STABLE AS $$
   END
 $$;
 
--- 2. Trigger: ao inserir mensagem do lead (sender_type=lead), setar temperatura=fire
+-- 3. Trigger: ao inserir mensagem do lead, popular timestamp + setar fire
 CREATE OR REPLACE FUNCTION veltzy.trg_update_temperature_on_message()
 RETURNS TRIGGER
 LANGUAGE plpgsql SECURITY DEFINER
@@ -26,7 +30,8 @@ AS $$
 BEGIN
   IF NEW.sender_type = 'lead' THEN
     UPDATE veltzy.leads
-    SET temperature = 'fire'
+    SET last_customer_message_at = NEW.created_at,
+        temperature = 'fire'
     WHERE id = NEW.lead_id;
   END IF;
   RETURN NEW;
@@ -39,7 +44,10 @@ CREATE TRIGGER trg_lead_temperature_on_message
   FOR EACH ROW
   EXECUTE FUNCTION veltzy.trg_update_temperature_on_message();
 
--- 3. Funcao de recalculo (chamada pelo cron)
+-- 4. Funcao de recalculo (chamada pelo cron a cada hora para esfriamento)
+-- NOTA: se a tabela leads crescer muito, otimizar filtrando por
+-- last_customer_message_at > now() - INTERVAL '4 days' (leads que ainda
+-- podem mudar de temperatura) ou excluindo status archived.
 CREATE OR REPLACE FUNCTION veltzy.recalculate_lead_temperatures()
 RETURNS void
 LANGUAGE sql SECURITY DEFINER
@@ -50,13 +58,24 @@ AS $$
   WHERE temperature IS DISTINCT FROM veltzy.compute_lead_temperature(last_customer_message_at);
 $$;
 
--- 4. pg_cron: recalcular a cada hora (esfriamento)
+-- 5. Backfill: popular last_customer_message_at a partir do historico de mensagens
+UPDATE veltzy.leads l
+SET last_customer_message_at = sub.last_msg
+FROM (
+  SELECT lead_id, MAX(created_at) AS last_msg
+  FROM veltzy.messages
+  WHERE sender_type = 'lead'
+  GROUP BY lead_id
+) sub
+WHERE l.id = sub.lead_id;
+
+-- 6. Recalcular temperaturas com os timestamps corretos
+SELECT veltzy.recalculate_lead_temperatures();
+
+-- 7. pg_cron: recalcular a cada hora (esfriamento gradual)
 -- Requer extensao pg_cron habilitada no Supabase (habilitada por padrao)
 SELECT cron.schedule(
   'recalculate-lead-temperatures',
   '0 * * * *',
   $$SELECT veltzy.recalculate_lead_temperatures()$$
 );
-
--- 5. Backfill: recalcular todos os leads existentes agora
-SELECT veltzy.recalculate_lead_temperatures();

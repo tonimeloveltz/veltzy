@@ -180,6 +180,27 @@ export const useMoveDealToPipeline = () => {
   })
 }
 
+export const useCloseDeal = () => {
+  const queryClient = useQueryClient()
+  const companyId = useAuthStore((s) => s.company?.id)
+
+  return useMutation({
+    mutationFn: ({ dealId, pipelineId, outcome }: { dealId: string; pipelineId: string; outcome: 'won' | 'lost' }) =>
+      dealsService.closeDeal(companyId!, dealId, pipelineId, outcome),
+    onSuccess: (_, { outcome }) => {
+      queryClient.invalidateQueries({ queryKey: ['deals'] })
+      if (outcome === 'won') {
+        toast.success('Negocio fechado com sucesso! 🎉')
+      } else {
+        toast.info('Negocio marcado como perdido')
+      }
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || 'Erro ao fechar negocio')
+    },
+  })
+}
+
 export const useAssignDeal = () => {
   const queryClient = useQueryClient()
   const companyId = useAuthStore((s) => s.company?.id)
