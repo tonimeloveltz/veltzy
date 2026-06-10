@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button'
 import { StageColumn } from '@/components/pipeline/stage-column'
 import { DealCard } from '@/components/pipeline/deal-card'
 import { CreateLeadModal } from '@/components/pipeline/create-lead-modal'
+import { CreateDealModal } from '@/components/deals/create-deal-modal'
 import { EditLeadModal } from '@/components/pipeline/edit-lead-modal'
 import { PipelineHeader } from '@/components/pipeline/pipeline-header'
 import { PipelineSelector } from '@/components/pipeline/pipeline-selector'
@@ -70,6 +71,7 @@ const PipelineBoard = () => {
   const [dealValuePending, setDealValuePending] = useState<{ dealId: string; stageId: string; dealName: string } | null>(null)
   const [activeDealId, setActiveDealId] = useState<string | null>(null)
   const [editDealId, setEditDealId] = useState<string | null>(null)
+  const [createDealForLead, setCreateDealForLead] = useState<{ leadId: string; leadName: string } | null>(null)
 
   // For EditLeadModal: fetch lead data when editing
   const { data: selectedLeadData } = useQuery({
@@ -218,6 +220,10 @@ const PipelineBoard = () => {
     setEditDealId(dealId)
   }, [setSelectedLeadId])
 
+  const handleCreateDeal = useCallback((leadId: string, leadName: string) => {
+    setCreateDealForLead({ leadId, leadName })
+  }, [])
+
   if (pipelinesLoading || (stagesLoading && !!activePipelineId) || (dealsLoading && !!activePipelineId)) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -299,7 +305,7 @@ const PipelineBoard = () => {
               </div>
               <div className="kanban-column flex-1 space-y-2 rounded-xl p-2 overflow-y-auto scrollbar-minimal">
                 {pendingDeals.map((deal) => (
-                  <DealCard key={deal.id} deal={deal} onEditDeal={handleEditDeal} onTransfer={setTransferDealId} onMovePipeline={setMovePipelineDeal} fireOnly={fireOnly} />
+                  <DealCard key={deal.id} deal={deal} onEditDeal={handleEditDeal} onTransfer={setTransferDealId} onMovePipeline={setMovePipelineDeal} onCreateDeal={handleCreateDeal} fireOnly={fireOnly} />
                 ))}
               </div>
             </div>
@@ -314,6 +320,7 @@ const PipelineBoard = () => {
               onEditDeal={handleEditDeal}
               onTransferDeal={setTransferDealId}
               onMovePipeline={setMovePipelineDeal}
+              onCreateDeal={handleCreateDeal}
               fireOnly={fireOnly}
             />
           ))}
@@ -371,6 +378,15 @@ const PipelineBoard = () => {
         open={!!movePipelineDeal}
         onClose={() => setMovePipelineDeal(null)}
       />
+
+      {createDealForLead && (
+        <CreateDealModal
+          open={!!createDealForLead}
+          onClose={() => setCreateDealForLead(null)}
+          leadId={createDealForLead.leadId}
+          leadName={createDealForLead.leadName}
+        />
+      )}
 
       <DealValueDialog
         open={!!dealValuePending}

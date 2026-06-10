@@ -87,8 +87,12 @@ export const useCreateDeal = () => {
       queryClient.invalidateQueries({ queryKey: ['deals'] })
       toast.success('Negocio criado com sucesso!')
     },
-    onError: (err: Error) => {
-      toast.error(err.message || 'Erro ao criar negocio')
+    onError: (err: Error & { code?: string }) => {
+      if (err.message?.includes('duplicate') || err.message?.includes('unique') || err.code === '23505') {
+        toast.error('Este contato já tem um negócio ativo neste pipeline')
+      } else {
+        toast.error(err.message || 'Erro ao criar negócio')
+      }
     },
   })
 }
