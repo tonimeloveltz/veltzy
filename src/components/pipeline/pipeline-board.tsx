@@ -367,6 +367,7 @@ const PipelineBoard = () => {
 
       <TransferLeadModal
         leadId={transferLeadId}
+        dealId={transferDealId}
         open={!!transferDealId}
         onClose={() => setTransferDealId(null)}
       />

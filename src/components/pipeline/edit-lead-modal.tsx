@@ -73,6 +73,7 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
   const { data: members } = useTeamMembers()
   const { isAdmin, isManager } = useRoles()
   const [transferOpen, setTransferOpen] = useState(false)
+  const [pendingAssignTo, setPendingAssignTo] = useState<string | null>(null)
 
   const { register, handleSubmit, control, reset, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -80,6 +81,8 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
 
   useEffect(() => {
     if (lead) {
+      setPendingAssignTo(null)
+      setTransferOpen(false)
       reset({
         name: lead.name ?? '',
         phone: lead.phone,
@@ -131,6 +134,11 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
           stage_id: values.stage_id,
         },
       })
+
+      // Transferir responsável (só persiste no Salvar)
+      if (pendingAssignTo && pendingAssignTo !== activeDeal.assigned_to) {
+        await assignDeal.mutateAsync({ dealId: activeDeal.id, userId: pendingAssignTo })
+      }
     }
 
     if (newStageId !== oldStageId) {
@@ -151,18 +159,13 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
     onClose()
   }
 
-  const handleTransfer = async (userId: string) => {
-    if (!activeDeal) return
-    await assignDeal.mutateAsync({ dealId: activeDeal.id, userId })
-    setTransferOpen(false)
-  }
-
-  const currentAssignee = activeDeal?.assigned_to
-    ? members?.find((m) => m.id === activeDeal.assigned_to)
+  const effectiveAssignTo = pendingAssignTo ?? activeDeal?.assigned_to ?? null
+  const currentAssignee = effectiveAssignTo
+    ? members?.find((m) => m.id === effectiveAssignTo)
     : null
 
   const eligibleMembers = members?.filter((m) =>
-    m.user_roles?.some((r) => ['seller', 'manager'].includes(r.role))
+    m.user_roles?.some((r) => ['admin', 'manager', 'seller', 'super_admin'].includes(r.role))
   ) ?? []
 
   if (!lead) return null
@@ -267,7 +270,7 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
                       )}
                     </div>
                     {transferOpen && (isAdmin || isManager) && (
-                      <Select onValueChange={handleTransfer}>
+                      <Select value={pendingAssignTo ?? ''} onValueChange={(v) => { setPendingAssignTo(v); setTransferOpen(false) }}>
                         <SelectTrigger>
                           <SelectValue placeholder="Selecione o vendedor" />
                         </SelectTrigger>
