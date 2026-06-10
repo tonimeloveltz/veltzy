@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/auth.store'
 import { toast } from 'sonner'
 import * as leadsService from '@/services/leads.service'
+import * as dealsService from '@/services/deals.service'
 import { exportToCsv, exportToPdf, exportToXlsx } from '@/lib/export-leads'
 import type { LeadWithDetails } from '@/types/database'
 
@@ -22,6 +23,26 @@ export const useBulkTransfer = (onSuccess?: () => void) => {
     },
     onError: () => {
       toast.error('Erro ao transferir leads')
+    },
+  })
+}
+
+export const useBulkTransferDeals = (onSuccess?: () => void) => {
+  const companyId = useAuthStore((s) => s.company?.id)
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ dealIds, targetUserId }: { dealIds: string[]; targetUserId: string }) => {
+      if (!companyId) throw new Error('Empresa nao encontrada')
+      await dealsService.bulkUpdateAssignedTo(companyId, dealIds, targetUserId)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['deals'] })
+      toast.success('Negócios transferidos com sucesso')
+      onSuccess?.()
+    },
+    onError: () => {
+      toast.error('Erro ao transferir negócios')
     },
   })
 }

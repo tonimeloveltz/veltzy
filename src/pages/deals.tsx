@@ -225,6 +225,7 @@ const DealsPage = () => {
             leads={dealsAsLeads as never}
             onClear={clearSelection}
             userRole={userRole}
+            mode="deals"
           />
         )}
 

@@ -16,7 +16,7 @@ import { useMoveDealStage, useUpdateDealValueAndMove } from '@/hooks/use-deals'
 import { timeAgo } from '@/lib/time'
 import type { DealWithLead } from '@/types/database'
 import { useNavigate } from 'react-router-dom'
-import { Phone, MoreVertical, Pencil, ArrowRightLeft, UserRoundPen, Clock, MessageSquare, Bot, CheckSquare, FolderInput, ArrowLeftRight, AlertTriangle, AlertCircle } from 'lucide-react'
+import { Phone, MoreVertical, Pencil, ArrowRightLeft, UserRoundPen, Clock, MessageSquare, Bot, CheckSquare, FolderInput, ArrowLeftRight, AlertTriangle, AlertCircle, Plus } from 'lucide-react'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import type { LeadTemperature } from '@/types/database'
 
@@ -38,6 +38,7 @@ interface DealCardProps {
   onEditDeal?: (leadId: string, dealId: string) => void
   onTransfer?: (dealId: string) => void
   onMovePipeline?: (deal: DealWithLead) => void
+  onCreateDeal?: (leadId: string, leadName: string) => void
   fireOnly?: boolean
 }
 
@@ -60,7 +61,7 @@ const TemperatureBar = ({ temperature }: { temperature: LeadTemperature }) => {
   )
 }
 
-const DealCard = ({ deal, onEditDeal, onTransfer, onMovePipeline, fireOnly }: DealCardProps) => {
+const DealCard = ({ deal, onEditDeal, onTransfer, onMovePipeline, onCreateDeal, fireOnly }: DealCardProps) => {
   const navigate = useNavigate()
   const { isAdmin, isManager } = useRoles()
   const lead = deal.leads
@@ -156,6 +157,12 @@ const DealCard = ({ deal, onEditDeal, onTransfer, onMovePipeline, fireOnly }: De
                 <Pencil className="h-4 w-4" />
                 Editar contato
               </DropdownMenuItem>
+              {onCreateDeal && (
+                <DropdownMenuItem onClick={() => onCreateDeal(deal.lead_id, lead?.name || lead?.phone || 'Contato')}>
+                  <Plus className="h-4 w-4" />
+                  Criar negócio
+                </DropdownMenuItem>
+              )}
 
               <DropdownMenuSeparator />
               <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">

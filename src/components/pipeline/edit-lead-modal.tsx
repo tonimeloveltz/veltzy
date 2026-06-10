@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Loader2, Trash2, UserPlus, ArrowRight, User, MessageSquare, Plus, CheckSquare, Phone, Video, MessageCircle as FollowUpIcon, Check } from 'lucide-react'
+import { Loader2, Trash2, UserPlus, ArrowRight, User, MessageSquare, Plus, CheckSquare, Phone, Video, MessageCircle as FollowUpIcon, Check, UserRoundPen } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
@@ -17,15 +17,23 @@ import {
 } from '@/components/ui/select'
 import { LeadTagsInput } from '@/components/pipeline/lead-tags-input'
 import { useUpdateLead, useDeleteLead } from '@/hooks/use-leads'
-import { useDealsByLead, useUpdateDeal } from '@/hooks/use-deals'
+import { useDealsByLead, useUpdateDeal, useAssignDeal } from '@/hooks/use-deals'
 import { usePipelineStages } from '@/hooks/use-pipeline-stages'
 import { useLeadSources } from '@/hooks/use-lead-sources'
 import { useLeadActivityLogs } from '@/hooks/use-activity-logs'
+import { useTeamMembers } from '@/hooks/use-team'
+import { useRoles } from '@/hooks/use-roles'
 import { triggerCelebration } from '@/lib/celebration'
 import { useLeadTasks, useCompleteTask } from '@/hooks/use-tasks'
 import { CreateTaskModal } from '@/components/tarefas/create-task-modal'
 import type { LeadWithDetails, LeadTemperature, ActivityLog, TaskType } from '@/types/database'
-import { leadTemperatureConfig } from '@/lib/lead-config'
+
+const temperatureBarConfig: Record<LeadTemperature, { width: string; gradient: string; label: string }> = {
+  cold:  { width: '25%',  gradient: 'linear-gradient(to right, #bfdbfe, #3b82f6)', label: 'Frio' },
+  warm:  { width: '50%',  gradient: 'linear-gradient(to right, #fde68a, #f59e0b)', label: 'Morno' },
+  hot:   { width: '75%',  gradient: 'linear-gradient(to right, #fed7aa, #f97316)', label: 'Quente' },
+  fire:  { width: '100%', gradient: 'linear-gradient(to right, #f97316, #ef4444, #dc2626)', label: 'Fire' },
+}
 
 const schema = z.object({
   // Contato
@@ -36,11 +44,12 @@ const schema = z.object({
   source_id: z.string().optional(),
   observations: z.string().optional(),
   tags: z.array(z.string()),
+  instagram_handle: z.string().optional(),
+  linkedin_url: z.string().optional(),
   // Negocio
   deal_name: z.string().optional(),
   deal_value: z.number().nonnegative().optional(),
   stage_id: z.string().uuid(),
-  temperature: z.enum(['cold', 'warm', 'hot', 'fire']),
 })
 
 type FormValues = z.infer<typeof schema>
@@ -56,10 +65,15 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
   const updateLead = useUpdateLead()
   const updateDeal = useUpdateDeal()
   const deleteLead = useDeleteLead()
+  const assignDeal = useAssignDeal()
   const { data: deals } = useDealsByLead(lead?.id)
   const activeDeal = dealId ? deals?.find((d) => d.id === dealId) : deals?.[0]
   const { data: stages } = usePipelineStages(activeDeal?.pipeline_id ?? lead?.pipeline_id)
   const { data: sources } = useLeadSources()
+  const { data: members } = useTeamMembers()
+  const { isAdmin, isManager } = useRoles()
+  const [transferOpen, setTransferOpen] = useState(false)
+  const [pendingAssignTo, setPendingAssignTo] = useState<string | null>(null)
 
   const { register, handleSubmit, control, reset, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -67,6 +81,8 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
 
   useEffect(() => {
     if (lead) {
+      setPendingAssignTo(null)
+      setTransferOpen(false)
       reset({
         name: lead.name ?? '',
         phone: lead.phone,
@@ -75,10 +91,11 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
         source_id: lead.source_id ?? undefined,
         observations: lead.observations ?? '',
         tags: lead.tags,
+        instagram_handle: lead.instagram_handle ?? '',
+        linkedin_url: lead.linkedin_url ?? '',
         deal_name: activeDeal?.name ?? '',
         deal_value: activeDeal?.value ?? lead.deal_value ?? 0,
         stage_id: activeDeal?.stage_id ?? lead.stage_id,
-        temperature: lead.temperature,
       })
     }
   }, [lead, activeDeal, reset])
@@ -98,11 +115,12 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
         email: values.email || null,
         company_name: values.company_name || null,
         source_id: values.source_id || null,
-        temperature: values.temperature,
         observations: values.observations || null,
         tags: values.tags,
         deal_value: values.deal_value || null,
         stage_id: values.stage_id,
+        instagram_handle: values.instagram_handle || null,
+        linkedin_url: values.linkedin_url || null,
       },
     })
 
@@ -116,13 +134,18 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
           stage_id: values.stage_id,
         },
       })
+
+      // Transferir responsável (só persiste no Salvar)
+      if (pendingAssignTo && pendingAssignTo !== activeDeal.assigned_to) {
+        await assignDeal.mutateAsync({ dealId: activeDeal.id, userId: pendingAssignTo })
+      }
     }
 
     if (newStageId !== oldStageId) {
       const newStage = stages?.find((s) => s.id === newStageId)
       if (newStage?.is_final && newStage?.is_positive) {
         triggerCelebration()
-        toast.success('Negocio fechado! 🎉')
+        toast.success('Negócio fechado! 🎉')
       }
     }
 
@@ -136,6 +159,15 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
     onClose()
   }
 
+  const effectiveAssignTo = pendingAssignTo ?? activeDeal?.assigned_to ?? null
+  const currentAssignee = effectiveAssignTo
+    ? members?.find((m) => m.id === effectiveAssignTo)
+    : null
+
+  const eligibleMembers = members?.filter((m) =>
+    m.user_roles?.some((r) => ['admin', 'manager', 'seller', 'super_admin'].includes(r.role))
+  ) ?? []
+
   if (!lead) return null
 
   return (
@@ -144,32 +176,32 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
         <DialogHeader>
           <DialogTitle>{lead.name || lead.phone}</DialogTitle>
           <DialogDescription>
-            {activeDeal ? `Negocio: ${activeDeal.name}` : 'Editar contato'}
+            {activeDeal ? `Negócio: ${activeDeal.name}` : 'Editar contato'}
           </DialogDescription>
         </DialogHeader>
 
         <Tabs defaultValue="info" className="w-full">
           <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="info">Informacoes</TabsTrigger>
+            <TabsTrigger value="info">Informações</TabsTrigger>
             <TabsTrigger value="tasks">Tarefas</TabsTrigger>
-            <TabsTrigger value="history">Historico</TabsTrigger>
+            <TabsTrigger value="history">Histórico</TabsTrigger>
           </TabsList>
 
           <TabsContent value="info" className="mt-4">
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-              {/* SECAO: NEGOCIO */}
+              {/* SEÇÃO: NEGÓCIO */}
               {activeDeal && (
                 <>
                   <div className="flex items-center gap-2">
                     <div className="h-px flex-1 bg-border/50" />
-                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Negocio</span>
+                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Negócio</span>
                     <div className="h-px flex-1 bg-border/50" />
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Nome do negocio</Label>
+                    <Label>Nome do negócio</Label>
                     <Input
-                      placeholder="Ex: Orcamento de treinamento, Brindes fim de ano..."
+                      placeholder="Ex: Orçamento de treinamento, Brindes fim de ano..."
                       {...register('deal_name')}
                     />
                   </div>
@@ -198,29 +230,64 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
                     </div>
                   </div>
 
+                  {/* Temperatura read-only (calculada por T1) */}
                   <div className="space-y-2">
                     <Label>Temperatura</Label>
-                    <Controller
-                      control={control}
-                      name="temperature"
-                      render={({ field }) => (
-                        <Select value={field.value} onValueChange={(v) => field.onChange(v as LeadTemperature)}>
-                          <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            {(Object.keys(leadTemperatureConfig) as LeadTemperature[]).map((t) => (
-                              <SelectItem key={t} value={t}>
-                                {leadTemperatureConfig[t].label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                    <div className="flex items-center gap-3 rounded-md border border-input px-3 py-2">
+                      <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-500 ease-out"
+                          style={{
+                            width: temperatureBarConfig[lead.temperature].width,
+                            background: temperatureBarConfig[lead.temperature].gradient,
+                          }}
+                        />
+                      </div>
+                      <span className="text-xs font-medium text-muted-foreground shrink-0">
+                        {temperatureBarConfig[lead.temperature].label}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">Calculada automaticamente pela atividade do contato</p>
+                  </div>
+
+                  {/* Dono do negócio */}
+                  <div className="space-y-2">
+                    <Label>Responsável</Label>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 rounded-md border border-input px-3 py-2 text-sm text-muted-foreground">
+                        {currentAssignee?.name ?? 'Sem responsável'}
+                      </div>
+                      {(isAdmin || isManager) && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setTransferOpen((v) => !v)}
+                        >
+                          <UserRoundPen className="h-3.5 w-3.5 mr-1" />
+                          Transferir
+                        </Button>
                       )}
-                    />
+                    </div>
+                    {transferOpen && (isAdmin || isManager) && (
+                      <Select value={pendingAssignTo ?? ''} onValueChange={(v) => { setPendingAssignTo(v); setTransferOpen(false) }}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione o vendedor" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {eligibleMembers.map((m) => (
+                            <SelectItem key={m.id} value={m.id}>
+                              {m.name} ({m.email})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                   </div>
                 </>
               )}
 
-              {/* SECAO: CONTATO */}
+              {/* SEÇÃO: CONTATO */}
               <div className="flex items-center gap-2">
                 <div className="h-px flex-1 bg-border/50" />
                 <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Contato</span>
@@ -247,9 +314,26 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
               <div className="space-y-2">
                 <Label>Empresa do cliente</Label>
                 <Input
-                  placeholder="Ex: Clinica Silva, Escritorio Martins..."
+                  placeholder="Ex: Clínica Silva, Escritório Martins..."
                   {...register('company_name')}
                 />
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Instagram</Label>
+                  <Input
+                    placeholder="@usuario"
+                    {...register('instagram_handle')}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>LinkedIn</Label>
+                  <Input
+                    placeholder="linkedin.com/in/usuario"
+                    {...register('linkedin_url')}
+                  />
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -270,7 +354,7 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
                 />
               </div>
 
-              {/* Campos que so aparecem se NAO tem deal (fallback para editar direto no lead) */}
+              {/* Campos que só aparecem se NÃO tem deal (fallback para editar direto no lead) */}
               {!activeDeal && (
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
@@ -292,22 +376,20 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
                   </div>
                   <div className="space-y-2">
                     <Label>Temperatura</Label>
-                    <Controller
-                      control={control}
-                      name="temperature"
-                      render={({ field }) => (
-                        <Select value={field.value} onValueChange={(v) => field.onChange(v as LeadTemperature)}>
-                          <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            {(Object.keys(leadTemperatureConfig) as LeadTemperature[]).map((t) => (
-                              <SelectItem key={t} value={t}>
-                                {leadTemperatureConfig[t].label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    />
+                    <div className="flex items-center gap-3 rounded-md border border-input px-3 py-2">
+                      <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-500 ease-out"
+                          style={{
+                            width: temperatureBarConfig[lead.temperature].width,
+                            background: temperatureBarConfig[lead.temperature].gradient,
+                          }}
+                        />
+                      </div>
+                      <span className="text-xs font-medium text-muted-foreground shrink-0">
+                        {temperatureBarConfig[lead.temperature].label}
+                      </span>
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <Label>Valor (R$)</Label>
@@ -331,7 +413,7 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
               </div>
 
               <div className="space-y-2">
-                <Label>Observacoes</Label>
+                <Label>Observações</Label>
                 <textarea
                   className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 input-clean"
                   {...register('observations')}
@@ -387,7 +469,7 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
 const actionConfig: Record<string, { icon: typeof UserPlus; label: string }> = {
   created: { icon: UserPlus, label: 'Lead criado' },
   stage_changed: { icon: ArrowRight, label: 'Movido para' },
-  assigned: { icon: User, label: 'Atribuido a' },
+  assigned: { icon: User, label: 'Atribuído a' },
   message_sent: { icon: MessageSquare, label: 'Mensagem enviada' },
 }
 

@@ -8,19 +8,20 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
-import { useUpdateLead } from '@/hooks/use-leads'
+import { useAssignDeal } from '@/hooks/use-deals'
 import { useTeamMembers } from '@/hooks/use-team'
+
+const ALLOWED_ROLES = ['admin', 'manager', 'seller', 'super_admin']
 
 interface TransferLeadModalProps {
   leadId: string | null
+  dealId?: string | null
   open: boolean
   onClose: () => void
 }
 
-const ALLOWED_ROLES = ['seller', 'manager']
-
-const TransferLeadModal = ({ leadId, open, onClose }: TransferLeadModalProps) => {
-  const updateLead = useUpdateLead()
+const TransferLeadModal = ({ leadId: _leadId, dealId, open, onClose }: TransferLeadModalProps) => {
+  const assignDeal = useAssignDeal()
   const { data: members } = useTeamMembers()
   const [selectedUserId, setSelectedUserId] = useState<string>('')
 
@@ -32,12 +33,9 @@ const TransferLeadModal = ({ leadId, open, onClose }: TransferLeadModalProps) =>
   }, [members])
 
   const handleTransfer = async () => {
-    if (!leadId || !selectedUserId) return
-    await updateLead.mutateAsync({
-      leadId,
-      data: { assigned_to: selectedUserId },
-    })
-    toast.success('Lead transferido com sucesso!')
+    if (!dealId || !selectedUserId) return
+    await assignDeal.mutateAsync({ dealId, userId: selectedUserId })
+    toast.success('Negócio transferido com sucesso!')
     setSelectedUserId('')
     onClose()
   }
@@ -46,7 +44,7 @@ const TransferLeadModal = ({ leadId, open, onClose }: TransferLeadModalProps) =>
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>Transferir Lead</DialogTitle>
+          <DialogTitle>Transferir Negócio</DialogTitle>
           <DialogDescription>Selecione o vendedor para transferir</DialogDescription>
         </DialogHeader>
 
@@ -66,8 +64,8 @@ const TransferLeadModal = ({ leadId, open, onClose }: TransferLeadModalProps) =>
 
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={onClose}>Cancelar</Button>
-            <Button onClick={handleTransfer} disabled={!selectedUserId || updateLead.isPending}>
-              {updateLead.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            <Button onClick={handleTransfer} disabled={!selectedUserId || assignDeal.isPending}>
+              {assignDeal.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Transferir
             </Button>
           </div>

@@ -199,6 +199,8 @@ export interface Lead {
   last_customer_message_at: string | null
   sla_breached: boolean
   first_response_at: string | null
+  instagram_handle: string | null
+  linkedin_url: string | null
   created_at: string
   updated_at: string
 }
@@ -242,6 +244,8 @@ export interface UpdateLeadInput {
   deal_value?: number | null
   observations?: string | null
   conversation_status?: ConversationStatus
+  instagram_handle?: string | null
+  linkedin_url?: string | null
 }
 
 // --- Deal (Negocio) ---

@@ -13,10 +13,11 @@ interface StageColumnProps {
   onEditDeal?: (leadId: string, dealId: string) => void
   onTransferDeal?: (dealId: string) => void
   onMovePipeline?: (deal: DealWithLead) => void
+  onCreateDeal?: (leadId: string, leadName: string) => void
   fireOnly?: boolean
 }
 
-const StageColumn = ({ stage, deals, onAddLead, onEditDeal, onTransferDeal, onMovePipeline, fireOnly }: StageColumnProps) => {
+const StageColumn = ({ stage, deals, onAddLead, onEditDeal, onTransferDeal, onMovePipeline, onCreateDeal, fireOnly }: StageColumnProps) => {
   const { setNodeRef, isOver } = useDroppable({ id: stage.id })
 
   const dealIds = deals.map((d) => d.id)
@@ -60,7 +61,7 @@ const StageColumn = ({ stage, deals, onAddLead, onEditDeal, onTransferDeal, onMo
           )}
         >
           {deals.map((deal) => (
-            <DealCard key={deal.id} deal={deal} onEditDeal={onEditDeal} onTransfer={onTransferDeal} onMovePipeline={onMovePipeline} fireOnly={fireOnly} />
+            <DealCard key={deal.id} deal={deal} onEditDeal={onEditDeal} onTransfer={onTransferDeal} onMovePipeline={onMovePipeline} onCreateDeal={onCreateDeal} fireOnly={fireOnly} />
           ))}
 
           {deals.length === 0 && (

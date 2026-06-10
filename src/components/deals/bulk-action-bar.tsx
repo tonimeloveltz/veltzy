@@ -16,9 +16,10 @@ interface BulkActionBarProps {
   leads: LeadWithDetails[]
   onClear: () => void
   userRole: AppRole
+  mode?: 'leads' | 'deals'
 }
 
-export const BulkActionBar = ({ selectedIds, leads, onClear, userRole }: BulkActionBarProps) => {
+export const BulkActionBar = ({ selectedIds, leads, onClear, userRole, mode = 'leads' }: BulkActionBarProps) => {
   const [transferOpen, setTransferOpen] = useState(false)
   const [movePipelineOpen, setMovePipelineOpen] = useState(false)
   const [archiveOpen, setArchiveOpen] = useState(false)
@@ -96,6 +97,7 @@ export const BulkActionBar = ({ selectedIds, leads, onClear, userRole }: BulkAct
         onClose={() => setTransferOpen(false)}
         leadIds={selectedArray}
         onSuccess={onClear}
+        mode={mode}
       />
 
       <BulkMovePipelineModal
