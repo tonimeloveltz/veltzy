@@ -1,11 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Briefcase, Plus, ChevronDown, ChevronUp, ExternalLink, Trophy, XCircle, MoreHorizontal } from 'lucide-react'
+import { Briefcase, Plus, ChevronDown, ChevronUp, ExternalLink, Trophy, XCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -100,30 +97,24 @@ const LeadDealsPanel = ({ leadId, leadName }: LeadDealsPanelProps) => {
                   </button>
 
                   {isActive ? (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-accent-foreground/10 transition-opacity shrink-0">
-                          <MoreHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-40">
-                        <DropdownMenuItem
-                          onClick={() => handleWon(deal)}
-                          disabled={closeDeal.isPending}
-                        >
-                          <Trophy className="h-3.5 w-3.5 mr-2 text-emerald-500" />
-                          Marcar ganho
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => setConfirmLost(deal)}
-                          disabled={closeDeal.isPending}
-                          className="text-destructive focus:text-destructive"
-                        >
-                          <XCircle className="h-3.5 w-3.5 mr-2" />
-                          Marcar perdido
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleWon(deal) }}
+                        disabled={closeDeal.isPending}
+                        title="Marcar ganho"
+                        className="rounded p-1 text-emerald-600 hover:bg-emerald-500/15 transition-colors"
+                      >
+                        <Trophy className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setConfirmLost(deal) }}
+                        disabled={closeDeal.isPending}
+                        title="Marcar perdido"
+                        className="rounded p-1 text-red-500 hover:bg-red-500/15 transition-colors"
+                      >
+                        <XCircle className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   ) : (
                     <ExternalLink
                       className="h-3 w-3 text-muted-foreground/40 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 cursor-pointer"
