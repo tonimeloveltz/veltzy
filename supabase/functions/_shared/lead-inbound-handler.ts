@@ -89,10 +89,10 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
     )
   }
 
-  // 4. Atualizar timestamp SLA
+  // 4. Atualizar timestamp SLA + temperatura por atividade (mensagem recebida = fire)
   await supabase
     .from('leads')
-    .update({ last_customer_message_at: new Date().toISOString() })
+    .update({ last_customer_message_at: new Date().toISOString(), temperature: 'fire' })
     .eq('id', lead.id)
 
   // 5. Salvar mensagem
