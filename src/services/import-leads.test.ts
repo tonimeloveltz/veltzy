@@ -26,7 +26,7 @@ describe('import-leads.service', () => {
       const lead = mapCsvRowToLead(row, mapping, 'pipe-1', 'stage-1', undefined, lookups)
 
       expect(lead.name).toBe('João Silva')
-      expect(lead.phone).toBe('11999887766')
+      expect(lead.phone).toBe('5511999887766')
       expect(lead.email).toBe('joao@email.com')
       expect(lead.source_id).toBe('src-1')
       expect(lead.stage_id).toBe('stage-2') // Qualificando resolvido
@@ -51,7 +51,7 @@ describe('import-leads.service', () => {
       const lead = mapCsvRowToLead(row, mapping, 'pipe-1', 'stage-1', undefined, lookups)
 
       expect(lead.name).toBe('João')
-      expect(lead.phone).toBe('11999001122')
+      expect(lead.phone).toBe('5511999001122')
     })
 
     it('normaliza telefone removendo caracteres não numéricos', () => {
@@ -60,7 +60,7 @@ describe('import-leads.service', () => {
 
       const lead = mapCsvRowToLead(row, mapping, 'pipe-1', 'stage-1', undefined, lookups)
 
-      expect(lead.phone).toBe('11999001122')
+      expect(lead.phone).toBe('5511999001122')
     })
 
     it('parseia valor monetário em formato brasileiro', () => {
