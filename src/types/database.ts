@@ -281,7 +281,7 @@ export interface Deal {
 }
 
 export interface DealWithLead extends Deal {
-  leads?: Pick<Lead, 'id' | 'name' | 'phone' | 'email' | 'avatar_url' | 'temperature' | 'tags' | 'is_ai_active' | 'transfer_summary' | 'source_id' | 'company_name' | 'created_at'> & {
+  leads?: Pick<Lead, 'id' | 'name' | 'phone' | 'email' | 'avatar_url' | 'temperature' | 'tags' | 'is_ai_active' | 'transfer_summary' | 'source_id' | 'company_name' | 'created_at' | 'whatsapp_instance_name'> & {
     lead_sources?: LeadSourceRecord | null
   }
   profiles?: Partial<Profile> | null
@@ -328,6 +328,7 @@ export interface Message {
   replied_message_id: string | null
   instance_name: string | null
   delivery_status: DeliveryStatus
+  delivery_error: string | null
   is_scheduled: boolean
   scheduled_at: string | null
   is_read: boolean
