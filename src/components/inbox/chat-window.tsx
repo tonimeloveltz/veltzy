@@ -22,10 +22,10 @@ const ChatWindow = ({ lead }: ChatWindowProps) => {
   const waDisconnected = waStatus ? !waStatus.connected : false
 
   useEffect(() => {
-    if (lead.conversation_status === 'unread') {
+    if (lead.conversation_status === 'unread' || (lead.unread_count ?? 0) > 0) {
       markAsRead.mutate(lead.id)
     }
-  }, [lead.id, lead.conversation_status]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [lead.id, lead.conversation_status, lead.unread_count]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex h-full flex-col">

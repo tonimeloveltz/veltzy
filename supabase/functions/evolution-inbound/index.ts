@@ -31,6 +31,7 @@ interface EvolutionInboundPayload {
     source_url?: string
     ctwa_clid?: string
   }
+  profile_pic_url?: string
 }
 
 Deno.serve(async (req) => {
@@ -122,6 +123,7 @@ Deno.serve(async (req) => {
       source: 'whatsapp',
       instanceName: payload.instance_name,
       adContext: payload.ad_context ?? null,
+      profilePicUrl: payload.profile_pic_url ?? null,
     })
 
     console.log(`[evolution-inbound] Processed: leadId=${result.leadId}, isNew=${result.isNewLead}`)
