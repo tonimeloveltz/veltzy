@@ -89,6 +89,7 @@ export const useSendMessage = () => {
         replied_message_id: payload.repliedMessageId ?? null,
         instance_name: null,
         delivery_status: 'pending',
+        delivery_error: null,
         is_scheduled: false,
         scheduled_at: null,
         is_read: true,

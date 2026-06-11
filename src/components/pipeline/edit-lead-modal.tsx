@@ -405,6 +405,11 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
                 <p className="text-xs text-muted-foreground">
                   Status: <span className="font-medium text-foreground">{lead.conversation_status}</span>
                 </p>
+                {lead.whatsapp_instance_name && (
+                  <p className="text-xs text-muted-foreground">
+                    Instancia WhatsApp: <span className="font-medium text-foreground">{lead.whatsapp_instance_name}</span>
+                  </p>
+                )}
                 <p className="text-xs text-muted-foreground">
                   Criado em: <span className="font-medium text-foreground">
                     {new Date(lead.created_at).toLocaleDateString('pt-BR')}

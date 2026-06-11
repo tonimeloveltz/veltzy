@@ -176,7 +176,7 @@ const MessageBubble = ({ message, senderName }: MessageBubbleProps) => {
               <TooltipTrigger>
                 <AlertTriangle className="h-3 w-3 text-destructive inline" />
               </TooltipTrigger>
-              <TooltipContent>Mensagem nao entregue - instancia offline</TooltipContent>
+              <TooltipContent>{message.delivery_error ? `Falha: ${message.delivery_error}` : 'Falha no envio'}</TooltipContent>
             </Tooltip>
           )}
         </p>

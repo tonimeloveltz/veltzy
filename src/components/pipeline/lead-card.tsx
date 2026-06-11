@@ -133,6 +133,11 @@ const LeadCard = ({ lead, onTransfer, onMovePipeline, fireOnly }: LeadCardProps)
                 <span className="truncate">{lead.email}</span>
               </p>
             )}
+            {lead.whatsapp_instance_name && (
+              <span className="text-[9px] text-muted-foreground/60 bg-muted px-1 py-0.5 rounded shrink-0 w-fit">
+                ...{lead.whatsapp_instance_name.slice(-4)}
+              </span>
+            )}
           </div>
 
           <div className="flex flex-col items-center gap-1 shrink-0">

@@ -109,6 +109,7 @@ Deno.serve(async (req) => {
 
     let instanceName: string | null = null
     let deliveryStatus: 'sent' | 'failed' = 'sent'
+    let deliveryError: string | null = null
     let source: 'whatsapp' | 'manual' = 'whatsapp'
 
     if (activeProvider === 'evolution') {
@@ -146,6 +147,7 @@ Deno.serve(async (req) => {
       } catch (err) {
         console.error('[whatsapp-send] Evolution send failed:', err)
         deliveryStatus = 'failed'
+        deliveryError = err instanceof Error ? err.message : String(err)
       }
     } else {
       // Fluxo Z-API existente
@@ -164,6 +166,7 @@ Deno.serve(async (req) => {
         } catch (err) {
           console.error('[whatsapp-send] Z-API send failed:', err)
           deliveryStatus = 'failed'
+          deliveryError = err instanceof Error ? err.message : String(err)
         }
       } else {
         source = 'manual'
@@ -186,6 +189,7 @@ Deno.serve(async (req) => {
         replied_message_id: payload.repliedMessageId ?? null,
         instance_name: instanceName,
         delivery_status: deliveryStatus,
+        delivery_error: deliveryError,
       })
       .select()
       .single()
