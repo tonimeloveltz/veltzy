@@ -7,7 +7,7 @@ import {
 import { cn } from '@/lib/utils'
 import { useDashboardDeals } from '@/hooks/use-deals'
 import { usePipelineStages } from '@/hooks/use-pipeline-stages'
-import { usePipelines } from '@/hooks/use-pipelines'
+import { useAccessiblePipelines } from '@/hooks/use-pipeline-access'
 import { useRoles } from '@/hooks/use-roles'
 import { PipelineFilter } from '@/components/shared/pipeline-filter'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -76,7 +76,7 @@ const DealsPage = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showArchived, setShowArchived] = useState(false)
 
-  const { data: pipelines } = usePipelines()
+  const { data: pipelines } = useAccessiblePipelines()
   const { data: allDeals, isLoading, isError, refetch } = useDashboardDeals(selectedPipelineId, showArchived)
   const { data: stages } = usePipelineStages()
   const showPipelineColumn = (pipelines ?? []).filter((p) => p.is_active).length > 1

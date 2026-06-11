@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/select'
 import { LeadTagsInput } from '@/components/pipeline/lead-tags-input'
 import { useCreateLead } from '@/hooks/use-leads'
-import { usePipelines } from '@/hooks/use-pipelines'
+import { useAccessiblePipelines } from '@/hooks/use-pipeline-access'
 import { usePipelineStages } from '@/hooks/use-pipeline-stages'
 import { useLeadSources } from '@/hooks/use-lead-sources'
 import { useCompanyLimits } from '@/hooks/use-company-limits'
@@ -48,7 +48,7 @@ interface CreateLeadModalProps {
 const CreateLeadModal = ({ open, onClose, defaultStageId, pipelineId }: CreateLeadModalProps) => {
   const createLead = useCreateLead()
   const activePipelineId = usePipelineStore((s) => s.activePipelineId)
-  const { data: pipelines } = usePipelines()
+  const { data: pipelines } = useAccessiblePipelines()
   const { data: sources } = useLeadSources()
   const { data: leadLimits } = useCompanyLimits('leads')
   const limitReached = leadLimits && !leadLimits.allowed

@@ -4,7 +4,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { usePipelines } from '@/hooks/use-pipelines'
+import { useAccessiblePipelines } from '@/hooks/use-pipeline-access'
 import { useMoveDealToPipeline } from '@/hooks/use-deals'
 import { cn } from '@/lib/utils'
 
@@ -17,7 +17,7 @@ interface MovePipelineModalProps {
 }
 
 const MovePipelineModal = ({ dealId, dealName, currentPipelineId, open, onClose }: MovePipelineModalProps) => {
-  const { data: pipelines } = usePipelines()
+  const { data: pipelines } = useAccessiblePipelines()
   const moveDealToPipeline = useMoveDealToPipeline()
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
