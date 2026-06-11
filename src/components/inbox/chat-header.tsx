@@ -8,6 +8,7 @@ import { MoreVertical, Kanban, CheckCircle, Phone } from 'lucide-react'
 import { useUpdateLead } from '@/hooks/use-leads'
 import { useAccessiblePipelines } from '@/hooks/use-pipeline-access'
 import { useWhatsAppStatus } from '@/hooks/use-whatsapp-status'
+import { leadDisplayName } from '@/lib/phone'
 import type { LeadWithLastMessage } from '@/types/database'
 
 interface ChatHeaderProps {
@@ -35,12 +36,12 @@ const ChatHeader = ({ lead }: ChatHeaderProps) => {
       <Avatar className="h-9 w-9">
         <AvatarImage src={avatarSrc} alt={lead.name ?? ''} />
         <AvatarFallback className="text-xs bg-secondary">
-          {(lead.name || lead.phone).slice(0, 2).toUpperCase()}
+          {leadDisplayName(lead.name, lead.phone).slice(0, 2).toUpperCase()}
         </AvatarFallback>
       </Avatar>
 
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate">{lead.name || lead.phone}</p>
+        <p className="text-sm font-medium truncate">{leadDisplayName(lead.name, lead.phone)}</p>
         {lead.company_name && (
           <p className="text-[11px] text-muted-foreground/70 truncate">{lead.company_name}</p>
         )}

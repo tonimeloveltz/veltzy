@@ -53,6 +53,14 @@ export const markAsRead = async (companyId: string, leadId: string): Promise<voi
     .eq('id', leadId)
     .eq('company_id', companyId)
   if (error) throw error
+
+  // A6: Marca mensagens de entrada como lidas via RPC (SECURITY DEFINER, filtra internamente).
+  // Best-effort: se falhar, loga e segue -- abrir conversa nao pode quebrar.
+  try {
+    await db().rpc('mark_lead_messages_read', { p_lead_id: leadId })
+  } catch (err) {
+    console.error('[markAsRead] RPC mark_lead_messages_read failed:', err)
+  }
 }
 
 export const getConversationList = async (companyId: string): Promise<LeadWithLastMessage[]> => {
@@ -101,7 +109,7 @@ export const getConversationList = async (companyId: string): Promise<LeadWithLa
       color: row.source_color as string,
       icon_name: row.source_icon as string,
     } : null,
-    last_message: row.last_message_content ? {
+    last_message: row.last_message_at ? {
       content: row.last_message_content as string,
       sender_type: row.last_message_sender as string,
       created_at: row.last_message_at as string,
