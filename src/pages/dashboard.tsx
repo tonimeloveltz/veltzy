@@ -10,7 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useAuthStore } from '@/stores/auth.store'
 import { useDashboardKpis } from '@/hooks/use-dashboard-metrics'
 import { useDashboardRealtime } from '@/hooks/use-dashboard-realtime'
-import { usePipelines } from '@/hooks/use-pipelines'
+import { useAccessiblePipelines } from '@/hooks/use-pipeline-access'
 import { PipelineFilter } from '@/components/shared/pipeline-filter'
 import { calculatePeriodChange } from '@/lib/dashboard-utils'
 import { LeadsBySourceChart } from '@/components/dashboard/leads-by-source-chart'
@@ -142,7 +142,7 @@ const DashboardPage = () => {
   const [selectedDays, setSelectedDays] = useState<number | undefined>(30)
   const [monthlyRange, setMonthlyRange] = useState(6)
   const [selectedPipelineId, setSelectedPipelineId] = useState<string | null>(null)
-  const { data: pipelines } = usePipelines()
+  const { data: pipelines } = useAccessiblePipelines()
   const { data: kpis, isLoading, isError, refetch } = useDashboardKpis(selectedDays, selectedPipelineId)
   useDashboardRealtime()
 

@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { MoreVertical } from 'lucide-react'
 import { useTeamMembers, useInvites, useCancelInvite, useUpdateMemberRole } from '@/hooks/use-team'
+import { PipelineAccessModal } from '@/components/sellers/pipeline-access-modal'
 import { useFallbackOwner } from '@/hooks/use-fallback-owner'
 import { useRoles } from '@/hooks/use-roles'
 import { useAuthStore } from '@/stores/auth.store'
@@ -33,11 +34,12 @@ const SellersTab = () => {
   const cancelInvite = useCancelInvite()
   const updateRole = useUpdateMemberRole()
   const { fallbackOwnerId, setFallback } = useFallbackOwner()
-  const { isAdmin } = useRoles()
+  const { isAdmin, isManager } = useRoles()
   const currentUserId = useAuthStore((s) => s.user?.id)
   const queryClient = useQueryClient()
   const [inviteOpen, setInviteOpen] = useState(false)
   const [removeMemberTarget, setRemoveMemberTarget] = useState<{ user_id: string; id: string; name: string } | null>(null)
+  const [pipelineAccessTarget, setPipelineAccessTarget] = useState<{ user_id: string; name: string } | null>(null)
 
   const toggleAvailability = async (profileId: string, available: boolean) => {
     await supabase.from('profiles').update({ is_available: available }).eq('id', profileId)
@@ -83,6 +85,7 @@ const SellersTab = () => {
                   <th className="pb-2 text-left font-medium text-muted-foreground">Membro</th>
                   <th className="pb-2 text-center font-medium text-muted-foreground">Funcao</th>
                   <th className="pb-2 text-center font-medium text-muted-foreground">Disponivel</th>
+                  {isManager && <th className="pb-2 text-center font-medium text-muted-foreground">Pipelines</th>}
                   {isAdmin && <th className="pb-2 text-right font-medium text-muted-foreground">Acoes</th>}
                 </tr>
               </thead>
@@ -135,6 +138,22 @@ const SellersTab = () => {
                           <div className="peer h-4 w-7 rounded-full bg-muted-foreground/40 after:absolute after:left-[2px] after:top-[2px] after:h-3 after:w-3 after:rounded-full after:bg-background after:transition-all peer-checked:bg-primary peer-checked:after:translate-x-3" />
                         </label>
                       </td>
+                      {isManager && (
+                        <td className="py-2.5 text-center">
+                          {(role === 'seller' || role === 'representative') ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-xs h-6"
+                              onClick={() => setPipelineAccessTarget({ user_id: m.user_id, name: m.name })}
+                            >
+                              Configurar
+                            </Button>
+                          ) : (
+                            <span className="text-[10px] text-muted-foreground">Todos</span>
+                          )}
+                        </td>
+                      )}
                       {isAdmin && (
                         <td className="py-2.5 text-right">
                           {!isSelf && role !== 'super_admin' && (
@@ -236,6 +255,11 @@ const SellersTab = () => {
         open={!!removeMemberTarget}
         onOpenChange={(open) => { if (!open) setRemoveMemberTarget(null) }}
         member={removeMemberTarget}
+      />
+      <PipelineAccessModal
+        open={!!pipelineAccessTarget}
+        onOpenChange={(open) => { if (!open) setPipelineAccessTarget(null) }}
+        member={pipelineAccessTarget}
       />
     </div>
   )

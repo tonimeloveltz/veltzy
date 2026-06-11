@@ -144,6 +144,14 @@ export interface Pipeline {
   updated_at: string
 }
 
+export interface UserPipelineAccess {
+  id: string
+  user_id: string
+  pipeline_id: string
+  company_id: string
+  created_at: string
+}
+
 export interface PipelineStage {
   id: string
   company_id: string

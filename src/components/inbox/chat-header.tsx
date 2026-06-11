@@ -6,7 +6,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { MoreVertical, Kanban, CheckCircle, Phone } from 'lucide-react'
 import { useUpdateLead } from '@/hooks/use-leads'
-import { usePipelines } from '@/hooks/use-pipelines'
+import { useAccessiblePipelines } from '@/hooks/use-pipeline-access'
 import { useWhatsAppStatus } from '@/hooks/use-whatsapp-status'
 import type { LeadWithLastMessage } from '@/types/database'
 
@@ -17,7 +17,7 @@ interface ChatHeaderProps {
 const ChatHeader = ({ lead }: ChatHeaderProps) => {
   const navigate = useNavigate()
   const updateLead = useUpdateLead()
-  const { data: pipelines } = usePipelines()
+  const { data: pipelines } = useAccessiblePipelines()
   const { data: whatsappStatus } = useWhatsAppStatus()
   const isEvolution = whatsappStatus?.provider === 'evolution'
   const avatarSrc = lead.avatar_url || undefined

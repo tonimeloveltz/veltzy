@@ -25,7 +25,7 @@ import { StageManagerModal } from '@/components/pipeline/stage-manager-modal'
 import { TransferLeadModal } from '@/components/pipeline/transfer-lead-modal'
 import { MovePipelineModal } from '@/components/pipeline/move-pipeline-modal'
 import { DealValueDialog } from '@/components/pipeline/deal-value-dialog'
-import { usePipelines } from '@/hooks/use-pipelines'
+import { useAccessiblePipelines } from '@/hooks/use-pipeline-access'
 import { usePipelineStages } from '@/hooks/use-pipeline-stages'
 import { useDealsForKanban, useMoveDealStage, useUpdateDealValueAndMove } from '@/hooks/use-deals'
 import { usePipelineStore } from '@/stores/pipeline.store'
@@ -42,7 +42,7 @@ function isProposalStage(slug: string) {
 const PipelineBoard = () => {
   const queryClient = useQueryClient()
   const companyId = useAuthStore((s) => s.company?.id)
-  const { data: pipelines, isLoading: pipelinesLoading } = usePipelines()
+  const { data: pipelines, isLoading: pipelinesLoading } = useAccessiblePipelines()
   const { activePipelineId, setActivePipelineId } = usePipelineStore()
 
   useEffect(() => {

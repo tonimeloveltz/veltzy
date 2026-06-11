@@ -13,7 +13,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { useCreateDeal } from '@/hooks/use-deals'
-import { usePipelines } from '@/hooks/use-pipelines'
+import { useAccessiblePipelines } from '@/hooks/use-pipeline-access'
 import { usePipelineStages } from '@/hooks/use-pipeline-stages'
 
 const schema = z.object({
@@ -34,7 +34,7 @@ interface CreateDealModalProps {
 
 const CreateDealModal = ({ open, onClose, leadId, leadName, defaultPipelineId }: CreateDealModalProps) => {
   const createDeal = useCreateDeal()
-  const { data: pipelines } = usePipelines()
+  const { data: pipelines } = useAccessiblePipelines()
 
   const initialPipelineId = defaultPipelineId ?? pipelines?.[0]?.id ?? ''
 
