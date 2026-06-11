@@ -93,7 +93,7 @@ const MediaContent = ({ message }: { message: Message }) => {
       if (!message.file_url) return <MediaFallback label="Imagem indisponivel" />
       return <MediaImage src={message.file_url} alt="imagem" />
     case 'sticker':
-      if (!message.file_url) return null
+      if (!message.file_url) return <MediaFallback label="Sticker indisponivel" />
       return <MediaImage src={message.file_url} alt="figurinha" maxWidth="max-w-[160px]" />
     case 'audio':
       return (
@@ -106,9 +106,10 @@ const MediaContent = ({ message }: { message: Message }) => {
       if (!message.file_url) return <MediaFallback label="Video indisponivel" />
       return <MediaVideo src={message.file_url} />
     case 'document':
+      if (!message.file_url) return <MediaFallback label="Documento indisponivel" />
       return (
         <a
-          href={message.file_url ?? '#'}
+          href={message.file_url}
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center gap-2 rounded-lg bg-background/50 px-3 py-2 text-xs hover:bg-background transition-smooth"
@@ -162,6 +163,10 @@ const MessageBubble = ({ message, senderName }: MessageBubbleProps) => {
             'whitespace-pre-wrap break-words',
             message.message_type === 'text' ? 'text-sm' : 'text-xs opacity-70',
           )}>{message.content}</p>
+        )}
+
+        {message.message_type === 'text' && !message.content && (
+          <p className="text-sm italic opacity-50">[mensagem]</p>
         )}
 
         <p className={cn('text-[10px] text-right flex items-center justify-end gap-1', isLead ? 'opacity-40' : 'opacity-60')}>

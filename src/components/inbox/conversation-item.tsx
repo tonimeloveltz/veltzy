@@ -2,6 +2,7 @@ import { cn } from '@/lib/utils'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Clock } from 'lucide-react'
 import { timeAgo } from '@/lib/time'
+import { leadDisplayName } from '@/lib/phone'
 import type { LeadWithLastMessage } from '@/types/database'
 
 interface ConversationItemProps {
@@ -19,19 +20,24 @@ const statusDot: Record<string, string> = {
   resolved: 'bg-muted-foreground/20',
 }
 
+const typeLabels: Record<string, string> = {
+  image: '[Imagem]',
+  audio: '[Audio]',
+  video: '[Video]',
+  document: '[Documento]',
+  sticker: '[Sticker]',
+  location: '[Localizacao]',
+  contact: '[Contato]',
+}
+
 const messagePreview = (lead: LeadWithLastMessage): string => {
   const msg = lead.last_message
   if (!msg) return 'Sem mensagens'
-  if (msg.message_type !== 'text') {
-    const typeLabels: Record<string, string> = {
-      image: 'Imagem',
-      audio: 'Audio',
-      video: 'Video',
-      document: 'Documento',
-    }
-    return typeLabels[msg.message_type] ?? msg.message_type
-  }
   const prefix = msg.sender_type === 'human' ? 'Voce: ' : msg.sender_type === 'ai' ? 'IA: ' : ''
+  if (msg.message_type !== 'text') {
+    return prefix + (typeLabels[msg.message_type] ?? '[Mensagem]')
+  }
+  if (!msg.content) return prefix + '[Mensagem]'
   return prefix + msg.content
 }
 
@@ -66,7 +72,7 @@ const ConversationItem = ({ lead, isSelected, onClick }: ConversationItemProps) 
         <Avatar className="h-10 w-10">
           <AvatarImage src={avatarSrc} alt={lead.name ?? ''} />
           <AvatarFallback className="text-xs bg-secondary">
-            {(lead.name || lead.phone).slice(0, 2).toUpperCase()}
+            {leadDisplayName(lead.name, lead.phone).slice(0, 2).toUpperCase()}
           </AvatarFallback>
         </Avatar>
         <span
@@ -76,7 +82,7 @@ const ConversationItem = ({ lead, isSelected, onClick }: ConversationItemProps) 
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-sm font-medium truncate">{lead.name || lead.phone}</p>
+          <p className="text-sm font-medium truncate">{leadDisplayName(lead.name, lead.phone)}</p>
           <div className="flex items-center gap-1 shrink-0">
             {lead.sla_breached && (
               <Clock className="h-3 w-3 text-destructive" />

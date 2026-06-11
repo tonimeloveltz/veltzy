@@ -24,6 +24,10 @@ export const useConversationList = () => {
     if (!query.data) return []
     let result = [...query.data]
 
+    // Fase A / R1: Descartar leads sem mensagem do inbox (leads de import/teste).
+    // Nao remove do banco nem do pipeline, so da lista do inbox.
+    result = result.filter((l) => l.last_message !== null)
+
     // Vendedor so ve suas proprias conversas (filtro obrigatorio)
     if (isSeller && profileId) {
       result = result.filter((l) => l.assigned_to === profileId)

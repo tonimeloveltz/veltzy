@@ -101,7 +101,7 @@ export const getConversationList = async (companyId: string): Promise<LeadWithLa
       color: row.source_color as string,
       icon_name: row.source_icon as string,
     } : null,
-    last_message: row.last_message_content ? {
+    last_message: row.last_message_at ? {
       content: row.last_message_content as string,
       sender_type: row.last_message_sender as string,
       created_at: row.last_message_at as string,

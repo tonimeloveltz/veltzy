@@ -7,6 +7,16 @@
  * '+55 11 91716-2109'  → '5511917162109'
  * ''                   → ''
  */
+/**
+ * Nome para exibicao do lead. Se name e vazio e phone tem >13 digitos (LID do Meta),
+ * exibe "Contato WhatsApp" em vez do numero cru.
+ */
+export const leadDisplayName = (name: string | null | undefined, phone: string): string => {
+  if (name) return name
+  if (phone.length > 13) return 'Contato WhatsApp'
+  return phone
+}
+
 export const normalizePhoneBR = (phone: string): string => {
   let digits = phone.replace(/\D/g, '')
   if (!digits) return ''
