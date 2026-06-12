@@ -22,6 +22,8 @@ export interface InboundParams {
     provider: import('./whatsapp-provider.ts').WhatsAppProvider
     config: import('./whatsapp-provider.ts').WhatsAppConfig
   }
+  /** URL direta da foto de perfil (enviada pelo Hub para Evolution) */
+  profilePicUrl?: string | null
   /** Override: pipeline destino (usado por source-webhook via pipeline_sources) */
   pipelineId?: string
   /** Override: lead_source.id (usado por source-webhook) */
@@ -86,6 +88,17 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
       params.phone,
       params.fetchAvatar.provider,
       params.fetchAvatar.config,
+    )
+  }
+
+  // 3b. Avatar via URL direta (Evolution via Hub) — só se lead ainda sem avatar
+  if (!lead.avatar_url && !params.fetchAvatar && params.profilePicUrl) {
+    await fetchAndUploadAvatarFromUrl(
+      params.supabaseUrl,
+      params.supabaseKey,
+      supabase,
+      lead.id,
+      params.profilePicUrl,
     )
   }
 
@@ -411,6 +424,48 @@ async function fetchAndUploadAvatar(
       .eq('id', leadId)
   } catch (err) {
     console.error('Avatar fetch failed:', err instanceof Error ? err.message : JSON.stringify(err))
+  }
+}
+
+/** Baixa avatar de URL direta (Evolution via Hub) e salva no Storage. */
+async function fetchAndUploadAvatarFromUrl(
+  supabaseUrl: string,
+  supabaseKey: string,
+  supabase: SupabaseClient,
+  leadId: string,
+  picUrl: string,
+): Promise<void> {
+  try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 5000)
+    const imgRes = await fetch(picUrl, { signal: controller.signal })
+    clearTimeout(timeout)
+    if (!imgRes.ok) return
+
+    const imgBuffer = await imgRes.arrayBuffer()
+    if (imgBuffer.byteLength === 0) return
+
+    const path = `avatars/${leadId}.jpg`
+    const storageClient = createClient(supabaseUrl, supabaseKey)
+    const { error: uploadError } = await storageClient.storage
+      .from('chat-attachments')
+      .upload(path, imgBuffer, { contentType: 'image/jpeg', upsert: true })
+
+    if (uploadError) {
+      console.error('Avatar URL upload error:', JSON.stringify(uploadError))
+      return
+    }
+
+    const { data: urlData } = storageClient.storage
+      .from('chat-attachments')
+      .getPublicUrl(path)
+
+    await supabase
+      .from('leads')
+      .update({ avatar_url: urlData.publicUrl })
+      .eq('id', leadId)
+  } catch (err) {
+    console.error('Avatar URL fetch failed:', err instanceof Error ? err.message : JSON.stringify(err))
   }
 }
 
