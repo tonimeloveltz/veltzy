@@ -28,11 +28,11 @@ import { updateLead as updateLeadService } from '@/services/leads.service'
 import type { LeadWithLastMessage, LeadTemperature, TaskType } from '@/types/database'
 
 // --- Temperature bar (same as pipeline cards) ---
-const temperatureConfig: Record<LeadTemperature, { width: string; gradient: string; ringClass: string; label: string }> = {
-  cold:  { width: '25%',  gradient: 'linear-gradient(to right, #bfdbfe, #3b82f6)', ringClass: 'ring-blue-400', label: 'Frio' },
-  warm:  { width: '50%',  gradient: 'linear-gradient(to right, #fde68a, #f59e0b)', ringClass: 'ring-amber-400', label: 'Morno' },
-  hot:   { width: '75%',  gradient: 'linear-gradient(to right, #fed7aa, #f97316)', ringClass: 'ring-orange-400', label: 'Quente' },
-  fire:  { width: '100%', gradient: 'linear-gradient(to right, #f97316, #ef4444, #dc2626)', ringClass: 'ring-red-400', label: 'Fire' },
+const temperatureConfig: Record<LeadTemperature, { width: string; gradient: string; label: string }> = {
+  cold:  { width: '25%',  gradient: 'linear-gradient(to right, #bfdbfe, #3b82f6)', label: 'Frio' },
+  warm:  { width: '50%',  gradient: 'linear-gradient(to right, #fde68a, #f59e0b)', label: 'Morno' },
+  hot:   { width: '75%',  gradient: 'linear-gradient(to right, #fed7aa, #f97316)', label: 'Quente' },
+  fire:  { width: '100%', gradient: 'linear-gradient(to right, #f97316, #ef4444, #dc2626)', label: 'Fire' },
 }
 
 // --- Task config ---
@@ -247,7 +247,7 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
       <div className="flex-1 overflow-y-auto scrollbar-minimal">
         {/* Compact header: avatar left + info right */}
         <div className="flex items-center gap-3 border-b px-4 py-3">
-          <Avatar className={cn('h-14 w-14 shrink-0 ring-2 ring-offset-2 ring-offset-background', temperatureConfig[lead.temperature].ringClass)}>
+          <Avatar className="h-14 w-14 shrink-0">
             <AvatarImage src={avatarSrc} alt={displayName} />
             <AvatarFallback className="text-base bg-secondary">
               {displayName.slice(0, 2).toUpperCase()}
