@@ -128,7 +128,7 @@ const LeadDealsPanel = ({ leadId, leadName }: LeadDealsPanelProps) => {
             <Button
               variant="ghost"
               size="sm"
-              className="w-full text-xs text-muted-foreground hover:text-foreground h-7 mt-1"
+              className="w-full text-xs text-muted-foreground hover:text-primary h-7 mt-1"
               onClick={() => setCreateOpen(true)}
             >
               <Plus className="h-3 w-3 mr-1" />
