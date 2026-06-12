@@ -200,6 +200,34 @@
     pointer-events: none;
   }
 
+  /* Focus glow — substitui o ring solido padrao por glow neon discreto.
+     Reseta as vars do Tailwind ring pra evitar composicao dupla. */
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible,
+  [role="combobox"]:focus-visible,
+  button:focus-visible {
+    --tw-ring-shadow: 0 0 #0000 !important;
+    --tw-ring-offset-shadow: 0 0 #0000 !important;
+    outline: none !important;
+    box-shadow:
+      0 0 0 1px hsl(var(--ring) / 0.45),
+      0 0 8px 0 hsl(var(--ring) / 0.15),
+      0 0 16px 0 hsl(var(--ring) / 0.06) !important;
+    transition: box-shadow 150ms ease-out;
+  }
+
+  .dark input:focus-visible,
+  .dark textarea:focus-visible,
+  .dark select:focus-visible,
+  .dark [role="combobox"]:focus-visible,
+  .dark button:focus-visible {
+    box-shadow:
+      0 0 0 1px hsl(var(--ring) / 0.35),
+      0 0 8px 0 hsl(var(--ring) / 0.12),
+      0 0 16px 0 hsl(var(--ring) / 0.04) !important;
+  }
+
   /* Inputs */
   .input-clean {
     @apply bg-secondary/50 transition-all duration-200 ease-out;
