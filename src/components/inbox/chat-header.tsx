@@ -1,13 +1,15 @@
 import { useNavigate } from 'react-router-dom'
+import { cn } from '@/lib/utils'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
 } from '@/components/ui/dropdown-menu'
-import { MoreVertical, Kanban, CheckCircle, Phone } from 'lucide-react'
+import { MoreVertical, Kanban, CheckCircle, Phone, PanelRight } from 'lucide-react'
 import { useUpdateLead } from '@/hooks/use-leads'
 import { useAccessiblePipelines } from '@/hooks/use-pipeline-access'
 import { useWhatsAppStatus } from '@/hooks/use-whatsapp-status'
+import { useInboxStore } from '@/stores/inbox.store'
 import { leadDisplayName } from '@/lib/phone'
 import type { LeadWithLastMessage } from '@/types/database'
 
@@ -20,6 +22,7 @@ const ChatHeader = ({ lead }: ChatHeaderProps) => {
   const updateLead = useUpdateLead()
   const { data: pipelines } = useAccessiblePipelines()
   const { data: whatsappStatus } = useWhatsAppStatus()
+  const { contactPanelOpen, toggleContactPanel } = useInboxStore()
   const isEvolution = whatsappStatus?.provider === 'evolution'
   const avatarSrc = lead.avatar_url || undefined
 
@@ -63,6 +66,16 @@ const ChatHeader = ({ lead }: ChatHeaderProps) => {
             Score: {lead.ai_score}
           </span>
         )}
+
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={toggleContactPanel}
+          title="Painel de contato"
+        >
+          <PanelRight className={cn('h-4 w-4', contactPanelOpen && 'text-primary')} />
+        </Button>
 
         <Button
           variant="ghost"
