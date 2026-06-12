@@ -29,7 +29,7 @@ export const useInboxStore = create<InboxState>((set) => ({
     sourceId: null,
   },
   unreadCount: 0,
-  contactPanelOpen: false,
+  contactPanelOpen: typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(min-width: 1280px)').matches,
   setSelectedLeadId: (id) => set({ selectedLeadId: id }),
   setFilters: (f) => set((s) => ({ filters: { ...s.filters, ...f } })),
   setUnreadCount: (n) => set({ unreadCount: n }),

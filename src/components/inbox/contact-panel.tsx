@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { cn } from '@/lib/utils'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   X, Save, Loader2, Phone, Mail, Building2, AtSign, Link2,
   CheckSquare, Video, MessageCircle as FollowUpIcon, Check, Plus,
@@ -21,7 +22,9 @@ import { useLeadTasks, useCompleteTask } from '@/hooks/use-tasks'
 import { useRoles } from '@/hooks/use-roles'
 import { useWhatsAppStatus } from '@/hooks/use-whatsapp-status'
 import { useInboxStore } from '@/stores/inbox.store'
+import { useAuthStore } from '@/stores/auth.store'
 import { leadDisplayName } from '@/lib/phone'
+import { updateLead as updateLeadService } from '@/services/leads.service'
 import type { LeadWithLastMessage, TaskType } from '@/types/database'
 
 const temperatureLabels: Record<string, { label: string; color: string }> = {
@@ -48,7 +51,11 @@ interface ContactPanelProps {
   lead: LeadWithLastMessage
 }
 
+type ObsSaveStatus = 'idle' | 'saving' | 'saved' | 'error'
+
 const ContactPanel = ({ lead }: ContactPanelProps) => {
+  const queryClient = useQueryClient()
+  const companyId = useAuthStore((s) => s.company?.id)
   const updateLead = useUpdateLead()
   const { data: sources } = useLeadSources()
   const { data: members } = useTeamMembers()
@@ -61,7 +68,7 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
 
   const [createTaskOpen, setCreateTaskOpen] = useState(false)
 
-  // Editable fields
+  // --- Editable fields (non-observations) ---
   const [name, setName] = useState(lead.name ?? '')
   const [email, setEmail] = useState(lead.email ?? '')
   const [companyName, setCompanyName] = useState(lead.company_name ?? '')
@@ -69,11 +76,91 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
   const [linkedinUrl, setLinkedinUrl] = useState(lead.linkedin_url ?? '')
   const [sourceId, setSourceId] = useState(lead.source_id ?? '')
   const [assignedTo, setAssignedTo] = useState(lead.assigned_to ?? '')
-  const [observations, setObservations] = useState(lead.observations ?? '')
   const [tags, setTags] = useState<string[]>(lead.tags ?? [])
   const [dirty, setDirty] = useState(false)
 
-  // Reset on lead change
+  // --- Observations with auto-save ---
+  const [observations, setObservations] = useState(lead.observations ?? '')
+  const [obsSaveStatus, setObsSaveStatus] = useState<ObsSaveStatus>('idle')
+  const obsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingObsRef = useRef<{ leadId: string; text: string } | null>(null)
+
+  // Flush pending observations save (uses captured leadId, never wrong lead)
+  const flushObservations = useCallback(async () => {
+    if (obsTimerRef.current) {
+      clearTimeout(obsTimerRef.current)
+      obsTimerRef.current = null
+    }
+    const pending = pendingObsRef.current
+    if (!pending || !companyId) return
+    pendingObsRef.current = null
+    setObsSaveStatus('saving')
+    try {
+      await updateLeadService(companyId, pending.leadId, { observations: pending.text || null })
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+      queryClient.invalidateQueries({ queryKey: ['conversations'] })
+      setObsSaveStatus('saved')
+    } catch {
+      setObsSaveStatus('error')
+    }
+  }, [companyId, queryClient])
+
+  // Debounced observations save
+  const scheduleObsSave = useCallback((text: string, leadId: string) => {
+    if (obsTimerRef.current) clearTimeout(obsTimerRef.current)
+    pendingObsRef.current = { leadId, text }
+    obsTimerRef.current = setTimeout(() => flushObservations(), 1000)
+  }, [flushObservations])
+
+  const handleObservationsChange = (text: string) => {
+    setObservations(text)
+    setObsSaveStatus('idle')
+    scheduleObsSave(text, lead.id)
+  }
+
+  // --- Flush all dirty fields (non-observations) ---
+  const dirtyRef = useRef(false)
+  const fieldsRef = useRef({ name, email, companyName, instagramHandle, linkedinUrl, sourceId, assignedTo, tags })
+  const leadIdRef = useRef(lead.id)
+
+  // Keep refs in sync
+  dirtyRef.current = dirty
+  fieldsRef.current = { name, email, companyName, instagramHandle, linkedinUrl, sourceId, assignedTo, tags }
+  leadIdRef.current = lead.id
+
+  const flushFields = useCallback(async () => {
+    if (!dirtyRef.current || !companyId) return
+    const f = fieldsRef.current
+    const lid = leadIdRef.current
+    dirtyRef.current = false
+    try {
+      await updateLeadService(companyId, lid, {
+        name: f.name || null,
+        email: f.email || null,
+        company_name: f.companyName || null,
+        instagram_handle: f.instagramHandle || null,
+        linkedin_url: f.linkedinUrl || null,
+        source_id: f.sourceId || null,
+        assigned_to: f.assignedTo || null,
+        tags: f.tags,
+      })
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+      queryClient.invalidateQueries({ queryKey: ['conversations'] })
+    } catch {
+      // Error on flush — non-critical, data still in local state
+    }
+  }, [companyId, queryClient])
+
+  // Flush everything on lead change
+  useEffect(() => {
+    return () => {
+      // Fires when lead.id changes (cleanup of previous effect) or unmount
+      flushFields()
+      flushObservations()
+    }
+  }, [lead.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reset local state to new lead
   useEffect(() => {
     setName(lead.name ?? '')
     setEmail(lead.email ?? '')
@@ -82,10 +169,28 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
     setLinkedinUrl(lead.linkedin_url ?? '')
     setSourceId(lead.source_id ?? '')
     setAssignedTo(lead.assigned_to ?? '')
-    setObservations(lead.observations ?? '')
     setTags(lead.tags ?? [])
+    setObservations(lead.observations ?? '')
     setDirty(false)
+    setObsSaveStatus('idle')
+    pendingObsRef.current = null
   }, [lead.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Flush on unmount (panel close)
+  useEffect(() => {
+    return () => {
+      flushFields()
+      flushObservations()
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Clear "Salvo" indicator after 2s
+  useEffect(() => {
+    if (obsSaveStatus === 'saved') {
+      const t = setTimeout(() => setObsSaveStatus('idle'), 2000)
+      return () => clearTimeout(t)
+    }
+  }, [obsSaveStatus])
 
   const markDirty = () => setDirty(true)
 
@@ -100,11 +205,18 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
         linkedin_url: linkedinUrl || null,
         source_id: sourceId || null,
         assigned_to: assignedTo || null,
-        observations: observations || null,
         tags,
       },
     })
+    queryClient.invalidateQueries({ queryKey: ['conversations'] })
     setDirty(false)
+  }
+
+  const handleClose = () => {
+    // Flush happens via unmount effect, but also trigger explicitly for safety
+    flushFields()
+    flushObservations()
+    toggleContactPanel()
   }
 
   const eligibleMembers = members?.filter((m) =>
@@ -124,7 +236,7 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
       {/* Header */}
       <div className="flex items-center justify-between border-b px-4 py-3">
         <span className="text-sm font-semibold">Contato</span>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={toggleContactPanel}>
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleClose}>
           <X className="h-4 w-4" />
         </Button>
       </div>
@@ -266,7 +378,7 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
             </div>
           )}
 
-          {/* Save button */}
+          {/* Save button for non-observation fields */}
           {dirty && (
             <Button
               size="sm"
@@ -287,17 +399,30 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
         {/* Deals - reuse existing component */}
         <LeadDealsPanel leadId={lead.id} leadName={lead.name} />
 
-        {/* Observations */}
+        {/* Observations - auto-save */}
         <div className="space-y-2 px-4 py-4 border-b">
           <div className="flex items-center gap-2">
             <div className="h-px flex-1 bg-border/50" />
             <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Observacoes</span>
             <div className="h-px flex-1 bg-border/50" />
+            {obsSaveStatus === 'saving' && (
+              <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                Salvando...
+              </span>
+            )}
+            {obsSaveStatus === 'saved' && (
+              <span className="text-[10px] text-emerald-500">Salvo</span>
+            )}
+            {obsSaveStatus === 'error' && (
+              <span className="text-[10px] text-destructive">Erro ao salvar</span>
+            )}
           </div>
           <textarea
             className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 input-clean resize-none"
             value={observations}
-            onChange={(e) => { setObservations(e.target.value); markDirty() }}
+            onChange={(e) => handleObservationsChange(e.target.value)}
+            onBlur={() => flushObservations()}
             placeholder="Anotacoes sobre o contato..."
           />
         </div>
