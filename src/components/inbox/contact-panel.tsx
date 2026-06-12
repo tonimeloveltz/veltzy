@@ -25,15 +25,20 @@ import { useInboxStore } from '@/stores/inbox.store'
 import { useAuthStore } from '@/stores/auth.store'
 import { leadDisplayName } from '@/lib/phone'
 import { updateLead as updateLeadService } from '@/services/leads.service'
-import type { LeadWithLastMessage, TaskType } from '@/types/database'
+import type { LeadWithLastMessage, LeadTemperature, TaskType } from '@/types/database'
 
-const temperatureLabels: Record<string, { label: string; color: string }> = {
-  cold: { label: 'Frio', color: 'text-blue-500' },
-  warm: { label: 'Morno', color: 'text-yellow-500' },
-  hot: { label: 'Quente', color: 'text-orange-500' },
-  fire: { label: 'Fire', color: 'text-red-500' },
-}
+// --- Temperature config ---
+const temperatureSegments: { value: LeadTemperature; label: string; activeClass: string; ringClass: string }[] = [
+  { value: 'cold', label: 'Frio', activeClass: 'bg-blue-500 text-white', ringClass: 'ring-blue-400' },
+  { value: 'warm', label: 'Morno', activeClass: 'bg-amber-500 text-white', ringClass: 'ring-amber-400' },
+  { value: 'hot', label: 'Quente', activeClass: 'bg-orange-500 text-white', ringClass: 'ring-orange-400' },
+  { value: 'fire', label: 'Fire', activeClass: 'bg-red-500 text-white', ringClass: 'ring-red-400' },
+]
 
+const getRingClass = (temp: LeadTemperature) =>
+  temperatureSegments.find((s) => s.value === temp)?.ringClass ?? 'ring-transparent'
+
+// --- Task config ---
 const taskTypeIcons: Record<TaskType, typeof CheckSquare> = {
   todo: CheckSquare,
   followup: FollowUpIcon,
@@ -46,6 +51,17 @@ const taskStatusLabels: Record<string, string> = {
   in_progress: 'Em andamento',
   done: 'Feito',
 }
+
+// --- Section header helper ---
+const SectionHeader = ({ label }: { label: string }) => (
+  <div className="flex items-center gap-2 pb-2">
+    <div className="h-px flex-1 bg-border/50" />
+    <span className="text-[10px] uppercase tracking-widest text-muted-foreground/70 font-medium select-none">
+      {label}
+    </span>
+    <div className="h-px flex-1 bg-border/50" />
+  </div>
+)
 
 interface ContactPanelProps {
   lead: LeadWithLastMessage
@@ -85,27 +101,27 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
   const obsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pendingObsRef = useRef<{ leadId: string; text: string } | null>(null)
 
-  // Flush pending observations save (uses captured leadId, never wrong lead)
+  const invalidateAll = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['leads'] })
+    queryClient.invalidateQueries({ queryKey: ['conversations'] })
+  }, [queryClient])
+
+  // Flush pending observations save
   const flushObservations = useCallback(async () => {
-    if (obsTimerRef.current) {
-      clearTimeout(obsTimerRef.current)
-      obsTimerRef.current = null
-    }
+    if (obsTimerRef.current) { clearTimeout(obsTimerRef.current); obsTimerRef.current = null }
     const pending = pendingObsRef.current
     if (!pending || !companyId) return
     pendingObsRef.current = null
     setObsSaveStatus('saving')
     try {
       await updateLeadService(companyId, pending.leadId, { observations: pending.text || null })
-      queryClient.invalidateQueries({ queryKey: ['leads'] })
-      queryClient.invalidateQueries({ queryKey: ['conversations'] })
+      invalidateAll()
       setObsSaveStatus('saved')
     } catch {
       setObsSaveStatus('error')
     }
-  }, [companyId, queryClient])
+  }, [companyId, invalidateAll])
 
-  // Debounced observations save
   const scheduleObsSave = useCallback((text: string, leadId: string) => {
     if (obsTimerRef.current) clearTimeout(obsTimerRef.current)
     pendingObsRef.current = { leadId, text }
@@ -118,12 +134,11 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
     scheduleObsSave(text, lead.id)
   }
 
-  // --- Flush all dirty fields (non-observations) ---
+  // --- Flush all dirty fields ---
   const dirtyRef = useRef(false)
   const fieldsRef = useRef({ name, email, companyName, instagramHandle, linkedinUrl, sourceId, assignedTo, tags })
   const leadIdRef = useRef(lead.id)
 
-  // Keep refs in sync
   dirtyRef.current = dirty
   fieldsRef.current = { name, email, companyName, instagramHandle, linkedinUrl, sourceId, assignedTo, tags }
   leadIdRef.current = lead.id
@@ -144,20 +159,15 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
         assigned_to: f.assignedTo || null,
         tags: f.tags,
       })
-      queryClient.invalidateQueries({ queryKey: ['leads'] })
-      queryClient.invalidateQueries({ queryKey: ['conversations'] })
+      invalidateAll()
     } catch {
-      // Error on flush — non-critical, data still in local state
+      // Non-critical
     }
-  }, [companyId, queryClient])
+  }, [companyId, invalidateAll])
 
-  // Flush everything on lead change
+  // Flush on lead change
   useEffect(() => {
-    return () => {
-      // Fires when lead.id changes (cleanup of previous effect) or unmount
-      flushFields()
-      flushObservations()
-    }
+    return () => { flushFields(); flushObservations() }
   }, [lead.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reset local state to new lead
@@ -176,15 +186,12 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
     pendingObsRef.current = null
   }, [lead.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Flush on unmount (panel close)
+  // Flush on unmount
   useEffect(() => {
-    return () => {
-      flushFields()
-      flushObservations()
-    }
+    return () => { flushFields(); flushObservations() }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Clear "Salvo" indicator after 2s
+  // Clear "Salvo" after 2s
   useEffect(() => {
     if (obsSaveStatus === 'saved') {
       const t = setTimeout(() => setObsSaveStatus('idle'), 2000)
@@ -208,15 +215,25 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
         tags,
       },
     })
-    queryClient.invalidateQueries({ queryKey: ['conversations'] })
+    invalidateAll()
     setDirty(false)
   }
 
   const handleClose = () => {
-    // Flush happens via unmount effect, but also trigger explicitly for safety
     flushFields()
     flushObservations()
     toggleContactPanel()
+  }
+
+  // --- Temperature change ---
+  const handleTemperatureChange = async (temp: LeadTemperature) => {
+    if (temp === lead.temperature) return
+    try {
+      await updateLeadService(companyId!, lead.id, { temperature: temp })
+      invalidateAll()
+    } catch {
+      // silent
+    }
   }
 
   const eligibleMembers = members?.filter((m) =>
@@ -229,12 +246,11 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
 
   const avatarSrc = lead.avatar_url || undefined
   const displayName = leadDisplayName(lead.name, lead.phone)
-  const temp = temperatureLabels[lead.temperature] ?? temperatureLabels.cold
 
   return (
     <div className="flex h-full flex-col border-l bg-background">
       {/* Header */}
-      <div className="flex items-center justify-between border-b px-4 py-3">
+      <div className="flex items-center justify-between border-b px-4 py-2.5">
         <span className="text-sm font-semibold">Contato</span>
         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleClose}>
           <X className="h-4 w-4" />
@@ -243,41 +259,54 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
 
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto scrollbar-minimal">
-        {/* Avatar + identity */}
-        <div className="flex flex-col items-center gap-2 border-b px-4 py-5">
-          <Avatar className="h-16 w-16">
+        {/* Compact header: avatar left + info right */}
+        <div className="flex items-center gap-3 border-b px-4 py-3">
+          <Avatar className={cn('h-14 w-14 shrink-0 ring-2 ring-offset-2 ring-offset-background', getRingClass(lead.temperature))}>
             <AvatarImage src={avatarSrc} alt={displayName} />
-            <AvatarFallback className="text-lg bg-secondary">
+            <AvatarFallback className="text-base bg-secondary">
               {displayName.slice(0, 2).toUpperCase()}
             </AvatarFallback>
           </Avatar>
-          <div className="text-center">
-            <p className="text-sm font-medium">{displayName}</p>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold truncate">{displayName}</p>
             <p className="text-xs text-muted-foreground">{lead.phone}</p>
             {isEvolution && lead.whatsapp_instance_name && (
-              <p className="text-[10px] text-muted-foreground/60 mt-0.5">
-                <Phone className="inline h-2.5 w-2.5 mr-0.5" />
+              <p className="text-[10px] text-muted-foreground/60 flex items-center gap-0.5 mt-0.5">
+                <Phone className="h-2.5 w-2.5" />
                 {lead.whatsapp_instance_name}
               </p>
             )}
-          </div>
-          <div className="flex items-center gap-2 mt-1">
-            <span className={cn('text-[10px] font-medium', temp.color)}>{temp.label}</span>
             {lead.ai_score > 0 && (
-              <span className="text-[10px] text-muted-foreground px-1.5 py-0.5 rounded bg-muted">
+              <span className="inline-block mt-1 text-[10px] text-muted-foreground px-1.5 py-0.5 rounded bg-muted">
                 Score: {lead.ai_score}
               </span>
             )}
           </div>
         </div>
 
+        {/* Temperature selector */}
+        <div className="px-4 py-3 border-b">
+          <div className="flex rounded-lg border border-border overflow-hidden">
+            {temperatureSegments.map((seg) => (
+              <button
+                key={seg.value}
+                onClick={() => handleTemperatureChange(seg.value)}
+                className={cn(
+                  'flex-1 py-1 text-[11px] font-medium transition-colors',
+                  lead.temperature === seg.value
+                    ? seg.activeClass
+                    : 'bg-transparent text-muted-foreground hover:bg-muted/50',
+                )}
+              >
+                {seg.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Editable fields */}
         <div className="space-y-3 px-4 py-4 border-b">
-          <div className="flex items-center gap-2">
-            <div className="h-px flex-1 bg-border/50" />
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Dados</span>
-            <div className="h-px flex-1 bg-border/50" />
-          </div>
+          <SectionHeader label="Dados" />
 
           <div className="space-y-1.5">
             <Label className="text-xs">Nome</Label>
@@ -378,7 +407,6 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
             </div>
           )}
 
-          {/* Save button for non-observation fields */}
           {dirty && (
             <Button
               size="sm"
@@ -396,26 +424,24 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
           )}
         </div>
 
-        {/* Deals - reuse existing component */}
+        {/* Deals */}
         <LeadDealsPanel leadId={lead.id} leadName={lead.name} />
 
         {/* Observations - auto-save */}
-        <div className="space-y-2 px-4 py-4 border-b">
+        <div className="px-4 py-4 border-b space-y-2">
           <div className="flex items-center gap-2">
-            <div className="h-px flex-1 bg-border/50" />
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Observacoes</span>
-            <div className="h-px flex-1 bg-border/50" />
+            <SectionHeader label="Observacoes" />
             {obsSaveStatus === 'saving' && (
-              <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+              <span className="text-[10px] text-muted-foreground flex items-center gap-1 shrink-0">
                 <Loader2 className="h-2.5 w-2.5 animate-spin" />
                 Salvando...
               </span>
             )}
             {obsSaveStatus === 'saved' && (
-              <span className="text-[10px] text-emerald-500">Salvo</span>
+              <span className="text-[10px] text-emerald-500 shrink-0">Salvo</span>
             )}
             {obsSaveStatus === 'error' && (
-              <span className="text-[10px] text-destructive">Erro ao salvar</span>
+              <span className="text-[10px] text-destructive shrink-0">Erro ao salvar</span>
             )}
           </div>
           <textarea
@@ -428,12 +454,8 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
         </div>
 
         {/* Tags */}
-        <div className="space-y-2 px-4 py-4 border-b">
-          <div className="flex items-center gap-2">
-            <div className="h-px flex-1 bg-border/50" />
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Tags</span>
-            <div className="h-px flex-1 bg-border/50" />
-          </div>
+        <div className="px-4 py-4 border-b space-y-2">
+          <SectionHeader label="Tags" />
           <LeadTagsInput
             value={tags}
             onChange={(newTags) => { setTags(newTags); markDirty() }}
@@ -441,17 +463,13 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
         </div>
 
         {/* Tasks */}
-        <div className="space-y-2 px-4 py-4">
+        <div className="px-4 py-4 space-y-2">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 flex-1">
-              <div className="h-px flex-1 bg-border/50" />
-              <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Tarefas</span>
-              <div className="h-px flex-1 bg-border/50" />
-            </div>
+            <SectionHeader label="Tarefas" />
             <Button
               variant="ghost"
               size="icon"
-              className="h-6 w-6 ml-2 shrink-0"
+              className="h-6 w-6 shrink-0"
               onClick={() => setCreateTaskOpen(true)}
             >
               <Plus className="h-3.5 w-3.5" />

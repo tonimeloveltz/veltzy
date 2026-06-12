@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { X } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
+import { tagColor } from '@/lib/tag-colors'
 
 interface LeadTagsInputProps {
   value: string[]
@@ -35,17 +37,20 @@ const LeadTagsInput = ({ value, onChange }: LeadTagsInputProps) => {
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap gap-1.5">
-        {value.map((tag) => (
-          <span
-            key={tag}
-            className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary"
-          >
-            {tag}
-            <button type="button" onClick={() => removeTag(tag)} className="hover:text-destructive">
-              <X className="h-3 w-3" />
-            </button>
-          </span>
-        ))}
+        {value.map((tag) => {
+          const tc = tagColor(tag)
+          return (
+            <span
+              key={tag}
+              className={cn('inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium', tc.bg, tc.text)}
+            >
+              {tag}
+              <button type="button" onClick={() => removeTag(tag)} className="opacity-60 hover:opacity-100">
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          )
+        })}
       </div>
       <Input
         placeholder="Digite e pressione Enter"
