@@ -27,16 +27,13 @@ import { leadDisplayName } from '@/lib/phone'
 import { updateLead as updateLeadService } from '@/services/leads.service'
 import type { LeadWithLastMessage, LeadTemperature, TaskType } from '@/types/database'
 
-// --- Temperature config ---
-const temperatureSegments: { value: LeadTemperature; label: string; activeClass: string; ringClass: string }[] = [
-  { value: 'cold', label: 'Frio', activeClass: 'bg-blue-500 text-white', ringClass: 'ring-blue-400' },
-  { value: 'warm', label: 'Morno', activeClass: 'bg-amber-500 text-white', ringClass: 'ring-amber-400' },
-  { value: 'hot', label: 'Quente', activeClass: 'bg-orange-500 text-white', ringClass: 'ring-orange-400' },
-  { value: 'fire', label: 'Fire', activeClass: 'bg-red-500 text-white', ringClass: 'ring-red-400' },
-]
-
-const getRingClass = (temp: LeadTemperature) =>
-  temperatureSegments.find((s) => s.value === temp)?.ringClass ?? 'ring-transparent'
+// --- Temperature bar (same as pipeline cards) ---
+const temperatureConfig: Record<LeadTemperature, { width: string; gradient: string; ringClass: string; label: string }> = {
+  cold:  { width: '25%',  gradient: 'linear-gradient(to right, #bfdbfe, #3b82f6)', ringClass: 'ring-blue-400', label: 'Frio' },
+  warm:  { width: '50%',  gradient: 'linear-gradient(to right, #fde68a, #f59e0b)', ringClass: 'ring-amber-400', label: 'Morno' },
+  hot:   { width: '75%',  gradient: 'linear-gradient(to right, #fed7aa, #f97316)', ringClass: 'ring-orange-400', label: 'Quente' },
+  fire:  { width: '100%', gradient: 'linear-gradient(to right, #f97316, #ef4444, #dc2626)', ringClass: 'ring-red-400', label: 'Fire' },
+}
 
 // --- Task config ---
 const taskTypeIcons: Record<TaskType, typeof CheckSquare> = {
@@ -225,17 +222,6 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
     toggleContactPanel()
   }
 
-  // --- Temperature change ---
-  const handleTemperatureChange = async (temp: LeadTemperature) => {
-    if (temp === lead.temperature) return
-    try {
-      await updateLeadService(companyId!, lead.id, { temperature: temp })
-      invalidateAll()
-    } catch {
-      // silent
-    }
-  }
-
   const eligibleMembers = members?.filter((m) =>
     m.user_roles?.some((r) => ['admin', 'manager', 'seller', 'super_admin'].includes(r.role))
   ) ?? []
@@ -261,7 +247,7 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
       <div className="flex-1 overflow-y-auto scrollbar-minimal">
         {/* Compact header: avatar left + info right */}
         <div className="flex items-center gap-3 border-b px-4 py-3">
-          <Avatar className={cn('h-14 w-14 shrink-0 ring-2 ring-offset-2 ring-offset-background', getRingClass(lead.temperature))}>
+          <Avatar className={cn('h-14 w-14 shrink-0 ring-2 ring-offset-2 ring-offset-background', temperatureConfig[lead.temperature].ringClass)}>
             <AvatarImage src={avatarSrc} alt={displayName} />
             <AvatarFallback className="text-base bg-secondary">
               {displayName.slice(0, 2).toUpperCase()}
@@ -284,23 +270,18 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
           </div>
         </div>
 
-        {/* Temperature selector */}
+        {/* Temperature bar (same as pipeline cards) */}
         <div className="px-4 py-3 border-b">
-          <div className="flex rounded-lg border border-border overflow-hidden">
-            {temperatureSegments.map((seg) => (
-              <button
-                key={seg.value}
-                onClick={() => handleTemperatureChange(seg.value)}
-                className={cn(
-                  'flex-1 py-1 text-[11px] font-medium transition-colors',
-                  lead.temperature === seg.value
-                    ? seg.activeClass
-                    : 'bg-transparent text-muted-foreground hover:bg-muted/50',
-                )}
-              >
-                {seg.label}
-              </button>
-            ))}
+          <div className="flex items-center gap-3">
+            <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all duration-500 ease-out"
+                style={{ width: temperatureConfig[lead.temperature].width, background: temperatureConfig[lead.temperature].gradient }}
+              />
+            </div>
+            <span className="text-[10px] font-medium text-muted-foreground shrink-0">
+              {temperatureConfig[lead.temperature].label}
+            </span>
           </div>
         </div>
 
