@@ -126,7 +126,7 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
     }
 
     if (!isDuplicate) {
-      const { data } = await supabase.from('messages').insert({
+      const { data, error: insertError } = await supabase.from('messages').insert({
         lead_id: lead.id,
         company_id: params.companyId,
         content: params.content,
@@ -140,7 +140,14 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
         instance_name: params.instanceName,
         delivery_status: 'sent',
       }).select('id').single()
-      savedMessage = data
+
+      // Race condition: unique violation entre check e insert → tratar como duplicata
+      if (insertError && insertError.code === '23505') {
+        isDuplicate = true
+        console.log(`[dedup] Race condition caught: external_id=${params.externalId}`)
+      } else {
+        savedMessage = data
+      }
     }
 
     // 5.1 Persistir midia no Storage (download + reupload)
