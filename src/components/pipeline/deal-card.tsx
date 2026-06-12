@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { cn } from '@/lib/utils'
+import { tagColor } from '@/lib/tag-colors'
 import { LeadSourceBadge } from '@/components/pipeline/lead-source-badge'
 import { DealValueDialog } from '@/components/pipeline/deal-value-dialog'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -287,11 +288,14 @@ const DealCard = ({ deal, onEditDeal, onTransfer, onMovePipeline, onCreateDeal, 
 
         <div className="flex items-center justify-between gap-1">
           <div className="flex flex-wrap gap-1 flex-1 min-w-0">
-            {lead?.tags?.slice(0, 3).map((tag) => (
-              <span key={tag} className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                {tag}
-              </span>
-            ))}
+            {lead?.tags?.slice(0, 3).map((tag) => {
+              const tc = tagColor(tag)
+              return (
+                <span key={tag} className={cn('rounded-full px-1.5 py-0.5 text-[10px] font-medium', tc.bg, tc.text)}>
+                  {tag}
+                </span>
+              )
+            })}
             {(lead?.tags?.length ?? 0) > 3 && (
               <span className="text-[10px] text-muted-foreground">+{(lead?.tags?.length ?? 0) - 3}</span>
             )}
