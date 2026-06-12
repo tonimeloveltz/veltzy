@@ -108,37 +108,79 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
   // ao inserir mensagem com sender_type='lead'. Nao precisa fazer aqui.
   // Webhook: nao cria mensagem (lead de formulario, sem conversa)
   let savedMessage: { id: string } | null = null
+  let isDuplicate = false
   if (params.source !== 'webhook') {
-    const { data } = await supabase.from('messages').insert({
-      lead_id: lead.id,
-      company_id: params.companyId,
-      content: params.content,
-      sender_type: 'lead',
-      message_type: params.messageType,
-      file_url: params.fileUrl,
-      file_name: params.fileName,
-      file_mime_type: params.fileMimeType,
-      source: params.source,
-      external_id: params.externalId,
-      instance_name: params.instanceName,
-      delivery_status: 'sent',
-    }).select('id').single()
-    savedMessage = data
+    // Dedup: se external_id presente, checar se ja existe (indice parcial unique)
+    if (params.externalId) {
+      const { data: existing } = await supabase
+        .from('messages')
+        .select('id')
+        .eq('company_id', params.companyId)
+        .eq('external_id', params.externalId)
+        .maybeSingle()
+      if (existing) {
+        savedMessage = existing
+        isDuplicate = true
+        console.log(`[dedup] Skipped duplicate message: external_id=${params.externalId}`)
+      }
+    }
+
+    if (!isDuplicate) {
+      const { data, error: insertError } = await supabase.from('messages').insert({
+        lead_id: lead.id,
+        company_id: params.companyId,
+        content: params.content,
+        sender_type: 'lead',
+        message_type: params.messageType,
+        file_url: params.fileUrl,
+        file_name: params.fileName,
+        file_mime_type: params.fileMimeType,
+        source: params.source,
+        external_id: params.externalId,
+        instance_name: params.instanceName,
+        delivery_status: 'sent',
+      }).select('id').single()
+
+      // Race condition: unique violation entre check e insert → tratar como duplicata
+      if (insertError && insertError.code === '23505') {
+        isDuplicate = true
+        console.log(`[dedup] Race condition caught: external_id=${params.externalId}`)
+      } else {
+        savedMessage = data
+      }
+    }
 
     // 5.1 Persistir midia no Storage (download + reupload)
     // URLs externas do WhatsApp/Evolution expiram. Baixar e salvar no bucket proprio.
-    if (params.fileUrl && savedMessage?.id) {
-      fetchAndUploadMedia(
-        params.supabaseUrl,
-        params.supabaseKey,
-        supabase,
-        savedMessage.id,
-        params.companyId,
-        params.fileUrl,
-        params.fileMimeType,
-        params.fileName,
-      )
+    // Se o Hub ja subiu pro Storage (URL contem /storage/v1/object/public/chat-attachments/),
+    // a midia ja esta persistida — pular re-upload.
+    // Pular se duplicata (midia ja foi persistida na primeira vez).
+    if (!isDuplicate && params.fileUrl && savedMessage?.id) {
+      const isAlreadyInStorage = params.fileUrl.includes('/storage/v1/object/public/chat-attachments/')
+      if (isAlreadyInStorage) {
+        // Midia ja persistida pelo Hub — so atualizar file_url da mensagem
+        await supabase
+          .from('messages')
+          .update({ file_url: params.fileUrl })
+          .eq('id', savedMessage.id)
+      } else {
+        fetchAndUploadMedia(
+          params.supabaseUrl,
+          params.supabaseKey,
+          supabase,
+          savedMessage.id,
+          params.companyId,
+          params.fileUrl,
+          params.fileMimeType,
+          params.fileName,
+        )
+      }
     }
+  }
+
+  // Duplicata: pular todos os efeitos colaterais (transcricao, SDR, notificacao)
+  if (isDuplicate) {
+    return { leadId: lead.id, isNewLead }
   }
 
   // 6. Transcricao de audio (async, nao bloqueia)
