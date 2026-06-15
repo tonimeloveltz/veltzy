@@ -262,35 +262,6 @@ export const deleteLead = async (companyId: string, leadId: string): Promise<voi
   if (error) throw error
 }
 
-export const moveLeadToStage = async (companyId: string, leadId: string, stageId: string): Promise<Lead> => {
-  const { data, error } = await veltzy()
-    .from('leads')
-    .update({ stage_id: stageId })
-    .eq('id', leadId)
-    .eq('company_id', companyId)
-    .select()
-    .single()
-  if (error) throw error
-  return data
-}
-
-export const updateDealValueAndMove = async (
-  companyId: string,
-  leadId: string,
-  stageId: string,
-  dealValue: number
-): Promise<Lead> => {
-  const { data, error } = await veltzy()
-    .from('leads')
-    .update({ stage_id: stageId, deal_value: dealValue })
-    .eq('id', leadId)
-    .eq('company_id', companyId)
-    .select()
-    .single()
-  if (error) throw error
-  return data
-}
-
 const BATCH_SIZE = 50
 
 const chunk = <T>(arr: T[], size: number): T[][] => {
@@ -371,23 +342,3 @@ export const bulkMoveToPipeline = async (companyId: string, leadIds: string[], t
   }
 }
 
-export const moveLeadToPipeline = async (companyId: string, leadId: string, targetPipelineId: string): Promise<Lead> => {
-  const { data: firstStage, error: stageError } = await veltzy()
-    .from('pipeline_stages')
-    .select('id')
-    .eq('pipeline_id', targetPipelineId)
-    .order('position')
-    .limit(1)
-    .single()
-  if (stageError) throw stageError
-
-  const { data, error } = await veltzy()
-    .from('leads')
-    .update({ pipeline_id: targetPipelineId, stage_id: firstStage.id })
-    .eq('id', leadId)
-    .eq('company_id', companyId)
-    .select()
-    .single()
-  if (error) throw error
-  return data
-}
