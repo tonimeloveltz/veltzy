@@ -3,8 +3,8 @@ import { toast } from 'sonner'
 import { useAuthStore } from '@/stores/auth.store'
 import { useTeamMembers } from '@/hooks/use-team'
 import * as leadsService from '@/services/leads.service'
-import { exportToCsv, exportToPdf, exportToXlsx } from '@/lib/export-leads'
-import type { LeadWithDetails } from '@/types/database'
+import * as dealsService from '@/services/deals.service'
+import { exportToCsv, exportToPdf, exportToXlsx, type ExportLeadRow } from '@/lib/export-leads'
 
 /**
  * Hook para exportar TODOS os leads sem limite de paginação.
@@ -19,22 +19,41 @@ export const useExportLeads = () => {
 
   const isSeller = roles.length > 0 && !roles.some(r => ['admin', 'manager', 'super_admin'].includes(r))
 
-  const fetchAllLeads = async (pipelineId?: string | null): Promise<LeadWithDetails[]> => {
+  const fetchAllLeads = async (pipelineId?: string | null): Promise<ExportLeadRow[]> => {
     if (!companyId) return []
 
-    const leads = await leadsService.getLeadsByCompany(companyId, {
-      pipelineId: pipelineId ?? undefined,
-      assignedTo: isSeller ? profileId : undefined,
-      limit: 0, // sem limite
-    })
+    const [leads, deals] = await Promise.all([
+      leadsService.getLeadsByCompany(companyId, {
+        pipelineId: pipelineId ?? undefined,
+        assignedTo: isSeller ? profileId : undefined,
+        limit: 0, // sem limite
+      }),
+      dealsService.getDealsByCompany(companyId, {
+        pipelineId: pipelineId ?? undefined,
+        assignedTo: isSeller ? profileId : undefined,
+        limit: 0, // sem limite
+      }),
+    ])
 
     const profileMap = new Map(
       members?.map((m) => [m.id, { id: m.id, name: m.name, email: m.email }]) ?? []
     )
 
+    // value/status do export vem do deal: pega o deal MAIS RECENTE de cada lead.
+    const dealByLead = new Map<string, NonNullable<ExportLeadRow['deal']>>()
+    const latestAt = new Map<string, string>()
+    for (const d of deals) {
+      const prev = latestAt.get(d.lead_id)
+      if (!prev || d.created_at > prev) {
+        latestAt.set(d.lead_id, d.created_at)
+        dealByLead.set(d.lead_id, { value: d.value, status: d.status })
+      }
+    }
+
     return leads.map((lead) => ({
       ...lead,
       profiles: lead.assigned_to ? profileMap.get(lead.assigned_to) ?? null : null,
+      deal: dealByLead.get(lead.id) ?? null,
     }))
   }
 

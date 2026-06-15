@@ -7,6 +7,8 @@ import { cn } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useDashboardLeads } from '@/hooks/use-dashboard-leads'
 import { useDashboardStages } from '@/hooks/use-dashboard-stages'
+import { useDashboardDeals } from '@/hooks/use-deals'
+import { buildActiveDealInfo, type ActiveDealInfo } from '@/lib/active-deal-info'
 import type { LeadWithDetails, PipelineStage } from '@/types/database'
 
 interface ActionItem {
@@ -39,9 +41,10 @@ const daysAgo = (dateStr: string, days: number) => {
   return new Date(dateStr) < threshold
 }
 
-const buildActions = (leads: LeadWithDetails[], stages: PipelineStage[]): ActionItem[] => {
-  const finalStageIds = new Set(stages.filter((s) => s.is_final).map((s) => s.id))
-  const activeLeads = leads.filter((l) => !finalStageIds.has(l.stage_id))
+const buildActions = (leads: LeadWithDetails[], stages: PipelineStage[], dealInfo: ActiveDealInfo): ActionItem[] => {
+  // "Ativo" e o stage por lead agora vem de deals (negocio aberto mais recente),
+  // nao mais de leads.stage_id. Campos de contato seguem vindo do lead.
+  const activeLeads = leads.filter((l) => dealInfo.activeLeadIds.has(l.id))
 
   const proposalStage = getStageBySlug(stages, 'proposta') ?? getStageBySlug(stages, 'proposal')
   const negotiationStage = getStageBySlug(stages, 'negociacao') ?? getStageBySlug(stages, 'negotiation')
@@ -52,7 +55,7 @@ const buildActions = (leads: LeadWithDetails[], stages: PipelineStage[]): Action
 
   const proposalStale = proposalStage
     ? activeLeads.filter(
-        (l) => l.stage_id === proposalStage.id && daysAgo(l.updated_at, 7)
+        (l) => dealInfo.stageByLeadId.get(l.id) === proposalStage.id && daysAgo(l.updated_at, 7)
       ).length
     : 0
 
@@ -64,7 +67,7 @@ const buildActions = (leads: LeadWithDetails[], stages: PipelineStage[]): Action
 
   const negotiationStuck = negotiationStage
     ? activeLeads.filter(
-        (l) => l.stage_id === negotiationStage.id && daysAgo(l.updated_at, 3)
+        (l) => dealInfo.stageByLeadId.get(l.id) === negotiationStage.id && daysAgo(l.updated_at, 3)
       ).length
     : 0
 
@@ -119,14 +122,15 @@ const buildActions = (leads: LeadWithDetails[], stages: PipelineStage[]): Action
 const NextActionsCard = ({ pipelineId }: { pipelineId?: string | null }) => {
   const { data: leads, isLoading: leadsLoading } = useDashboardLeads(pipelineId)
   const { data: stages, isLoading: stagesLoading } = useDashboardStages(pipelineId)
+  const { data: deals, isLoading: dealsLoading } = useDashboardDeals(pipelineId)
   const navigate = useNavigate()
 
   const actions = useMemo(() => {
-    if (!leads || !stages) return []
-    return buildActions(leads, stages)
-  }, [leads, stages])
+    if (!leads || !stages || !deals) return []
+    return buildActions(leads, stages, buildActiveDealInfo(deals))
+  }, [leads, stages, deals])
 
-  const isLoading = leadsLoading || stagesLoading
+  const isLoading = leadsLoading || stagesLoading || dealsLoading
 
   if (isLoading) {
     return (
