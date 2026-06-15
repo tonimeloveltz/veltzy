@@ -321,17 +321,6 @@ async function createLead(
     }
   }
 
-  // Primeiro stage
-  const { data: defaultStage } = pipelineId
-    ? await supabase
-        .from('pipeline_stages')
-        .select('id')
-        .eq('pipeline_id', pipelineId)
-        .order('position')
-        .limit(1)
-        .maybeSingle()
-    : { data: null }
-
   // Source: usar override (webhook) ou buscar por slug 'whatsapp'
   let sourceId: string | null = params.sourceId ?? null
   if (!sourceId) {
@@ -412,11 +401,13 @@ async function createLead(
   const { data: newLead } = await supabase
     .from('leads')
     .insert({
+      // Negocio fica em deals: createDealForLead (chamado depois) cria o deal e
+      // o espelho (trg_mirror_deal_to_lead) replica o stage de volta para o lead.
+      // pipeline_id permanece porque leads.pipeline_id e NOT NULL (migration 027).
       company_id: params.companyId,
       phone: params.phone,
       name: params.senderName,
       pipeline_id: pipelineId,
-      stage_id: defaultStage?.id,
       source_id: sourceId,
       assigned_to: assignedTo,
       is_queued: !assignedTo,
