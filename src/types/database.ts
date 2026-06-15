@@ -297,6 +297,13 @@ export interface CreateDealInput {
   value?: number
   assigned_to?: string | null
   status?: DealStatus
+  closed_at?: string | null
+}
+
+export interface CreateLeadWithDealInput extends CreateLeadInput {
+  // Quando o estagio escolhido e final (ganho/perdido), data de fechamento
+  // a gravar em deals.closed_at. Para venda retroativa. Estagio aberto: ignorado.
+  closed_at?: string | null
 }
 
 export interface UpdateDealInput {

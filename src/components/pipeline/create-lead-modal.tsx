@@ -34,6 +34,7 @@ const schema = z.object({
   deal_value: z.number().nonnegative().optional().or(z.nan().transform(() => undefined)),
   observations: z.string().optional(),
   tags: z.array(z.string()),
+  closed_date: z.string().optional(),
 })
 
 type FormValues = z.infer<typeof schema>
@@ -56,18 +57,26 @@ const CreateLeadModal = ({ open, onClose, defaultStageId, pipelineId }: CreateLe
   const initialPipelineId = pipelineId ?? activePipelineId ?? ''
   const hasMultiplePipelines = (pipelines?.length ?? 0) > 1
 
-  const { register, handleSubmit, control, reset, watch, setValue, formState: { errors } } = useForm<FormValues>({
+  const todayStr = new Date().toISOString().slice(0, 10)
+
+  const { register, handleSubmit, control, reset, watch, setValue, setError, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       pipeline_id: initialPipelineId,
       stage_id: defaultStageId ?? '',
       temperature: 'cold',
       tags: [],
+      closed_date: todayStr,
     },
   })
 
   const selectedPipelineId = watch('pipeline_id')
   const { data: stages } = usePipelineStages(selectedPipelineId || null)
+
+  const selectedStageId = watch('stage_id')
+  const selectedStage = stages?.find((s) => s.id === selectedStageId)
+  const isFinalStage = !!selectedStage?.is_final
+  const isWonStage = isFinalStage && selectedStage?.is_positive === true
 
   // Quando pipeline muda, seleciona a primeira fase
   useEffect(() => {
@@ -92,19 +101,38 @@ const CreateLeadModal = ({ open, onClose, defaultStageId, pipelineId }: CreateLe
         stage_id: defaultStageId ?? '',
         temperature: 'cold',
         tags: [],
+        closed_date: todayStr,
       })
     }
-  }, [open, pipelineId, activePipelineId, pipelines, defaultStageId, reset])
+  }, [open, pipelineId, activePipelineId, pipelines, defaultStageId, reset, todayStr])
 
   const onSubmit = async (values: FormValues) => {
+    // Venda retroativa: estagio final usa closed_date (data real do fechamento)
+    let closed_at: string | undefined
+    if (isFinalStage) {
+      const date = values.closed_date || todayStr
+      if (date > todayStr) {
+        setError('closed_date', { message: 'A data de fechamento nao pode ser futura' })
+        return
+      }
+      // Meio-dia local evita rollover de fuso ao cair no mes errado nos relatorios
+      closed_at = new Date(`${date}T12:00:00`).toISOString()
+    }
+
+    // closed_date e so do formulario; nao vai para o insert de leads
     const input = {
-      ...values,
+      phone: values.phone,
+      pipeline_id: values.pipeline_id,
+      stage_id: values.stage_id,
+      temperature: values.temperature,
+      tags: values.tags,
       deal_value: values.deal_value || undefined,
       email: values.email || undefined,
       name: values.name || undefined,
       company_name: values.company_name || undefined,
       source_id: values.source_id || undefined,
       observations: values.observations || undefined,
+      closed_at,
     }
     await createLead.mutateAsync(input)
     reset()
@@ -244,6 +272,24 @@ const CreateLeadModal = ({ open, onClose, defaultStageId, pipelineId }: CreateLe
             <Label>Valor (R$)</Label>
             <Input type="number" step="0.01" placeholder="0,00" {...register('deal_value', { valueAsNumber: true })} />
           </div>
+
+          {isFinalStage && (
+            <div className="space-y-2">
+              <Label htmlFor="closed-date">
+                Data do fechamento {isWonStage ? '(ganho)' : '(perdido)'}
+              </Label>
+              <Input
+                id="closed-date"
+                type="date"
+                max={todayStr}
+                {...register('closed_date')}
+              />
+              <p className="text-xs text-muted-foreground">
+                Para lancar uma venda passada, ajuste a data real do fechamento.
+              </p>
+              {errors.closed_date && <p className="text-xs text-destructive">{errors.closed_date.message}</p>}
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label>Observacoes</Label>
