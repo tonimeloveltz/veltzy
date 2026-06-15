@@ -159,9 +159,26 @@ export const createLead = async (companyId: string, input: CreateLeadInput): Pro
     )
   }
 
+  // Campos de negocio (stage_id, deal_value, status) NAO sao mais gravados em
+  // leads: vao so para deals e o espelho (trg_mirror_deal_to_lead) replica de
+  // volta apos o insert do deal. pipeline_id permanece porque a coluna e NOT
+  // NULL e o espelho so roda depois (sera removido na Fase 4).
   const { data, error } = await veltzy()
     .from('leads')
-    .insert(normalized)
+    .insert({
+      company_id: companyId,
+      name: normalized.name,
+      phone: normalized.phone,
+      email: normalized.email,
+      company_name: normalized.company_name,
+      source_id: normalized.source_id,
+      pipeline_id: normalized.pipeline_id,
+      temperature: normalized.temperature,
+      observations: normalized.observations,
+      assigned_to: normalized.assigned_to,
+      tags: normalized.tags,
+      whatsapp_instance_name: normalized.whatsapp_instance_name,
+    })
     .select()
     .single()
   if (error) {
@@ -187,6 +204,10 @@ export const createLead = async (companyId: string, input: CreateLeadInput): Pro
  *
  * O insert do deal seta status/closed_at direto: o trigger
  * set_deal_status_on_stage_change e BEFORE UPDATE e nao dispara no insert.
+ *
+ * O lead nasce SEM stage_id/deal_value (so dados de pessoa + pipeline_id). Ao
+ * criar o deal, o espelho (trg_mirror_deal_to_lead) replica stage_id/value de
+ * volta para o lead. Nao reescrevemos esses campos no lead manualmente.
  *
  * Consistencia: se o deal falhar, o lead recem-criado e removido (rollback
  * best-effort) para nao reintroduzir lead orfao.
