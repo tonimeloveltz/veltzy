@@ -237,19 +237,18 @@ export interface CreateLeadInput {
 }
 
 export interface UpdateLeadInput {
+  // Campos de negocio (stage_id, status, deal_value) saiu daqui: negocio se
+  // edita via deals; o espelho replica para leads. pipeline_id nunca esteve.
   name?: string | null
   phone?: string
   email?: string | null
   company_name?: string | null
   source_id?: string | null
-  stage_id?: string
-  status?: LeadStatus
   temperature?: LeadTemperature
   ai_score?: number
   assigned_to?: string | null
   is_ai_active?: boolean
   tags?: string[]
-  deal_value?: number | null
   observations?: string | null
   conversation_status?: ConversationStatus
   instagram_handle?: string | null
