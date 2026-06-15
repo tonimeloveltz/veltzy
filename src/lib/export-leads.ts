@@ -1,15 +1,24 @@
 import * as XLSX from 'xlsx'
-import type { LeadWithDetails } from '@/types/database'
+import type { LeadWithDetails, DealStatus } from '@/types/database'
 
-const getLeadRows = (leads: LeadWithDetails[]) =>
+/**
+ * Lead para export com o negocio representativo anexado. value/status do CSV
+ * vem do deal (nao mais de leads.deal_value/leads.status). Lead sem deal:
+ * campos ficam vazios.
+ */
+export type ExportLeadRow = LeadWithDetails & {
+  deal?: { value: number | null; status: DealStatus } | null
+}
+
+const getLeadRows = (leads: ExportLeadRow[]) =>
   leads.map((l) => [
     l.name ?? '',
     l.phone,
     l.email ?? '',
-    l.deal_value != null ? l.deal_value.toString() : '',
+    l.deal?.value != null ? l.deal.value.toString() : '',
     l.pipelines?.name ?? '',
     l.pipeline_stages?.name ?? '',
-    l.status ?? '',
+    l.deal?.status ?? '',
     l.temperature,
     l.profiles?.name ?? '',
     (l.tags ?? []).join(', '),
@@ -63,7 +72,7 @@ export const downloadImportTemplate = (format: 'xlsx' | 'csv' = 'xlsx') => {
   }
 }
 
-export const exportToXlsx = (leads: LeadWithDetails[], filename = 'leads.xlsx') => {
+export const exportToXlsx = (leads: ExportLeadRow[], filename = 'leads.xlsx') => {
   const rows = getLeadRows(leads)
   const ws = XLSX.utils.aoa_to_sheet([EXPORT_HEADERS, ...rows])
   const wb = XLSX.utils.book_new()
@@ -71,7 +80,7 @@ export const exportToXlsx = (leads: LeadWithDetails[], filename = 'leads.xlsx') 
   XLSX.writeFile(wb, filename)
 }
 
-export const exportToCsv = (leads: LeadWithDetails[], filename = 'leads.csv') => {
+export const exportToCsv = (leads: ExportLeadRow[], filename = 'leads.csv') => {
   const rows = getLeadRows(leads)
 
   const csvContent = [EXPORT_HEADERS, ...rows]
@@ -87,7 +96,7 @@ export const exportToCsv = (leads: LeadWithDetails[], filename = 'leads.csv') =>
   URL.revokeObjectURL(url)
 }
 
-export const exportToPdf = async (leads: LeadWithDetails[], filename = 'leads.pdf') => {
+export const exportToPdf = async (leads: ExportLeadRow[], filename = 'leads.pdf') => {
   const jsPDFModule = await import('jspdf')
   const autoTableModule = await import('jspdf-autotable')
   const jsPDF = jsPDFModule.default
@@ -105,10 +114,10 @@ export const exportToPdf = async (leads: LeadWithDetails[], filename = 'leads.pd
     l.name ?? l.phone,
     l.phone,
     l.email ?? '-',
-    l.deal_value ? `R$ ${l.deal_value.toLocaleString('pt-BR')}` : '-',
+    l.deal?.value ? `R$ ${l.deal.value.toLocaleString('pt-BR')}` : '-',
     l.pipelines?.name ?? '-',
     l.pipeline_stages?.name ?? '-',
-    l.status ?? '-',
+    l.deal?.status ?? '-',
     l.temperature,
     l.profiles?.name ?? '-',
     (l.tags ?? []).join(', ') || '-',
