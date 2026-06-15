@@ -377,7 +377,7 @@ export interface ReplyTemplate {
   updated_at: string
 }
 
-export interface LeadWithLastMessage extends Lead {
+export interface LeadWithLastMessage extends Omit<Lead, 'stage_id' | 'status' | 'deal_value'> {
   profiles?: Partial<Profile> | null
   lead_sources?: LeadSourceRecord | null
   last_message?: Pick<Message, 'content' | 'sender_type' | 'created_at' | 'message_type'> | null
