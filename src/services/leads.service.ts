@@ -1,5 +1,8 @@
 import { supabase, veltzy } from '@/lib/supabase'
-import type { Lead, LeadWithDetails, CreateLeadInput, UpdateLeadInput } from '@/types/database'
+import type {
+  Lead, LeadWithDetails, CreateLeadInput, UpdateLeadInput,
+  CreateLeadWithDealInput, Deal, DealStatus,
+} from '@/types/database'
 import { normalizePhoneBR } from '@/lib/phone'
 
 /**
@@ -168,6 +171,71 @@ export const createLead = async (companyId: string, input: CreateLeadInput): Pro
     throw error
   }
   return data
+}
+
+/**
+ * Cria contato + negocio numa unica operacao do ponto de vista da UI.
+ *
+ * Ponto unico de criacao manual no browser (modal "Novo Lead"). O deal nasce
+ * no mesmo stage/pipeline do lead, com status derivado do estagio:
+ *   - estagio aberto        -> status 'open'
+ *   - estagio final positivo -> status 'won'  + closed_at
+ *   - estagio final negativo -> status 'lost' + closed_at
+ *
+ * Para venda retroativa, `input.closed_at` define a data real do fechamento
+ * (cai no mes correto nos relatorios). Se ausente em estagio final, usa agora.
+ *
+ * O insert do deal seta status/closed_at direto: o trigger
+ * set_deal_status_on_stage_change e BEFORE UPDATE e nao dispara no insert.
+ *
+ * Consistencia: se o deal falhar, o lead recem-criado e removido (rollback
+ * best-effort) para nao reintroduzir lead orfao.
+ */
+export const createLeadWithDeal = async (
+  companyId: string,
+  input: CreateLeadWithDealInput,
+): Promise<{ lead: Lead; deal: Deal }> => {
+  const { closed_at: closedAtInput, ...leadInput } = input
+
+  const lead = await createLead(companyId, leadInput)
+
+  // Derivar status/closed_at a partir do estagio escolhido
+  const { data: stage } = await veltzy()
+    .from('pipeline_stages')
+    .select('is_final, is_positive')
+    .eq('id', leadInput.stage_id)
+    .maybeSingle()
+
+  let status: DealStatus = 'open'
+  let closedAt: string | null = null
+  if (stage?.is_final) {
+    status = stage.is_positive ? 'won' : 'lost'
+    closedAt = closedAtInput ?? new Date().toISOString()
+  }
+
+  const { data: deal, error } = await veltzy()
+    .from('deals')
+    .insert({
+      company_id: companyId,
+      lead_id: lead.id,
+      name: leadInput.name ? `Negocio - ${leadInput.name}` : 'Negocio',
+      value: leadInput.deal_value ?? 0,
+      stage_id: leadInput.stage_id,
+      pipeline_id: leadInput.pipeline_id,
+      assigned_to: leadInput.assigned_to ?? null,
+      status,
+      closed_at: closedAt,
+    })
+    .select()
+    .single()
+
+  if (error) {
+    // Rollback: o lead nasceu mas o deal falhou. Remover o lead orfao.
+    await veltzy().from('leads').delete().eq('id', lead.id).eq('company_id', companyId)
+    throw error
+  }
+
+  return { lead, deal }
 }
 
 export const updateLead = async (companyId: string, leadId: string, input: UpdateLeadInput): Promise<Lead> => {

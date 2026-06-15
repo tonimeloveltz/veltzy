@@ -1,5 +1,5 @@
 import { veltzy } from '@/lib/supabase'
-import type { LeadTemperature, PipelineStage, LeadSourceRecord, Pipeline, Profile } from '@/types/database'
+import type { LeadTemperature, PipelineStage, LeadSourceRecord, Pipeline, Profile, DealStatus } from '@/types/database'
 import type { LeadField } from '@/lib/csv-parser'
 import { normalizePhoneBR } from '@/lib/phone'
 import { resolveWhatsAppInstance } from '@/services/leads.service'
@@ -192,6 +192,53 @@ const resolveStatusFromStage = (stageId: string, stages: PipelineStage[]): strin
   return 'new'
 }
 
+// Status do deal espelhando o estagio do lead importado (consistente com o
+// backfill 054 e com createLeadWithDeal). Estagio final -> won/lost; senao open.
+const resolveDealStatusFromStage = (stageId: string, stages: PipelineStage[]): DealStatus => {
+  const stage = stages.find((s) => s.id === stageId)
+  if (stage?.is_final) return stage.is_positive ? 'won' : 'lost'
+  return 'open'
+}
+
+interface InsertedLeadRow {
+  id: string
+  row: ImportableRow
+}
+
+/**
+ * Cria deals em lote para os leads recem-importados, espelhando stage/pipeline/
+ * valor/dono de cada lead. Best-effort: falha aqui nao reverte a importacao do
+ * lead (mesma postura do fluxo WhatsApp), apenas loga.
+ */
+const createDealsForImportedLeads = async (
+  companyId: string,
+  inserted: InsertedLeadRow[],
+  stages: PipelineStage[],
+  nowIso: string,
+): Promise<void> => {
+  if (inserted.length === 0) return
+
+  const dealRecords = inserted.map(({ id, row }) => {
+    const status = resolveDealStatusFromStage(row.stage_id, stages)
+    return {
+      company_id: companyId,
+      lead_id: id,
+      name: row.name ? `Negocio - ${row.name}` : 'Negocio',
+      value: row.deal_value ?? 0,
+      stage_id: row.stage_id,
+      pipeline_id: row.pipeline_id,
+      assigned_to: row.assigned_to ?? null,
+      status,
+      closed_at: status === 'won' || status === 'lost' ? nowIso : null,
+    }
+  })
+
+  const { error } = await veltzy().from('deals').insert(dealRecords)
+  if (error) {
+    console.error('[import-leads] Falha ao criar deals em lote:', error.message)
+  }
+}
+
 export const importLeads = async (
   companyId: string,
   rows: ImportableRow[],
@@ -202,6 +249,7 @@ export const importLeads = async (
   let inserted = 0
   let skipped = 0
   let errors = 0
+  const nowIso = new Date().toISOString()
 
   for (let i = 0; i < rows.length; i += BATCH_SIZE) {
     const batch = rows.slice(i, i + BATCH_SIZE)
@@ -276,16 +324,21 @@ export const importLeads = async (
         insertData.push(record)
       }
 
-      const { error } = await veltzy()
+      const batchInserted: InsertedLeadRow[] = []
+
+      const { data: insertedRows, error } = await veltzy()
         .from('leads')
         .insert(insertData)
+        .select('id')
 
       if (error) {
         // Batch falhou — tentar row-a-row para identificar quais linhas tem problema
         for (let r = 0; r < insertData.length; r++) {
-          const { error: rowError } = await veltzy()
+          const { data: rowData, error: rowError } = await veltzy()
             .from('leads')
             .insert(insertData[r])
+            .select('id')
+            .single()
 
           if (rowError) {
             const reason = translateDbError(rowError.message)
@@ -294,6 +347,7 @@ export const importLeads = async (
           } else {
             allResults.push({ rowIndex: toInsertIndices[r], status: 'success' })
             inserted++
+            if (rowData?.id) batchInserted.push({ id: rowData.id, row: toInsert[r] })
           }
         }
       } else {
@@ -301,7 +355,14 @@ export const importLeads = async (
           allResults.push({ rowIndex: idx, status: 'success' })
         })
         inserted += toInsertIndices.length
+        // Insert preserva a ordem das linhas: insertedRows[k] <-> toInsert[k]
+        ;(insertedRows ?? []).forEach((lr, k) => {
+          if (lr?.id && toInsert[k]) batchInserted.push({ id: lr.id, row: toInsert[k] })
+        })
       }
+
+      // Negocio nasce junto do contato (mesma regra do modal e do WhatsApp)
+      await createDealsForImportedLeads(companyId, batchInserted, stages ?? [], nowIso)
     }
 
     onProgress(Math.min(i + BATCH_SIZE, rows.length), rows.length)
