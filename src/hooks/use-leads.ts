@@ -4,7 +4,7 @@ import { useAuthStore } from '@/stores/auth.store'
 import { usePipelineStore } from '@/stores/pipeline.store'
 import { useTeamMembers } from '@/hooks/use-team'
 import * as leadsService from '@/services/leads.service'
-import type { CreateLeadInput, UpdateLeadInput, LeadWithDetails } from '@/types/database'
+import type { CreateLeadWithDealInput, UpdateLeadInput, LeadWithDetails } from '@/types/database'
 
 export const useLeads = () => {
   const companyId = useAuthStore((s) => s.company?.id)
@@ -54,13 +54,16 @@ export const useCreateLead = () => {
   const companyId = useAuthStore((s) => s.company?.id)
 
   return useMutation({
-    mutationFn: (input: CreateLeadInput) => leadsService.createLead(companyId!, input),
+    mutationFn: (input: CreateLeadWithDealInput) => leadsService.createLeadWithDeal(companyId!, input),
     onSuccess: () => {
+      // Contato + negocio nascem juntos: invalidar leads, deals (kanban) e dashboard
       queryClient.invalidateQueries({ queryKey: ['leads'] })
-      toast.success('Lead criado com sucesso!')
+      queryClient.invalidateQueries({ queryKey: ['deals'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      toast.success('Negocio criado com sucesso!')
     },
     onError: (err: Error) => {
-      toast.error(err.message || 'Erro ao criar lead')
+      toast.error(err.message || 'Erro ao criar negocio')
     },
   })
 }
