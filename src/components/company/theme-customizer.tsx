@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { toast } from 'sonner'
 import { Check, Loader2, RotateCcw } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { useAuthStore } from '@/stores/auth.store'
 import { useThemeConfig } from '@/hooks/use-theme-config'
+import { useThemeSettings, THEME_SETTINGS_KEY } from '@/hooks/use-theme-settings'
 import { supabase, veltzy } from '@/lib/supabase'
 import { useQueryClient } from '@tanstack/react-query'
 
@@ -42,9 +43,9 @@ const sidebarStyles = [
 function hexToHsl(hex: string): string {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
   if (!result) return '158 64% 42%'
-  let r = parseInt(result[1], 16) / 255
-  let g = parseInt(result[2], 16) / 255
-  let b = parseInt(result[3], 16) / 255
+  const r = parseInt(result[1], 16) / 255
+  const g = parseInt(result[2], 16) / 255
+  const b = parseInt(result[3], 16) / 255
   const max = Math.max(r, g, b)
   const min = Math.min(r, g, b)
   let h = 0
@@ -92,8 +93,10 @@ function hslToHex(hslStr: string): string {
 
 const ThemeCustomizer = () => {
   const company = useAuthStore((s) => s.company)
+  const setCompany = useAuthStore((s) => s.setCompany)
   const companyId = company?.id
   const { theme, setTheme } = useThemeConfig()
+  const { data: themeSettings } = useThemeSettings()
   const queryClient = useQueryClient()
 
   const initialHsl = company?.primary_color ?? '158 64% 42%'
@@ -102,26 +105,12 @@ const ThemeCustomizer = () => {
     const match = swatches.find((s) => s.hsl === initialHsl)
     return match ? match.hex : hslToHex(initialHsl)
   })
-  const [cardStyle, setCardStyle] = useState('glass')
-  const [sidebarStyle, setSidebarStyle] = useState('glass')
+  // Valor salvo (query) e a base; override guarda a edicao local nao salva.
+  const [cardStyleOverride, setCardStyleOverride] = useState<string | null>(null)
+  const [sidebarStyleOverride, setSidebarStyleOverride] = useState<string | null>(null)
+  const cardStyle = cardStyleOverride ?? themeSettings?.card_style ?? 'glass'
+  const sidebarStyle = sidebarStyleOverride ?? themeSettings?.sidebar_style ?? 'solid'
   const [saving, setSaving] = useState(false)
-
-  useEffect(() => {
-    if (!companyId) return
-    veltzy()
-      .from('system_settings')
-      .select('value')
-      .eq('company_id', companyId)
-      .eq('key', 'theme_config')
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data?.value) {
-          const cfg = data.value as { card_style?: string; sidebar_style?: string }
-          if (cfg.card_style) setCardStyle(cfg.card_style)
-          if (cfg.sidebar_style) setSidebarStyle(cfg.sidebar_style)
-        }
-      })
-  }, [companyId])
 
   const applyPreview = (hsl: string, hex: string) => {
     setPrimaryHsl(hsl)
@@ -164,7 +153,13 @@ const ThemeCustomizer = () => {
         { company_id: companyId, key: 'theme_config', value: { card_style: cardStyle, sidebar_style: sidebarStyle } },
         { onConflict: 'company_id,key' }
       )
+      // Atualiza o store imediatamente para a cor nao reverter ao valor antigo
+      // quando o efeito de tema reaplicar company.primary_color.
+      if (company) {
+        setCompany({ ...company, primary_color: primaryHsl })
+      }
       queryClient.invalidateQueries({ queryKey: ['company'] })
+      queryClient.invalidateQueries({ queryKey: [THEME_SETTINGS_KEY] })
       toast.success('Tema salvo!')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erro ao salvar')
@@ -176,8 +171,8 @@ const ThemeCustomizer = () => {
   const handleReset = () => {
     applyPreview('158 64% 42%', '#22a06b')
     setTheme('light')
-    setCardStyle('glass')
-    setSidebarStyle('glass')
+    setCardStyleOverride('glass')
+    setSidebarStyleOverride('solid')
   }
 
   return (
@@ -256,7 +251,7 @@ const ThemeCustomizer = () => {
             {cardStyles.map((s) => (
               <button
                 key={s.id}
-                onClick={() => setCardStyle(s.id)}
+                onClick={() => setCardStyleOverride(s.id)}
                 className={cn(
                   'rounded-lg border px-4 py-2 text-sm transition-smooth',
                   cardStyle === s.id ? 'border-primary bg-primary/10 text-foreground' : 'border-border/30 text-muted-foreground hover:text-foreground'
@@ -274,7 +269,7 @@ const ThemeCustomizer = () => {
             {sidebarStyles.map((s) => (
               <button
                 key={s.id}
-                onClick={() => setSidebarStyle(s.id)}
+                onClick={() => setSidebarStyleOverride(s.id)}
                 className={cn(
                   'rounded-lg border px-4 py-2 text-sm transition-smooth',
                   sidebarStyle === s.id ? 'border-primary bg-primary/10 text-foreground' : 'border-border/30 text-muted-foreground hover:text-foreground'

@@ -115,7 +115,7 @@ const AutoReplySettings = () => {
                   className={`rounded-md px-2.5 py-1 text-xs font-medium transition-smooth ${
                     selectedDays.includes(d.value)
                       ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted text-muted-foreground hover:bg-accent'
+                      : 'bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground'
                   }`}
                 >
                   {d.label}

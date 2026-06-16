@@ -17,10 +17,27 @@
   </head>
   <body>
     <script>
-      // Aplica tema ANTES do React montar (evita flash de cor errada)
+      // Aplica tema E cor da marca ANTES do React montar (evita flash de cor errada,
+      // ex: spinner verde piscando antes da cor da empresa carregar).
       (function() {
+        var root = document.documentElement;
         var theme = localStorage.getItem('veltzy-theme') || 'dark';
-        if (theme !== 'light') document.documentElement.classList.add(theme);
+        if (theme !== 'light') root.classList.add(theme);
+
+        var primary = localStorage.getItem('veltzy-primary');
+        var m = primary && primary.match(/(\d+)\s+(\d+)%?\s+(\d+)%?/);
+        if (m) {
+          var h = +m[1], s = +m[2], l = +m[3];
+          var isDark = theme === 'dark';
+          var p = (isDark && l < 20) ? (h + ' ' + s + '% 55%') : primary;
+          ['--primary', '--ring', '--sidebar-primary', '--glow-primary'].forEach(function(v) {
+            root.style.setProperty(v, p);
+          });
+          if (theme !== 'sand') {
+            root.style.setProperty('--accent', isDark ? (h + ' ' + Math.round(s * 0.1) + '% 16%') : (h + ' ' + Math.round(s * 0.6) + '% 94%'));
+            root.style.setProperty('--accent-foreground', isDark ? (h + ' ' + s + '% 58%') : (h + ' ' + s + '% 32%'));
+          }
+        }
       })();
     </script>
     <div id="root"></div>
