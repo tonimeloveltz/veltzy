@@ -109,7 +109,7 @@ const TaskCard = ({ task, onEdit, onLeadClick }: TaskCardProps) => {
           <DropdownMenu>
             <DropdownMenuTrigger
               onClick={(e) => e.stopPropagation()}
-              className="rounded p-0.5 text-muted-foreground hover:text-foreground hover:bg-accent transition-smooth shrink-0"
+              className="rounded p-0.5 text-muted-foreground hover:text-accent-foreground hover:bg-accent transition-smooth shrink-0"
             >
               <MoreVertical className="h-4 w-4" />
             </DropdownMenuTrigger>
@@ -141,7 +141,7 @@ const TaskCard = ({ task, onEdit, onLeadClick }: TaskCardProps) => {
                   e.stopPropagation()
                   onLeadClick?.(task.leads!.id)
                 }}
-                className="truncate rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-accent transition-smooth"
+                className="truncate rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-smooth"
               >
                 {task.leads.name || task.leads.phone}
               </button>

@@ -87,7 +87,7 @@ const NotificationItem = ({ notification, onRead }: { notification: Notification
     <button
       onClick={handleClick}
       className={cn(
-        'flex w-full items-start gap-2.5 px-3 py-2 text-left transition-smooth hover:bg-accent rounded-md',
+        'flex w-full items-start gap-2.5 px-3 py-2 text-left transition-smooth hover:bg-accent hover:text-accent-foreground rounded-md',
         !notification.is_read && !isCopilot && !isConflict && 'bg-primary/5',
         !notification.is_read && isCopilot && 'bg-purple-500/10 border border-purple-500/20 rounded-lg',
         !notification.is_read && isConflict && 'bg-amber-500/10 border border-amber-500/20 rounded-lg',

@@ -20,6 +20,7 @@ import { useToggleAvailability } from '@/hooks/use-sellers'
 import { useTeamMembers } from '@/hooks/use-team'
 import { useMyTaskCounts } from '@/hooks/use-tasks'
 import { useFeatureFlag } from '@/hooks/use-feature-flag'
+import { useThemeSettings } from '@/hooks/use-theme-settings'
 import { ThemeToggle } from '@/components/layout/theme-toggle'
 import { NotificationCenter } from '@/components/shared/notification-center'
 import { Separator } from '@/components/ui/separator'
@@ -56,6 +57,8 @@ const AppSidebar = () => {
   const { data: members } = useTeamMembers()
   const { data: taskCounts } = useMyTaskCounts()
   const isSdrAgentV2 = useFeatureFlag('sdr_agent_v2')
+  const { data: themeSettings } = useThemeSettings()
+  const isGlassSidebar = themeSettings?.sidebar_style === 'glass'
 
   const available = profile?.is_available ?? false
   const onlineMembers = members?.filter((m) => {
@@ -81,7 +84,12 @@ const AppSidebar = () => {
   const initials = getInitials(profile?.name)
 
   return (
-    <aside className="flex h-screen w-64 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
+    <aside
+      className={cn(
+        'flex h-screen w-64 flex-col border-r border-sidebar-border text-sidebar-foreground',
+        isGlassSidebar ? 'sidebar-glass' : 'bg-sidebar'
+      )}
+    >
       <div className="flex items-center gap-3 px-4 py-5">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-sm shrink-0">
           {company?.name?.[0]?.toUpperCase() ?? 'V'}
