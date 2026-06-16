@@ -16,7 +16,7 @@ import { AlertCircle, AlertTriangle, Loader2, Inbox } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { StageColumn } from '@/components/pipeline/stage-column'
 import { DealCard } from '@/components/pipeline/deal-card'
-import { CreateLeadModal } from '@/components/pipeline/create-lead-modal'
+import { NewDealModal } from '@/components/deals/new-deal-modal'
 import { CreateDealModal } from '@/components/deals/create-deal-modal'
 import { EditLeadModal } from '@/components/pipeline/edit-lead-modal'
 import { PipelineHeader } from '@/components/pipeline/pipeline-header'
@@ -331,7 +331,7 @@ const PipelineBoard = () => {
             <Inbox className="h-10 w-10 text-muted-foreground/40" />
             <p className="text-sm text-muted-foreground">Nenhum negocio neste pipeline</p>
             <Button size="sm" className="pointer-events-auto" onClick={() => handleAddLead()}>
-              Criar primeiro lead
+              Criar primeiro negocio
             </Button>
           </div>
         )}
@@ -345,11 +345,11 @@ const PipelineBoard = () => {
         </DragOverlay>
       </DndContext>
 
-      <CreateLeadModal
+      <NewDealModal
         open={createModalOpen}
         onClose={() => setCreateModalOpen(false)}
+        defaultPipelineId={activePipelineId ?? undefined}
         defaultStageId={createModalStageId}
-        pipelineId={activePipelineId ?? undefined}
       />
 
       <EditLeadModal

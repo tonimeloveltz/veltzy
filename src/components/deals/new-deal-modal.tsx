@@ -46,9 +46,13 @@ interface SelectedContact {
 interface NewDealModalProps {
   open: boolean
   onClose: () => void
+  /** Pre-seleciona o pipeline ao abrir (ex: pipeline do board). Editavel. */
+  defaultPipelineId?: string
+  /** Pre-seleciona a etapa ao abrir (ex: coluna do board). Editavel. */
+  defaultStageId?: string
 }
 
-const NewDealModal = ({ open, onClose }: NewDealModalProps) => {
+const NewDealModal = ({ open, onClose, defaultPipelineId, defaultStageId }: NewDealModalProps) => {
   const createDeal = useCreateDeal()
   const { data: contacts } = useContacts()
   const { data: pipelines } = useAccessiblePipelines()
@@ -76,15 +80,16 @@ const NewDealModal = ({ open, onClose }: NewDealModalProps) => {
   // Reset ao abrir, com pipeline default/primeiro acessivel.
   useEffect(() => {
     if (open) {
-      const resolvedPipelineId = pipelines?.find((p) => p.is_default)?.id ?? pipelines?.[0]?.id ?? ''
+      const resolvedPipelineId = defaultPipelineId
+        ?? pipelines?.find((p) => p.is_default)?.id ?? pipelines?.[0]?.id ?? ''
       setSelectedContact(null)
       setContactSearch('')
       reset({
-        lead_id: '', name: '', pipeline_id: resolvedPipelineId, stage_id: '',
+        lead_id: '', name: '', pipeline_id: resolvedPipelineId, stage_id: defaultStageId ?? '',
         value: 0, assigned_to: NO_OWNER, closed_date: todayStr,
       })
     }
-  }, [open, pipelines, reset, todayStr])
+  }, [open, pipelines, reset, todayStr, defaultPipelineId, defaultStageId])
 
   // Quando pipeline muda, seleciona a primeira etapa.
   useEffect(() => {
