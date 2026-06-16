@@ -85,6 +85,8 @@ export const useCreateDeal = () => {
     mutationFn: (input: CreateDealInput) => dealsService.createDeal(companyId!, input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['deals'] })
+      // Contagem de Negocios e LTV do contato mudam na pagina Contatos
+      queryClient.invalidateQueries({ queryKey: ['contacts'] })
       toast.success('Negocio criado com sucesso!')
     },
     onError: (err: Error & { code?: string }) => {

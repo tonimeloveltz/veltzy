@@ -20,7 +20,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { CreateLeadModal } from '@/components/pipeline/create-lead-modal'
+import { NewDealModal } from '@/components/deals/new-deal-modal'
 import { EditLeadModal } from '@/components/pipeline/edit-lead-modal'
 import { ImportLeadsModal } from '@/components/pipeline/import-leads-modal'
 import { BulkActionBar } from '@/components/deals/bulk-action-bar'
@@ -513,7 +513,7 @@ const DealsPage = () => {
         </div>
       </div>
 
-      <CreateLeadModal
+      <NewDealModal
         open={createModalOpen}
         onClose={() => setCreateModalOpen(false)}
       />
