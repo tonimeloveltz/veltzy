@@ -54,6 +54,16 @@ const statusConfig: Record<DealStatus, { label: string; color: string }> = {
   pending_assignment: { label: 'Aberto', color: 'text-yellow-500' },
 }
 
+// Cor do valor monetario por status: Fechado verde, Perdido vermelho (mesmo
+// token do label), demais neutro (igual ao nome do negocio).
+const dealValueColor: Record<DealStatus, string> = {
+  open: 'text-foreground',
+  won: 'text-emerald-500',
+  lost: 'text-red-500',
+  archived: 'text-foreground',
+  pending_assignment: 'text-foreground',
+}
+
 const filterByPeriod = (deals: DealWithLead[], days: number | undefined) => {
   if (!days) return deals
   const cutoff = new Date()
@@ -432,7 +442,7 @@ const DealsPage = () => {
                       </td>
 
                       {/* Valor */}
-                      <td className={cn('py-3 text-left font-semibold', deal.status === 'won' ? 'text-emerald-500' : 'text-primary')}>
+                      <td className={cn('py-3 text-left font-semibold', dealValueColor[deal.status])}>
                         {deal.value ? fmt(deal.value) : '-'}
                       </td>
 
