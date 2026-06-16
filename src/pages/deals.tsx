@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { leadDisplayName } from '@/lib/phone'
+import { filterByPeriod } from '@/lib/deals-period-filter'
 import { useDashboardDeals } from '@/hooks/use-deals'
 import { usePipelineStages } from '@/hooks/use-pipeline-stages'
 import { useAccessiblePipelines } from '@/hooks/use-pipeline-access'
@@ -19,12 +20,12 @@ import { Skeleton } from '@/components/ui/skeleton'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { CreateLeadModal } from '@/components/pipeline/create-lead-modal'
+import { NewDealModal } from '@/components/deals/new-deal-modal'
 import { EditLeadModal } from '@/components/pipeline/edit-lead-modal'
 import { ImportLeadsModal } from '@/components/pipeline/import-leads-modal'
 import { BulkActionBar } from '@/components/deals/bulk-action-bar'
 import { exportToCsv, exportToPdf, exportToXlsx } from '@/lib/export-leads'
-import type { DealWithLead, DealStatus, LeadTemperature } from '@/types/database'
+import type { DealStatus, LeadTemperature } from '@/types/database'
 import { getLeadById } from '@/services/leads.service'
 import { useAuthStore } from '@/stores/auth.store'
 import { useQuery } from '@tanstack/react-query'
@@ -62,13 +63,6 @@ const dealValueColor: Record<DealStatus, string> = {
   lost: 'text-red-500',
   archived: 'text-foreground',
   pending_assignment: 'text-foreground',
-}
-
-const filterByPeriod = (deals: DealWithLead[], days: number | undefined) => {
-  if (!days) return deals
-  const cutoff = new Date()
-  cutoff.setDate(cutoff.getDate() - days)
-  return deals.filter((d) => new Date(d.created_at) >= cutoff)
 }
 
 const thClass = 'pb-3 text-xs font-medium text-muted-foreground uppercase tracking-wider'
@@ -529,7 +523,7 @@ const DealsPage = () => {
         </div>
       </div>
 
-      <CreateLeadModal
+      <NewDealModal
         open={createModalOpen}
         onClose={() => setCreateModalOpen(false)}
       />
