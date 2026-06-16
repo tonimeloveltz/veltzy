@@ -5,6 +5,7 @@ import {
   DollarSign, Users, TrendingUp, Plus, MessageSquare, Download, Upload,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { leadDisplayName } from '@/lib/phone'
 import { useDashboardDeals } from '@/hooks/use-deals'
 import { usePipelineStages } from '@/hooks/use-pipeline-stages'
 import { useAccessiblePipelines } from '@/hooks/use-pipeline-access'
@@ -50,7 +51,7 @@ const statusConfig: Record<DealStatus, { label: string; color: string }> = {
   won: { label: 'Fechado', color: 'text-emerald-500' },
   lost: { label: 'Perdido', color: 'text-red-500' },
   archived: { label: 'Arquivado', color: 'text-muted-foreground' },
-  pending_assignment: { label: 'Sem dono', color: 'text-amber-500' },
+  pending_assignment: { label: 'Aberto', color: 'text-yellow-500' },
 }
 
 const filterByPeriod = (deals: DealWithLead[], days: number | undefined) => {
@@ -79,7 +80,6 @@ const DealsPage = () => {
   const { data: pipelines } = useAccessiblePipelines()
   const { data: allDeals, isLoading, isError, refetch } = useDashboardDeals(selectedPipelineId, showArchived)
   const { data: stages } = usePipelineStages()
-  const showPipelineColumn = (pipelines ?? []).filter((p) => p.is_active).length > 1
 
   // Fetch lead for edit modal
   const { data: selectedLeadData } = useQuery({
@@ -350,13 +350,14 @@ const DealsPage = () => {
                   <th className={cn(thClass, 'text-left w-[10%]')}>Empresa</th>
                   <th className={cn(thClass, 'text-left w-[4%]')}>Chat</th>
                   <th className={cn(thClass, 'text-left w-[11%]')}>Negocio</th>
-                  <th className={cn(thClass, 'text-left w-[9%]')}>Valor</th>
-                  {showPipelineColumn && <th className={cn(thClass, 'text-left w-[9%]')}>Pipeline</th>}
-                  <th className={cn(thClass, 'text-left w-[9%]')}>Etapa</th>
-                  <th className={cn(thClass, 'text-left w-[8%]')}>Status</th>
-                  <th className={cn(thClass, 'text-left w-[9%]')}>Temperatura</th>
-                  <th className={cn(thClass, 'text-left w-[9%]')}>Responsavel</th>
-                  <th className={cn(thClass, 'text-left w-[9%]')}>Criado em</th>
+                  <th className={cn(thClass, 'text-left w-[8%]')}>Valor</th>
+                  <th className={cn(thClass, 'text-left w-[8%]')}>Pipeline</th>
+                  <th className={cn(thClass, 'text-left w-[8%]')}>Etapa</th>
+                  <th className={cn(thClass, 'text-left w-[7%]')}>Status</th>
+                  <th className={cn(thClass, 'text-left w-[7%]')}>Temperatura</th>
+                  <th className={cn(thClass, 'text-left w-[8%]')}>Responsavel</th>
+                  <th className={cn(thClass, 'text-left w-[8%]')}>Criado em</th>
+                  <th className={cn(thClass, 'text-left w-[8%]')}>Fechado em</th>
                 </tr>
               </thead>
               <tbody>
@@ -402,8 +403,8 @@ const DealsPage = () => {
                             )}
                           </Avatar>
                           <div className="min-w-0">
-                            <p className="font-medium truncate">{lead?.name ?? 'Sem nome'}</p>
-                            <p className="text-[11px] text-muted-foreground truncate">{lead?.email ?? lead?.phone}</p>
+                            <p className="font-medium truncate">{leadDisplayName(lead?.name, lead?.phone ?? '')}</p>
+                            <p className="text-[11px] text-muted-foreground truncate">{lead?.phone}</p>
                           </div>
                         </div>
                       </td>
@@ -426,7 +427,7 @@ const DealsPage = () => {
                       {/* Negocio */}
                       <td className="py-3 text-left">
                         <p className="text-xs font-medium truncate">
-                          {deal.name && deal.name !== lead?.name ? deal.name : <span className="text-muted-foreground">-</span>}
+                          {deal.name ? deal.name : <span className="text-muted-foreground">-</span>}
                         </p>
                       </td>
 
@@ -436,7 +437,7 @@ const DealsPage = () => {
                       </td>
 
                       {/* Pipeline */}
-                      {showPipelineColumn && (() => {
+                      {(() => {
                         const pipeline = deal.pipeline_id ? pipelineMap.get(deal.pipeline_id) : null
                         return (
                           <td className="py-3 text-left">
@@ -476,11 +477,11 @@ const DealsPage = () => {
                         </span>
                       </td>
 
-                      {/* Temperatura */}
+                      {/* Temperatura (compacta) */}
                       <td className="py-3 text-left">
                         {temp && (
-                          <span className="inline-flex items-center gap-1.5 text-xs">
-                            <span className={cn('h-2 w-2 rounded-full shrink-0', temp.dotColor)} />
+                          <span className="inline-flex items-center gap-1 text-[10px]" title={temp.label}>
+                            <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', temp.dotColor)} />
                             {temp.label}
                           </span>
                         )}
@@ -488,23 +489,26 @@ const DealsPage = () => {
 
                       {/* Responsavel */}
                       <td className="py-3 text-left text-xs">
-                        {deal.status === 'pending_assignment' ? (
-                          <span className="text-amber-500 font-medium">Sem dono</span>
-                        ) : (
-                          assignedName ?? <span className="text-muted-foreground/40">Sem responsavel</span>
-                        )}
+                        {assignedName ?? <span className="text-muted-foreground/40">Sem responsavel</span>}
                       </td>
 
                       {/* Criado em */}
                       <td className="py-3 text-left text-xs text-muted-foreground">
                         {new Date(deal.created_at).toLocaleDateString('pt-BR')}
                       </td>
+
+                      {/* Fechado em */}
+                      <td className="py-3 text-left text-xs text-muted-foreground">
+                        {(deal.status === 'won' || deal.status === 'lost') && deal.closed_at
+                          ? new Date(deal.closed_at).toLocaleDateString('pt-BR')
+                          : <span className="text-muted-foreground/40">-</span>}
+                      </td>
                     </tr>
                   )
                 })}
                 {deals.length === 0 && (
                   <tr>
-                    <td colSpan={showPipelineColumn ? 12 : 11} className="py-12 text-center text-sm text-muted-foreground">
+                    <td colSpan={13} className="py-12 text-center text-sm text-muted-foreground">
                       Nenhum negocio encontrado
                     </td>
                   </tr>
