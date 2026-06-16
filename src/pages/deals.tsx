@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { leadDisplayName } from '@/lib/phone'
+import { filterByPeriod } from '@/lib/deals-period-filter'
 import { useDashboardDeals } from '@/hooks/use-deals'
 import { usePipelineStages } from '@/hooks/use-pipeline-stages'
 import { useAccessiblePipelines } from '@/hooks/use-pipeline-access'
@@ -24,7 +25,7 @@ import { EditLeadModal } from '@/components/pipeline/edit-lead-modal'
 import { ImportLeadsModal } from '@/components/pipeline/import-leads-modal'
 import { BulkActionBar } from '@/components/deals/bulk-action-bar'
 import { exportToCsv, exportToPdf, exportToXlsx } from '@/lib/export-leads'
-import type { DealWithLead, DealStatus, LeadTemperature } from '@/types/database'
+import type { DealStatus, LeadTemperature } from '@/types/database'
 import { getLeadById } from '@/services/leads.service'
 import { useAuthStore } from '@/stores/auth.store'
 import { useQuery } from '@tanstack/react-query'
@@ -52,13 +53,6 @@ const statusConfig: Record<DealStatus, { label: string; color: string }> = {
   lost: { label: 'Perdido', color: 'text-red-500' },
   archived: { label: 'Arquivado', color: 'text-muted-foreground' },
   pending_assignment: { label: 'Aberto', color: 'text-yellow-500' },
-}
-
-const filterByPeriod = (deals: DealWithLead[], days: number | undefined) => {
-  if (!days) return deals
-  const cutoff = new Date()
-  cutoff.setDate(cutoff.getDate() - days)
-  return deals.filter((d) => new Date(d.created_at) >= cutoff)
 }
 
 const thClass = 'pb-3 text-xs font-medium text-muted-foreground uppercase tracking-wider'
