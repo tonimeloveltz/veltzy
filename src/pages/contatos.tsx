@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AlertCircle, Search, MessageSquare, Download, Upload, Plus } from 'lucide-react'
-import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { leadDisplayName } from '@/lib/phone'
 import { timeAgo } from '@/lib/time'
@@ -12,6 +11,7 @@ import { useRoles } from '@/hooks/use-roles'
 import { leadTemperatureConfig } from '@/lib/lead-config'
 import { LeadSourceBadge } from '@/components/pipeline/lead-source-badge'
 import { ImportLeadsModal } from '@/components/pipeline/import-leads-modal'
+import { NewContactModal } from '@/components/contacts/new-contact-modal'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -48,6 +48,7 @@ const ContatosPage = () => {
   const [sourceId, setSourceId] = useState<string | null>(null)
   const [temperature, setTemperature] = useState<LeadTemperature | null>(null)
   const [importModalOpen, setImportModalOpen] = useState(false)
+  const [newContactOpen, setNewContactOpen] = useState(false)
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -131,7 +132,7 @@ const ContatosPage = () => {
                 <DropdownMenuItem onClick={() => doExport('pdf')}>Exportar PDF</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button size="sm" className="gap-1.5" onClick={() => toast.info('Novo contato chega na proxima etapa')}>
+            <Button size="sm" className="gap-1.5" onClick={() => setNewContactOpen(true)}>
               <Plus className="h-4 w-4" />
               Novo Contato
             </Button>
@@ -303,6 +304,7 @@ const ContatosPage = () => {
       </div>
 
       <ImportLeadsModal open={importModalOpen} onClose={() => setImportModalOpen(false)} />
+      <NewContactModal open={newContactOpen} onClose={() => setNewContactOpen(false)} />
     </div>
   )
 }

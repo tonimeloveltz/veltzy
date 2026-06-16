@@ -1,10 +1,11 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { useAuthStore } from '@/stores/auth.store'
 import { useTeamMembers } from '@/hooks/use-team'
 import * as leadsService from '@/services/leads.service'
 import * as dealsService from '@/services/deals.service'
 import { aggregateDealsByLead } from '@/lib/contacts-aggregate'
-import type { LeadWithDetails } from '@/types/database'
+import type { CreateLeadInput, LeadWithDetails } from '@/types/database'
 
 export interface ContactRow extends LeadWithDetails {
   dealCount: number
@@ -53,5 +54,27 @@ export const useContacts = () => {
     },
     enabled: !!companyId,
     staleTime: 30 * 1000,
+  })
+}
+
+/**
+ * Cria um contato puro (lead sem negocio). NAO escreve em `deals` - o contato
+ * nasce com 0 negocios. O service `createLead` ja nao grava campos de negocio;
+ * pipeline_id e preenchido pelo modal (coluna NOT NULL ate a Fase 4).
+ */
+export const useCreateContact = () => {
+  const queryClient = useQueryClient()
+  const companyId = useAuthStore((s) => s.company?.id)
+
+  return useMutation({
+    mutationFn: (input: CreateLeadInput) => leadsService.createLead(companyId!, input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contacts'] })
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+      toast.success('Contato criado com sucesso!')
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || 'Erro ao criar contato')
+    },
   })
 }
