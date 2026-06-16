@@ -58,7 +58,7 @@ const ReplyTemplatesPopover = ({ onSelect }: ReplyTemplatesPopoverProps) => {
               setOpen(false)
               setSearch('')
             }}
-            className="w-full rounded-md px-2 py-1.5 text-left hover:bg-accent transition-smooth"
+            className="w-full rounded-md px-2 py-1.5 text-left hover:bg-accent hover:text-accent-foreground transition-smooth"
           >
             <p className="text-xs font-medium truncate">{t.title}</p>
             <p className="text-[10px] text-muted-foreground truncate">{t.content}</p>

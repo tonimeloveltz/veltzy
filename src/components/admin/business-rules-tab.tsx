@@ -265,7 +265,7 @@ const BusinessRulesTab = () => {
                     {rule.extraKey && (
                       <button
                         onClick={() => setExpandedRule(expanded ? null : String(rule.key))}
-                        className="rounded p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent transition-smooth"
+                        className="rounded p-1.5 text-muted-foreground hover:text-accent-foreground hover:bg-accent transition-smooth"
                         title="Configurar"
                       >
                         <Pencil className="h-3.5 w-3.5" />

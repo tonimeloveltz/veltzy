@@ -14,49 +14,55 @@ const applyTheme = (theme: Theme) => {
   }
 }
 
-function ensureContrastOnDark(hslColor: string, isDark: boolean): string {
-  if (!isDark) return hslColor
-  const match = hslColor.match(/(\d+)\s+(\d+)%?\s+(\d+)%?/)
-  if (!match) return hslColor
-  const [, h, s, l] = match.map(Number)
-  if (l < 20) return `${h} ${s}% 55%`
-  return hslColor
-}
+const PRIMARY_KEY = 'veltzy-primary'
 
-function deriveAccentColors(hslColor: string, isDark: boolean): { accent: string; accentForeground: string } {
+// Vars derivadas da cor da marca aplicadas como inline style no <html>.
+// Precisam ser limpas a cada troca de tema, senao o valor do tema anterior
+// fica "preso" (ex: accent escuro do dark sobrevive ao trocar pro claro,
+// fazendo texto escuro sumir no hover).
+const PRIMARY_VARS = ['--primary', '--ring', '--sidebar-primary', '--glow-primary']
+const ACCENT_VARS = ['--accent', '--accent-foreground']
+
+function parseHsl(hslColor?: string): [number, number, number] | null {
+  if (!hslColor) return null
   const match = hslColor.match(/(\d+)\s+(\d+)%?\s+(\d+)%?/)
-  if (!match) return { accent: hslColor, accentForeground: hslColor }
-  const [, h, s] = match.map(Number)
-  if (isDark) {
-    return {
-      accent: `${h} ${Math.round(s * 0.1)}% 16%`,
-      accentForeground: `${h} ${s}% 58%`,
-    }
-  }
-  return {
-    accent: `${h} ${Math.round(s * 0.6)}% 94%`,
-    accentForeground: `${h} ${s}% 32%`,
-  }
+  if (!match) return null
+  const [, h, s, l] = match.map(Number)
+  return [h, s, l]
 }
 
 const applyCompanyColors = (primaryColor?: string, secondaryColor?: string) => {
   const root = document.documentElement
   const isDark = root.classList.contains('dark')
-  if (primaryColor) {
-    const adjusted = ensureContrastOnDark(primaryColor, isDark)
-    root.style.setProperty('--primary', adjusted)
-    root.style.setProperty('--ring', adjusted)
-    root.style.setProperty('--sidebar-primary', adjusted)
-    root.style.setProperty('--glow-primary', adjusted)
+  const isSand = root.classList.contains('sand')
+  const hsl = parseHsl(primaryColor)
 
-    const { accent, accentForeground } = deriveAccentColors(primaryColor, isDark)
-    root.style.setProperty('--accent-foreground', accentForeground)
-    if (!root.classList.contains('sand')) {
-      root.style.setProperty('--accent', accent)
+  // Sempre limpa os overrides antes de reaplicar — evita valores presos do tema anterior.
+  PRIMARY_VARS.forEach((v) => root.style.removeProperty(v))
+  ACCENT_VARS.forEach((v) => root.style.removeProperty(v))
+
+  if (hsl) {
+    const [h, s, l] = hsl
+    // No dark, cores muito escuras precisam clarear pra ter contraste.
+    const primary = isDark && l < 20 ? `${h} ${s}% 55%` : `${h} ${s}% ${l}%`
+    PRIMARY_VARS.forEach((v) => root.style.setProperty(v, primary))
+
+    // Accent tintado pela marca — sand mantem o tom de areia do stylesheet.
+    if (!isSand) {
+      root.style.setProperty('--accent', isDark ? `${h} ${Math.round(s * 0.1)}% 16%` : `${h} ${Math.round(s * 0.6)}% 94%`)
+      root.style.setProperty('--accent-foreground', isDark ? `${h} ${s}% 58%` : `${h} ${s}% 32%`)
     }
+
+    // Persiste pro script de pre-render (index.html) aplicar antes do React montar.
+    localStorage.setItem(PRIMARY_KEY, primaryColor as string)
+  } else {
+    localStorage.removeItem(PRIMARY_KEY)
   }
+
   if (secondaryColor) {
     root.style.setProperty('--secondary', secondaryColor)
+  } else {
+    root.style.removeProperty('--secondary')
   }
 }
 

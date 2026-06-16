@@ -80,7 +80,7 @@ const LeadDealsPanel = ({ leadId, leadName }: LeadDealsPanelProps) => {
               return (
                 <div
                   key={deal.id}
-                  className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent transition-smooth group"
+                  className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent hover:text-accent-foreground transition-smooth group"
                 >
                   <button
                     onClick={() => navigate('/pipeline')}

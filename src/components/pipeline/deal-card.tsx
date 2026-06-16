@@ -153,7 +153,7 @@ const DealCard = ({ deal, onEditDeal, onTransfer, onMovePipeline, onCreateDeal, 
           <DropdownMenu>
             <DropdownMenuTrigger
               onClick={(e) => e.stopPropagation()}
-              className="rounded p-0.5 text-muted-foreground hover:text-foreground hover:bg-accent transition-smooth"
+              className="rounded p-0.5 text-muted-foreground hover:text-accent-foreground hover:bg-accent transition-smooth"
             >
               <MoreVertical className="h-4 w-4" />
             </DropdownMenuTrigger>
