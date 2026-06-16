@@ -21,6 +21,7 @@ const SuperAdminPage = lazy(() => import('@/pages/super-admin'))
 const GestaoPage = lazy(() => import('@/pages/gestao'))
 const TarefasPage = lazy(() => import('@/pages/tarefas'))
 const DealsPage = lazy(() => import('@/pages/deals'))
+const ContatosPage = lazy(() => import('@/pages/contatos'))
 const MinhaContaPage = lazy(() => import('@/pages/minha-conta'))
 const AceitarConvitePage = lazy(() => import('@/pages/aceitar-convite'))
 const AcessoNegadoPage = lazy(() => import('@/pages/acesso-negado'))
@@ -81,6 +82,7 @@ const App = () => {
                 <Route path="/inbox" element={<InboxPage />} />
                 <Route path="/tarefas" element={<TarefasPage />} />
                 <Route path="/deals" element={<DealsPage />} />
+                <Route path="/contatos" element={<ContatosPage />} />
                 <Route path="/gestao" element={<ProtectedRoute requireRole={['manager', 'admin', 'super_admin']}><GestaoPage /></ProtectedRoute>} />
                 <Route path="/sellers" element={<Navigate to="/gestao?tab=vendedores" replace />} />
                 <Route path="/settings" element={<Navigate to="/minha-conta" replace />} />
