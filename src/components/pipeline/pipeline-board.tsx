@@ -29,6 +29,7 @@ import { usePipelineStages } from '@/hooks/use-pipeline-stages'
 import { useDealsForKanban, useMoveDealStage, useUpdateDealValueAndMove } from '@/hooks/use-deals'
 import { usePipelineStore } from '@/stores/pipeline.store'
 import { triggerCelebration } from '@/lib/celebration'
+import { isClosedInCurrentMonth } from '@/lib/current-month'
 import type { DealWithLead } from '@/types/database'
 import { getLeadById } from '@/services/leads.service'
 import { useAuthStore } from '@/stores/auth.store'
@@ -92,7 +93,12 @@ const PipelineBoard = () => {
 
   const filteredDeals = useMemo(() => {
     if (!deals) return []
-    let result = deals
+    // Fechados (won/lost) so aparecem no board se closed_at for do mes corrente;
+    // os de meses anteriores recolhem para o historico (seguem em /deals e no
+    // contato). Abertos/pending nao sao afetados.
+    let result = deals.filter((d) =>
+      d.status === 'won' || d.status === 'lost' ? isClosedInCurrentMonth(d.closed_at) : true
+    )
     if (filters.search) {
       const q = filters.search.toLowerCase()
       result = result.filter(
