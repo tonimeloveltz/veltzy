@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { cn } from '@/lib/utils'
+import { leadDisplayName } from '@/lib/phone'
 import { LeadSourceBadge } from '@/components/pipeline/lead-source-badge'
 import { DealValueDialog } from '@/components/pipeline/deal-value-dialog'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -87,7 +88,9 @@ const DealCard = ({ deal, onEditDeal, onTransfer, onMovePipeline, onCreateDeal, 
     transition,
   }
 
-  const leadName = lead?.name || lead?.phone || 'Contato'
+  // Card por negocio: nome do contato resolvido do join deals.lead_id -> leads,
+  // com helper LID (numero longo da Meta -> "Contato WhatsApp"). lead null e tratado.
+  const leadName = lead ? leadDisplayName(lead.name, lead.phone ?? '') : 'Contato'
   const avatarSrc = lead?.avatar_url || undefined
 
   const assigneeName = deal.profiles?.name
@@ -163,7 +166,7 @@ const DealCard = ({ deal, onEditDeal, onTransfer, onMovePipeline, onCreateDeal, 
                 Editar contato
               </DropdownMenuItem>
               {onCreateDeal && (
-                <DropdownMenuItem onClick={() => onCreateDeal(deal.lead_id, lead?.name || lead?.phone || 'Contato')}>
+                <DropdownMenuItem onClick={() => onCreateDeal(deal.lead_id, leadName)}>
                   <Plus className="h-4 w-4" />
                   Criar negócio
                 </DropdownMenuItem>
