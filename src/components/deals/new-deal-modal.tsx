@@ -50,9 +50,12 @@ interface NewDealModalProps {
   defaultPipelineId?: string
   /** Pre-seleciona a etapa ao abrir (ex: coluna do board). Editavel. */
   defaultStageId?: string
+  /** Trava o contato (inbox/card): contato ja conhecido, esconde o seletor. */
+  lockedLeadId?: string
+  lockedLeadName?: string | null
 }
 
-const NewDealModal = ({ open, onClose, defaultPipelineId, defaultStageId }: NewDealModalProps) => {
+const NewDealModal = ({ open, onClose, defaultPipelineId, defaultStageId, lockedLeadId, lockedLeadName }: NewDealModalProps) => {
   const createDeal = useCreateDeal()
   const { data: contacts } = useContacts()
   const { data: pipelines } = useAccessiblePipelines()
@@ -82,14 +85,17 @@ const NewDealModal = ({ open, onClose, defaultPipelineId, defaultStageId }: NewD
     if (open) {
       const resolvedPipelineId = defaultPipelineId
         ?? pipelines?.find((p) => p.is_default)?.id ?? pipelines?.[0]?.id ?? ''
-      setSelectedContact(null)
+      setSelectedContact(lockedLeadId ? { id: lockedLeadId, name: lockedLeadName ?? null, phone: '' } : null)
       setContactSearch('')
       reset({
-        lead_id: '', name: '', pipeline_id: resolvedPipelineId, stage_id: defaultStageId ?? '',
+        lead_id: lockedLeadId ?? '',
+        name: lockedLeadId && lockedLeadName ? `Negocio - ${lockedLeadName}` : '',
+        pipeline_id: resolvedPipelineId,
+        stage_id: defaultStageId ?? '',
         value: 0, assigned_to: NO_OWNER, closed_date: todayStr,
       })
     }
-  }, [open, pipelines, reset, todayStr, defaultPipelineId, defaultStageId])
+  }, [open, pipelines, reset, todayStr, defaultPipelineId, defaultStageId, lockedLeadId, lockedLeadName])
 
   // Quando pipeline muda, seleciona a primeira etapa.
   useEffect(() => {
@@ -169,6 +175,11 @@ const NewDealModal = ({ open, onClose, defaultPipelineId, defaultStageId }: NewD
           {/* Contato */}
           <div className="space-y-2">
             <Label>Contato *</Label>
+            {lockedLeadId ? (
+              <div className="flex h-10 items-center rounded-md border border-input bg-muted/30 px-3 text-sm">
+                <span className="truncate">{leadDisplayName(lockedLeadName ?? null, '') || 'Contato'}</span>
+              </div>
+            ) : (
             <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
               <PopoverTrigger asChild>
                 <Button type="button" variant="outline" role="combobox" className="w-full justify-between font-normal">
@@ -219,6 +230,7 @@ const NewDealModal = ({ open, onClose, defaultPipelineId, defaultStageId }: NewD
                 </div>
               </PopoverContent>
             </Popover>
+            )}
             {errors.lead_id && <p className="text-xs text-destructive">{errors.lead_id.message}</p>}
           </div>
 

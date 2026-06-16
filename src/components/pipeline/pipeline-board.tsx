@@ -17,7 +17,6 @@ import { Button } from '@/components/ui/button'
 import { StageColumn } from '@/components/pipeline/stage-column'
 import { DealCard } from '@/components/pipeline/deal-card'
 import { NewDealModal } from '@/components/deals/new-deal-modal'
-import { CreateDealModal } from '@/components/deals/create-deal-modal'
 import { EditLeadModal } from '@/components/pipeline/edit-lead-modal'
 import { PipelineHeader } from '@/components/pipeline/pipeline-header'
 import { PipelineSelector } from '@/components/pipeline/pipeline-selector'
@@ -381,11 +380,12 @@ const PipelineBoard = () => {
       />
 
       {createDealForLead && (
-        <CreateDealModal
+        <NewDealModal
           open={!!createDealForLead}
           onClose={() => setCreateDealForLead(null)}
-          leadId={createDealForLead.leadId}
-          leadName={createDealForLead.leadName}
+          lockedLeadId={createDealForLead.leadId}
+          lockedLeadName={createDealForLead.leadName}
+          defaultPipelineId={activePipelineId ?? undefined}
         />
       )}
 
