@@ -17,7 +17,7 @@ import { useCreateContact } from '@/hooks/use-contacts'
 import { usePipelines, useDefaultPipeline } from '@/hooks/use-pipelines'
 import { useLeadSources } from '@/hooks/use-lead-sources'
 import { useTeamMembers } from '@/hooks/use-team'
-import type { CreateLeadInput } from '@/types/database'
+import type { CreateLeadInput, Lead } from '@/types/database'
 
 const NO_OWNER = 'none'
 
@@ -37,9 +37,11 @@ type FormValues = z.infer<typeof schema>
 interface NewContactModalProps {
   open: boolean
   onClose: () => void
+  /** Disparado com o contato recem-criado (ex: auto-selecionar no Novo Negocio). */
+  onCreated?: (lead: Lead) => void
 }
 
-const NewContactModal = ({ open, onClose }: NewContactModalProps) => {
+const NewContactModal = ({ open, onClose, onCreated }: NewContactModalProps) => {
   const createContact = useCreateContact()
   const { data: pipelines } = usePipelines()
   const { data: defaultPipeline } = useDefaultPipeline()
@@ -86,7 +88,8 @@ const NewContactModal = ({ open, onClose }: NewContactModalProps) => {
       // (coluna nullable). Contato puro nasce sem stage/negocio.
       stage_id: '',
     }
-    await createContact.mutateAsync(input)
+    const lead = await createContact.mutateAsync(input)
+    onCreated?.(lead)
     reset()
     onClose()
   }
