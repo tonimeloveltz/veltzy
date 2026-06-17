@@ -12,7 +12,7 @@ import { usePipelineStages } from '@/hooks/use-pipeline-stages'
 import { useAccessiblePipelines } from '@/hooks/use-pipeline-access'
 import { useRoles } from '@/hooks/use-roles'
 import { PipelineFilter } from '@/components/shared/pipeline-filter'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { IdentityCell } from '@/components/shared/identity-cell'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Switch } from '@/components/ui/switch'
@@ -47,12 +47,14 @@ const tempConfig: Record<LeadTemperature, { label: string; dotColor: string }> =
   fire: { label: 'Pegando Fogo', dotColor: 'bg-red-500' },
 }
 
-const statusConfig: Record<DealStatus, { label: string; color: string }> = {
-  open: { label: 'Aberto', color: 'text-yellow-500' },
-  won: { label: 'Fechado', color: 'text-emerald-500' },
-  lost: { label: 'Perdido', color: 'text-red-500' },
-  archived: { label: 'Arquivado', color: 'text-muted-foreground' },
-  pending_assignment: { label: 'Aberto', color: 'text-yellow-500' },
+// Badge de status com tokens suaves ja usados na pagina (Aberto=amarelo,
+// Ganho=emerald/success, Perdido=red/danger, Arquivado=muted).
+const statusBadge: Record<DealStatus, { label: string; className: string }> = {
+  open: { label: 'Aberto', className: 'bg-yellow-500/15 text-yellow-500' },
+  pending_assignment: { label: 'Aberto', className: 'bg-yellow-500/15 text-yellow-500' },
+  won: { label: 'Ganho', className: 'bg-emerald-500/15 text-emerald-500' },
+  lost: { label: 'Perdido', className: 'bg-red-500/15 text-red-500' },
+  archived: { label: 'Arquivado', className: 'bg-muted text-muted-foreground' },
 }
 
 // Cor do valor monetario por status: Fechado verde, Perdido vermelho (mesmo
@@ -65,7 +67,7 @@ const dealValueColor: Record<DealStatus, string> = {
   pending_assignment: 'text-foreground',
 }
 
-const thClass = 'pb-3 text-xs font-medium text-muted-foreground uppercase tracking-wider'
+const thClass = 'pb-3 text-xs font-medium text-muted-foreground'
 
 const DealsPage = () => {
   const navigate = useNavigate()
@@ -350,34 +352,35 @@ const DealsPage = () => {
                       onCheckedChange={toggleSelectAll}
                     />
                   </th>
-                  <th className={cn(thClass, 'text-left w-[14%]')}>Contato</th>
-                  <th className={cn(thClass, 'text-left w-[10%]')}>Empresa</th>
+                  <th className={cn(thClass, 'text-left w-[26%]')}>Negocio</th>
+                  <th className={cn(thClass, 'text-left w-[10%]')}>Valor</th>
+                  <th className={cn(thClass, 'text-left w-[15%]')}>Pipeline · etapa</th>
+                  <th className={cn(thClass, 'text-left w-[9%]')}>Status</th>
+                  <th className={cn(thClass, 'text-left w-[11%]')}>Temperatura</th>
+                  <th className={cn(thClass, 'text-left w-[12%]')}>Responsavel</th>
+                  <th className={cn(thClass, 'text-left w-[10%]')}>Data</th>
                   <th className={cn(thClass, 'text-left w-[4%]')}>Chat</th>
-                  <th className={cn(thClass, 'text-left w-[11%]')}>Negocio</th>
-                  <th className={cn(thClass, 'text-left w-[8%]')}>Valor</th>
-                  <th className={cn(thClass, 'text-left w-[8%]')}>Pipeline</th>
-                  <th className={cn(thClass, 'text-left w-[8%]')}>Etapa</th>
-                  <th className={cn(thClass, 'text-left w-[7%]')}>Status</th>
-                  <th className={cn(thClass, 'text-left w-[7%]')}>Temperatura</th>
-                  <th className={cn(thClass, 'text-left w-[8%]')}>Responsavel</th>
-                  <th className={cn(thClass, 'text-left w-[8%]')}>Criado em</th>
-                  <th className={cn(thClass, 'text-left w-[8%]')}>Fechado em</th>
                 </tr>
               </thead>
               <tbody>
                 {deals.map((deal) => {
                   const lead = deal.leads
                   const stage = deal.stage_id ? stageMap.get(deal.stage_id) : null
+                  const pipeline = deal.pipeline_id ? pipelineMap.get(deal.pipeline_id) : null
                   const temp = lead ? tempConfig[lead.temperature] : null
-                  const initials = lead?.name
-                    ?.split(' ')
-                    .map((n) => n[0])
-                    .join('')
-                    .slice(0, 2)
-                    .toUpperCase() ?? '?'
                   const assignedName = (deal.profiles as { name?: string } | null)?.name
                   const isSelected = selectedIds.has(deal.id)
-                  const status = statusConfig[deal.status]
+                  const status = statusBadge[deal.status]
+
+                  // Coluna de identidade: nome do negocio no titulo; contato (+ empresa)
+                  // no subtitulo. Sem nome de negocio, o contato vira titulo.
+                  const contactName = leadDisplayName(lead?.name, lead?.phone ?? '')
+                  const company = lead?.company_name?.trim()
+                  const dealName = deal.name?.trim()
+                  const identityTitle = dealName || contactName
+                  const identitySubtitle = dealName
+                    ? (company ? `${contactName} · ${company}` : contactName)
+                    : (company || null)
 
                   return (
                     <tr
@@ -396,43 +399,13 @@ const DealsPage = () => {
                         />
                       </td>
 
-                      {/* Contato */}
+                      {/* Negocio (identidade rica) */}
                       <td className="py-3 text-left">
-                        <div className="flex items-center gap-2.5">
-                          <Avatar className="h-7 w-7">
-                            {lead?.avatar_url ? (
-                              <img src={lead.avatar_url} alt={lead?.name ?? ''} className="h-full w-full rounded-full object-cover" />
-                            ) : (
-                              <AvatarFallback className="text-[9px] bg-primary/10 text-primary">{initials}</AvatarFallback>
-                            )}
-                          </Avatar>
-                          <div className="min-w-0">
-                            <p className="font-medium truncate">{leadDisplayName(lead?.name, lead?.phone ?? '')}</p>
-                            <p className="text-[11px] text-muted-foreground truncate">{lead?.phone}</p>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Empresa */}
-                      <td className="py-3 text-left text-xs text-muted-foreground truncate">
-                        {lead?.company_name || <span className="text-muted-foreground/40">-</span>}
-                      </td>
-
-                      {/* Chat */}
-                      <td className="py-3 text-left">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); navigate(`/inbox?lead=${deal.lead_id}`) }}
-                          className="inline-flex items-center text-muted-foreground hover:text-primary transition-smooth cursor-pointer"
-                        >
-                          <MessageSquare className="h-4 w-4" />
-                        </button>
-                      </td>
-
-                      {/* Negocio */}
-                      <td className="py-3 text-left">
-                        <p className="text-xs font-medium truncate">
-                          {deal.name ? deal.name : <span className="text-muted-foreground">-</span>}
-                        </p>
+                        <IdentityCell
+                          title={identityTitle}
+                          subtitle={identitySubtitle}
+                          avatarUrl={lead?.avatar_url}
+                        />
                       </td>
 
                       {/* Valor */}
@@ -440,43 +413,29 @@ const DealsPage = () => {
                         {deal.value ? fmt(deal.value) : '-'}
                       </td>
 
-                      {/* Pipeline */}
-                      {(() => {
-                        const pipeline = deal.pipeline_id ? pipelineMap.get(deal.pipeline_id) : null
-                        return (
-                          <td className="py-3 text-left">
-                            {pipeline ? (
-                              <span className="inline-flex items-center gap-1.5 text-xs">
-                                <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: pipeline.color }} />
-                                {pipeline.name}
-                              </span>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">-</span>
-                            )}
-                          </td>
-                        )
-                      })()}
-
-                      {/* Etapa */}
+                      {/* Pipeline · etapa */}
                       <td className="py-3 text-left">
-                        {stage && (
-                          deal.status === 'won' ? (
-                            <span className="inline-flex items-center gap-1.5 text-xs rounded-full bg-emerald-500/15 text-emerald-500 px-2 py-0.5 font-medium">
-                              <span className="h-2 w-2 rounded-full shrink-0 bg-emerald-500" />
-                              {stage.name}
+                        <div className="flex flex-col gap-0.5 min-w-0">
+                          {pipeline ? (
+                            <span className="inline-flex items-center gap-1.5 text-xs min-w-0">
+                              <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: pipeline.color }} />
+                              <span className="truncate">{pipeline.name}</span>
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1.5 text-xs">
-                              <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: stage.color }} />
-                              {stage.name}
+                            <span className="text-xs text-muted-foreground">-</span>
+                          )}
+                          {stage && (
+                            <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground min-w-0">
+                              <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: stage.color }} />
+                              <span className="truncate">{stage.name}</span>
                             </span>
-                          )
-                        )}
+                          )}
+                        </div>
                       </td>
 
                       {/* Status */}
                       <td className="py-3 text-left">
-                        <span className={cn('text-xs font-medium', status.color)}>
+                        <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', status.className)}>
                           {status.label}
                         </span>
                       </td>
@@ -496,23 +455,28 @@ const DealsPage = () => {
                         {assignedName ?? <span className="text-muted-foreground/40">Sem responsavel</span>}
                       </td>
 
-                      {/* Criado em */}
-                      <td className="py-3 text-left text-xs text-muted-foreground">
-                        {new Date(deal.created_at).toLocaleDateString('pt-BR')}
+                      {/* Data (criado, ou fechado quando aplicavel) */}
+                      <td className="py-3 text-left text-xs text-muted-foreground whitespace-nowrap">
+                        {(deal.status === 'won' || deal.status === 'lost') && deal.closed_at
+                          ? `fech. ${new Date(deal.closed_at).toLocaleDateString('pt-BR')}`
+                          : new Date(deal.created_at).toLocaleDateString('pt-BR')}
                       </td>
 
-                      {/* Fechado em */}
-                      <td className="py-3 text-left text-xs text-muted-foreground">
-                        {(deal.status === 'won' || deal.status === 'lost') && deal.closed_at
-                          ? new Date(deal.closed_at).toLocaleDateString('pt-BR')
-                          : <span className="text-muted-foreground/40">-</span>}
+                      {/* Chat */}
+                      <td className="py-3 text-left">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); navigate(`/inbox?lead=${deal.lead_id}`) }}
+                          className="inline-flex items-center text-muted-foreground hover:text-primary transition-smooth cursor-pointer"
+                        >
+                          <MessageSquare className="h-4 w-4" />
+                        </button>
                       </td>
                     </tr>
                   )
                 })}
                 {deals.length === 0 && (
                   <tr>
-                    <td colSpan={13} className="py-12 text-center text-sm text-muted-foreground">
+                    <td colSpan={9} className="py-12 text-center text-sm text-muted-foreground">
                       Nenhum negocio encontrado
                     </td>
                   </tr>
