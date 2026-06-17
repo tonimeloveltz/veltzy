@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import { AlertCircle, Search, MessageSquare, Download, Upload, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { leadDisplayName } from '@/lib/phone'
-import { timeAgo } from '@/lib/time'
 import { useContacts } from '@/hooks/use-contacts'
 import { useLeadSources } from '@/hooks/use-lead-sources'
 import { useExportLeads } from '@/hooks/use-export-leads'
@@ -12,7 +11,7 @@ import { leadTemperatureConfig } from '@/lib/lead-config'
 import { LeadSourceBadge } from '@/components/pipeline/lead-source-badge'
 import { ImportLeadsModal } from '@/components/pipeline/import-leads-modal'
 import { NewContactModal } from '@/components/contacts/new-contact-modal'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { IdentityCell } from '@/components/shared/identity-cell'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -35,7 +34,7 @@ const tempConfig: Record<LeadTemperature, { label: string; dotColor: string }> =
   fire: { label: 'Pegando Fogo', dotColor: 'bg-red-500' },
 }
 
-const thClass = 'pb-3 text-xs font-medium text-muted-foreground uppercase tracking-wider'
+const thClass = 'pb-3 text-xs font-medium text-muted-foreground'
 
 const ContatosPage = () => {
   const navigate = useNavigate()
@@ -57,7 +56,11 @@ const ContatosPage = () => {
       if (temperature && c.temperature !== temperature) return false
       if (q) {
         const haystack = `${c.name ?? ''} ${c.phone ?? ''} ${c.email ?? ''} ${c.company_name ?? ''}`.toLowerCase()
-        if (!haystack.includes(q)) return false
+        // Telefone tambem por digitos: "5511" acha "+55 11 9...".
+        const qDigits = q.replace(/\D/g, '')
+        const phoneDigits = (c.phone ?? '').replace(/\D/g, '')
+        const matches = haystack.includes(q) || (qDigits !== '' && phoneDigits.includes(qDigits))
+        if (!matches) return false
       }
       return true
     })
@@ -145,17 +148,12 @@ const ContatosPage = () => {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border/30">
-                  <th className={cn(thClass, 'text-left w-[15%]')}>Contato</th>
-                  <th className={cn(thClass, 'text-left w-[10%]')}>Telefone</th>
-                  <th className={cn(thClass, 'text-left w-[12%]')}>Email</th>
-                  <th className={cn(thClass, 'text-left w-[10%]')}>Empresa</th>
-                  <th className={cn(thClass, 'text-left w-[10%]')}>Canal</th>
-                  <th className={cn(thClass, 'text-left w-[6%]')}>Negocios</th>
-                  <th className={cn(thClass, 'text-left w-[9%]')}>Valor total</th>
-                  <th className={cn(thClass, 'text-left w-[7%]')}>Temperatura</th>
-                  <th className={cn(thClass, 'text-left w-[8%]')}>Responsavel</th>
-                  <th className={cn(thClass, 'text-left w-[8%]')}>Tags</th>
-                  <th className={cn(thClass, 'text-left w-[7%]')}>Ultimo contato</th>
+                  <th className={cn(thClass, 'text-left w-[30%]')}>Contato</th>
+                  <th className={cn(thClass, 'text-left w-[18%]')}>Canal</th>
+                  <th className={cn(thClass, 'text-left w-[10%]')}>Negocios</th>
+                  <th className={cn(thClass, 'text-left w-[13%]')}>Valor total</th>
+                  <th className={cn(thClass, 'text-left w-[12%]')}>Temperatura</th>
+                  <th className={cn(thClass, 'text-left w-[13%]')}>Responsavel</th>
                   <th className={cn(thClass, 'text-left w-[4%]')}>Chat</th>
                 </tr>
               </thead>
@@ -163,14 +161,14 @@ const ContatosPage = () => {
                 {isLoading && (
                   [1, 2, 3, 4, 5].map((i) => (
                     <tr key={i} className="border-b border-border/10">
-                      <td colSpan={12} className="py-3"><Skeleton className="h-7 w-full" /></td>
+                      <td colSpan={7} className="py-3"><Skeleton className="h-7 w-full" /></td>
                     </tr>
                   ))
                 )}
 
                 {isError && !isLoading && (
                   <tr>
-                    <td colSpan={12} className="py-12">
+                    <td colSpan={7} className="py-12">
                       <div className="flex flex-col items-center justify-center gap-3">
                         <AlertCircle className="h-8 w-8 text-destructive" />
                         <p className="text-sm text-muted-foreground">Erro ao carregar contatos</p>
@@ -182,39 +180,19 @@ const ContatosPage = () => {
 
                 {!isLoading && !isError && rows.map((c) => {
                   const temp = tempConfig[c.temperature]
-                  const initials = c.name
-                    ?.split(' ')
-                    .map((n) => n[0])
-                    .join('')
-                    .slice(0, 2)
-                    .toUpperCase() ?? '?'
                   return (
                     <tr
                       key={c.id}
                       className="border-b border-border/10 last:border-0 hover:bg-muted/20 transition-smooth"
                     >
-                      {/* Contato */}
+                      {/* Contato (identidade rica: nome + telefone no subtitulo) */}
                       <td className="py-3 text-left">
-                        <div className="flex items-center gap-2.5">
-                          <Avatar className="h-7 w-7">
-                            {c.avatar_url ? (
-                              <img src={c.avatar_url} alt={c.name ?? ''} className="h-full w-full rounded-full object-cover" />
-                            ) : (
-                              <AvatarFallback className="text-[9px] bg-primary/10 text-primary">{initials}</AvatarFallback>
-                            )}
-                          </Avatar>
-                          <p className="font-medium truncate">{leadDisplayName(c.name, c.phone ?? '')}</p>
-                        </div>
+                        <IdentityCell
+                          title={leadDisplayName(c.name, c.phone ?? '')}
+                          subtitle={c.phone || null}
+                          avatarUrl={c.avatar_url}
+                        />
                       </td>
-
-                      {/* Telefone */}
-                      <td className="py-3 text-left text-xs text-muted-foreground">{c.phone || <span className="text-muted-foreground/40">-</span>}</td>
-
-                      {/* Email */}
-                      <td className="py-3 text-left text-xs text-muted-foreground truncate">{c.email || <span className="text-muted-foreground/40">-</span>}</td>
-
-                      {/* Empresa */}
-                      <td className="py-3 text-left text-xs text-muted-foreground truncate">{c.company_name || <span className="text-muted-foreground/40">-</span>}</td>
 
                       {/* Canal: origem + instancia */}
                       <td className="py-3 text-left">
@@ -255,27 +233,6 @@ const ContatosPage = () => {
                         {c.profiles?.name ?? <span className="text-muted-foreground/40">Sem responsavel</span>}
                       </td>
 
-                      {/* Tags */}
-                      <td className="py-3 text-left">
-                        {c.tags && c.tags.length > 0 ? (
-                          <span className="inline-flex flex-wrap gap-1">
-                            {c.tags.slice(0, 3).map((tag) => (
-                              <span key={tag} className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{tag}</span>
-                            ))}
-                            {c.tags.length > 3 && (
-                              <span className="text-[10px] text-muted-foreground/60">+{c.tags.length - 3}</span>
-                            )}
-                          </span>
-                        ) : (
-                          <span className="text-xs text-muted-foreground/40">-</span>
-                        )}
-                      </td>
-
-                      {/* Ultimo contato */}
-                      <td className="py-3 text-left text-xs text-muted-foreground">
-                        {c.last_customer_message_at ? timeAgo(c.last_customer_message_at) : <span className="text-muted-foreground/40">-</span>}
-                      </td>
-
                       {/* Chat */}
                       <td className="py-3 text-left">
                         <button
@@ -292,7 +249,7 @@ const ContatosPage = () => {
 
                 {!isLoading && !isError && rows.length === 0 && (
                   <tr>
-                    <td colSpan={12} className="py-12 text-center text-sm text-muted-foreground">
+                    <td colSpan={7} className="py-12 text-center text-sm text-muted-foreground">
                       Nenhum contato encontrado
                     </td>
                   </tr>
