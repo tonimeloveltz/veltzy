@@ -3,17 +3,19 @@ import { Lightbulb, AlertCircle, Flame, TrendingUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useLeads } from '@/hooks/use-leads'
-import { usePipelineStages } from '@/hooks/use-pipeline-stages'
+import { useDashboardDeals } from '@/hooks/use-deals'
+import { buildActiveDealInfo } from '@/lib/active-deal-info'
 
 const FollowUpTips = () => {
   const { data: leads, isLoading: leadsLoading } = useLeads()
-  const { data: stages, isLoading: stagesLoading } = usePipelineStages()
+  const { data: deals, isLoading: dealsLoading } = useDashboardDeals()
 
   const tips = useMemo(() => {
-    if (!leads || !stages) return null
+    if (!leads || !deals) return null
 
-    const finalStageIds = new Set(stages.filter((s) => s.is_final).map((s) => s.id))
-    const activeLeads = leads.filter((l) => !finalStageIds.has(l.stage_id))
+    // "Ativo" agora vem de deals (negocio aberto), nao de leads.stage_id.
+    const { activeLeadIds } = buildActiveDealInfo(deals)
+    const activeLeads = leads.filter((l) => activeLeadIds.has(l.id))
 
     const threeDaysAgo = new Date()
     threeDaysAgo.setDate(threeDaysAgo.getDate() - 3)
@@ -29,9 +31,9 @@ const FollowUpTips = () => {
     const qualifiedLeads = activeLeads.filter((l) => l.ai_score > 70)
 
     return { staleLeads, hotLeads, qualifiedLeads }
-  }, [leads, stages])
+  }, [leads, deals])
 
-  const isLoading = leadsLoading || stagesLoading
+  const isLoading = leadsLoading || dealsLoading
 
   if (isLoading) {
     return (

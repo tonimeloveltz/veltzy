@@ -81,9 +81,25 @@ Deno.serve(async (req) => {
 
       try {
         switch (rule.action_type) {
-          case 'change_stage':
-            await supabase.from('leads').update({ stage_id: actionData.stage_id }).eq('id', leadId)
+          case 'change_stage': {
+            // Negocio mora em deals; o espelho (trg_mirror_deal_to_lead) replica
+            // o stage para o lead. Multi-deal: move o deal ABERTO mais recente.
+            // Sem deal aberto: fail-safe (loga e segue, nao quebra a automacao).
+            const { data: targetDeal } = await supabase
+              .from('deals')
+              .select('id')
+              .eq('lead_id', leadId)
+              .eq('status', 'open')
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle()
+            if (targetDeal) {
+              await supabase.from('deals').update({ stage_id: actionData.stage_id }).eq('id', targetDeal.id)
+            } else {
+              console.warn(`[run-automations] change_stage: lead ${leadId} sem deal aberto; acao ignorada`)
+            }
             break
+          }
           case 'assign_lead':
             await supabase.from('leads').update({ assigned_to: actionData.profile_id }).eq('id', leadId)
             break

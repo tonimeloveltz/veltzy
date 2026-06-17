@@ -64,16 +64,30 @@ Deno.serve(async (req) => {
           }
           const { data: stage } = await supabase.from('pipeline_stages').select('id').eq('pipeline_id', defaultPipeline?.id).order('position').limit(1).maybeSingle()
           const { data: source } = await supabase.from('lead_sources').select('id').eq('company_id', connection.company_id).eq('slug', 'instagram').maybeSingle()
+          // Negocio fica em deals; o espelho (trg_mirror_deal_to_lead) replica o
+          // stage para o lead. pipeline_id permanece (leads.pipeline_id NOT NULL).
           const { data: newLead } = await supabase.from('leads').insert({
             company_id: connection.company_id,
             phone: `ig_${senderId}`,
             instagram_id: senderId,
             name: senderName,
             pipeline_id: defaultPipeline?.id,
-            stage_id: stage?.id,
             source_id: source?.id,
           }).select('id').single()
           lead = newLead
+
+          // Cria o deal do contato novo. Sem isso o lead fica orfao (nao aparece
+          // no pipeline/Negocios) — mesmo bug ja corrigido no inbound/manual.
+          if (newLead && defaultPipeline?.id && stage?.id) {
+            await supabase.from('deals').insert({
+              company_id: connection.company_id,
+              lead_id: newLead.id,
+              name: senderName ? `Negocio - ${senderName}` : 'Negocio',
+              pipeline_id: defaultPipeline.id,
+              stage_id: stage.id,
+              status: 'open',
+            })
+          }
         }
 
         if (lead) {

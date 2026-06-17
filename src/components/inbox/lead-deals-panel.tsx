@@ -8,7 +8,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { useDealsByLead, useCloseDeal } from '@/hooks/use-deals'
-import { CreateDealModal } from '@/components/deals/create-deal-modal'
+import { NewDealModal } from '@/components/deals/new-deal-modal'
 import { triggerCelebration } from '@/lib/celebration'
 import type { DealStatus, DealWithLead } from '@/types/database'
 
@@ -138,11 +138,11 @@ const LeadDealsPanel = ({ leadId, leadName }: LeadDealsPanelProps) => {
         )}
       </div>
 
-      <CreateDealModal
+      <NewDealModal
         open={createOpen}
         onClose={() => setCreateOpen(false)}
-        leadId={leadId}
-        leadName={leadName ?? undefined}
+        lockedLeadId={leadId}
+        lockedLeadName={leadName}
       />
 
       <AlertDialog open={!!confirmLost} onOpenChange={(open) => !open && setConfirmLost(null)}>

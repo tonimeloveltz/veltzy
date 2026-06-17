@@ -237,19 +237,18 @@ export interface CreateLeadInput {
 }
 
 export interface UpdateLeadInput {
+  // Campos de negocio (stage_id, status, deal_value) saiu daqui: negocio se
+  // edita via deals; o espelho replica para leads. pipeline_id nunca esteve.
   name?: string | null
   phone?: string
   email?: string | null
   company_name?: string | null
   source_id?: string | null
-  stage_id?: string
-  status?: LeadStatus
   temperature?: LeadTemperature
   ai_score?: number
   assigned_to?: string | null
   is_ai_active?: boolean
   tags?: string[]
-  deal_value?: number | null
   observations?: string | null
   conversation_status?: ConversationStatus
   instagram_handle?: string | null
@@ -297,12 +296,6 @@ export interface CreateDealInput {
   value?: number
   assigned_to?: string | null
   status?: DealStatus
-  closed_at?: string | null
-}
-
-export interface CreateLeadWithDealInput extends CreateLeadInput {
-  // Quando o estagio escolhido e final (ganho/perdido), data de fechamento
-  // a gravar em deals.closed_at. Para venda retroativa. Estagio aberto: ignorado.
   closed_at?: string | null
 }
 
@@ -378,7 +371,7 @@ export interface ReplyTemplate {
   updated_at: string
 }
 
-export interface LeadWithLastMessage extends Lead {
+export interface LeadWithLastMessage extends Omit<Lead, 'stage_id' | 'status' | 'deal_value'> {
   profiles?: Partial<Profile> | null
   lead_sources?: LeadSourceRecord | null
   last_message?: Pick<Message, 'content' | 'sender_type' | 'created_at' | 'message_type'> | null

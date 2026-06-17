@@ -16,8 +16,7 @@ import { AlertCircle, AlertTriangle, Loader2, Inbox } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { StageColumn } from '@/components/pipeline/stage-column'
 import { DealCard } from '@/components/pipeline/deal-card'
-import { CreateLeadModal } from '@/components/pipeline/create-lead-modal'
-import { CreateDealModal } from '@/components/deals/create-deal-modal'
+import { NewDealModal } from '@/components/deals/new-deal-modal'
 import { EditLeadModal } from '@/components/pipeline/edit-lead-modal'
 import { PipelineHeader } from '@/components/pipeline/pipeline-header'
 import { PipelineSelector } from '@/components/pipeline/pipeline-selector'
@@ -30,6 +29,7 @@ import { usePipelineStages } from '@/hooks/use-pipeline-stages'
 import { useDealsForKanban, useMoveDealStage, useUpdateDealValueAndMove } from '@/hooks/use-deals'
 import { usePipelineStore } from '@/stores/pipeline.store'
 import { triggerCelebration } from '@/lib/celebration'
+import { isClosedInCurrentMonth } from '@/lib/current-month'
 import type { DealWithLead } from '@/types/database'
 import { getLeadById } from '@/services/leads.service'
 import { useAuthStore } from '@/stores/auth.store'
@@ -93,7 +93,12 @@ const PipelineBoard = () => {
 
   const filteredDeals = useMemo(() => {
     if (!deals) return []
-    let result = deals
+    // Fechados (won/lost) so aparecem no board se closed_at for do mes corrente;
+    // os de meses anteriores recolhem para o historico (seguem em /deals e no
+    // contato). Abertos/pending nao sao afetados.
+    let result = deals.filter((d) =>
+      d.status === 'won' || d.status === 'lost' ? isClosedInCurrentMonth(d.closed_at) : true
+    )
     if (filters.search) {
       const q = filters.search.toLowerCase()
       result = result.filter(
@@ -331,7 +336,7 @@ const PipelineBoard = () => {
             <Inbox className="h-10 w-10 text-muted-foreground/40" />
             <p className="text-sm text-muted-foreground">Nenhum negocio neste pipeline</p>
             <Button size="sm" className="pointer-events-auto" onClick={() => handleAddLead()}>
-              Criar primeiro lead
+              Criar primeiro negocio
             </Button>
           </div>
         )}
@@ -345,11 +350,11 @@ const PipelineBoard = () => {
         </DragOverlay>
       </DndContext>
 
-      <CreateLeadModal
+      <NewDealModal
         open={createModalOpen}
         onClose={() => setCreateModalOpen(false)}
+        defaultPipelineId={activePipelineId ?? undefined}
         defaultStageId={createModalStageId}
-        pipelineId={activePipelineId ?? undefined}
       />
 
       <EditLeadModal
@@ -381,11 +386,12 @@ const PipelineBoard = () => {
       />
 
       {createDealForLead && (
-        <CreateDealModal
+        <NewDealModal
           open={!!createDealForLead}
           onClose={() => setCreateDealForLead(null)}
-          leadId={createDealForLead.leadId}
-          leadName={createDealForLead.leadName}
+          lockedLeadId={createDealForLead.leadId}
+          lockedLeadName={createDealForLead.leadName}
+          defaultPipelineId={activePipelineId ?? undefined}
         />
       )}
 

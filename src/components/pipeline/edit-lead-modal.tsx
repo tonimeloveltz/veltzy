@@ -106,7 +106,8 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
     const oldStageId = activeDeal?.stage_id ?? lead.stage_id
     const newStageId = values.stage_id
 
-    // Atualizar contato
+    // Atualizar contato (so dados de pessoa). stage_id/deal_value vao para o
+    // deal abaixo; o espelho (trg_mirror_deal_to_lead) replica para o lead.
     await updateLead.mutateAsync({
       leadId: lead.id,
       data: {
@@ -117,8 +118,6 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
         source_id: values.source_id || null,
         observations: values.observations || null,
         tags: values.tags,
-        deal_value: values.deal_value || null,
-        stage_id: values.stage_id,
         instagram_handle: values.instagram_handle || null,
         linkedin_url: values.linkedin_url || null,
       },
