@@ -56,7 +56,11 @@ const ContatosPage = () => {
       if (temperature && c.temperature !== temperature) return false
       if (q) {
         const haystack = `${c.name ?? ''} ${c.phone ?? ''} ${c.email ?? ''} ${c.company_name ?? ''}`.toLowerCase()
-        if (!haystack.includes(q)) return false
+        // Telefone tambem por digitos: "5511" acha "+55 11 9...".
+        const qDigits = q.replace(/\D/g, '')
+        const phoneDigits = (c.phone ?? '').replace(/\D/g, '')
+        const matches = haystack.includes(q) || (qDigits !== '' && phoneDigits.includes(qDigits))
+        if (!matches) return false
       }
       return true
     })

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   AlertCircle, Clock, Calendar, CalendarDays, BarChart3,
-  DollarSign, Users, TrendingUp, Plus, MessageSquare, Download, Upload,
+  DollarSign, Users, TrendingUp, Plus, MessageSquare, Download, Upload, Search,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { leadDisplayName } from '@/lib/phone'
@@ -14,6 +14,7 @@ import { useRoles } from '@/hooks/use-roles'
 import { PipelineFilter } from '@/components/shared/pipeline-filter'
 import { IdentityCell } from '@/components/shared/identity-cell'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Switch } from '@/components/ui/switch'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -28,6 +29,7 @@ import { exportToCsv, exportToPdf, exportToXlsx } from '@/lib/export-leads'
 import type { DealStatus, LeadTemperature } from '@/types/database'
 import { getLeadById } from '@/services/leads.service'
 import { useAuthStore } from '@/stores/auth.store'
+import { useDebouncedValue } from '@/hooks/use-debounced-value'
 import { useQuery } from '@tanstack/react-query'
 
 const periodOptions = [
@@ -82,6 +84,8 @@ const DealsPage = () => {
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showArchived, setShowArchived] = useState(false)
+  const [search, setSearch] = useState('')
+  const debouncedSearch = useDebouncedValue(search, 200)
 
   const { data: pipelines } = useAccessiblePipelines()
   const { data: allDeals, isLoading, isError, refetch } = useDashboardDeals(selectedPipelineId, showArchived)
@@ -101,6 +105,27 @@ const DealsPage = () => {
     if (showArchived) return periodDeals
     return periodDeals.filter((d) => d.status !== 'archived')
   }, [periodDeals, showArchived])
+
+  // Busca textual client-side: filtra SO as linhas exibidas, sobre o conjunto
+  // ja filtrado por pipeline + periodo. Nao afeta os cards de topo (KPIs).
+  // Varre nome do negocio, contato (leadDisplayName), empresa e telefone (digitos).
+  const visibleDeals = useMemo(() => {
+    const q = debouncedSearch.trim().toLowerCase()
+    if (!q) return deals
+    const qDigits = q.replace(/\D/g, '')
+    return deals.filter((d) => {
+      const lead = d.leads
+      const name = (d.name ?? '').toLowerCase()
+      const contact = leadDisplayName(lead?.name, lead?.phone ?? '').toLowerCase()
+      const company = (lead?.company_name ?? '').toLowerCase()
+      if (name.includes(q) || contact.includes(q) || company.includes(q)) return true
+      if (qDigits) {
+        const phoneDigits = (lead?.phone ?? '').replace(/\D/g, '')
+        if (phoneDigits.includes(qDigits)) return true
+      }
+      return false
+    })
+  }, [deals, debouncedSearch])
 
   const openDeals = deals.filter((d) => d.status === 'open' || d.status === 'pending_assignment')
   const closedDeals = deals.filter((d) => d.status === 'won')
@@ -125,18 +150,16 @@ const DealsPage = () => {
     })
   }
 
+  // Selecao "todos" opera sobre as linhas visiveis (respeita a busca ativa).
   const toggleSelectAll = () => {
-    if (selectedIds.size === deals.length) {
-      setSelectedIds(new Set())
-    } else {
-      setSelectedIds(new Set(deals.map((d) => d.id)))
-    }
+    const allVisibleSelected = visibleDeals.length > 0 && visibleDeals.every((d) => selectedIds.has(d.id))
+    setSelectedIds(allVisibleSelected ? new Set() : new Set(visibleDeals.map((d) => d.id)))
   }
 
   const clearSelection = () => setSelectedIds(new Set())
 
-  const allSelected = deals.length > 0 && selectedIds.size === deals.length
-  const someSelected = selectedIds.size > 0 && selectedIds.size < deals.length
+  const allSelected = visibleDeals.length > 0 && visibleDeals.every((d) => selectedIds.has(d.id))
+  const someSelected = !allSelected && visibleDeals.some((d) => selectedIds.has(d.id))
 
   // Convert deals to lead-like objects for BulkActionBar + export compatibility
   const dealsAsLeads = useMemo(() => {
@@ -164,7 +187,16 @@ const DealsPage = () => {
               Gestao completa de negocios e oportunidades
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar negocio..."
+                className="h-9 w-56 pl-9"
+              />
+            </div>
             <PipelineFilter
               value={selectedPipelineId}
               onChange={setSelectedPipelineId}
@@ -363,7 +395,7 @@ const DealsPage = () => {
                 </tr>
               </thead>
               <tbody>
-                {deals.map((deal) => {
+                {visibleDeals.map((deal) => {
                   const lead = deal.leads
                   const stage = deal.stage_id ? stageMap.get(deal.stage_id) : null
                   const pipeline = deal.pipeline_id ? pipelineMap.get(deal.pipeline_id) : null
@@ -474,7 +506,7 @@ const DealsPage = () => {
                     </tr>
                   )
                 })}
-                {deals.length === 0 && (
+                {visibleDeals.length === 0 && (
                   <tr>
                     <td colSpan={9} className="py-12 text-center text-sm text-muted-foreground">
                       Nenhum negocio encontrado
