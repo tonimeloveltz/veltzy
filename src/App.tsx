@@ -26,6 +26,7 @@ const MinhaContaPage = lazy(() => import('@/pages/minha-conta'))
 const AceitarConvitePage = lazy(() => import('@/pages/aceitar-convite'))
 const AcessoNegadoPage = lazy(() => import('@/pages/acesso-negado'))
 const SdrIaPage = lazy(() => import('@/pages/sdr-ia'))
+const PrivacidadePage = lazy(() => import('@/pages/privacidade'))
 const NotFoundPage = lazy(() => import('@/pages/not-found'))
 
 const queryClient = new QueryClient({
@@ -59,6 +60,10 @@ const App = () => {
               <Route path="/auth/cadastro" element={<AuthCadastroPage />} />
               <Route path="/aceitar-convite" element={<AceitarConvitePage />} />
               <Route path="/acesso-negado" element={<AcessoNegadoPage />} />
+
+              {/* Pagina publica institucional (Politica de Privacidade) - FORA do auth guard */}
+              <Route path="/privacidade" element={<PrivacidadePage />} />
+              <Route path="/privacy" element={<PrivacidadePage />} />
 
 
               <Route
