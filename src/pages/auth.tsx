@@ -120,6 +120,12 @@ const AuthPage = () => {
             )}
           </CardContent>
         </Card>
+
+        <p className="mt-6 text-center text-xs text-muted-foreground">
+          <Link to="/privacidade" className="hover:text-foreground hover:underline">
+            Política de Privacidade
+          </Link>
+        </p>
       </div>
     </div>
   )
