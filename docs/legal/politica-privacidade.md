@@ -76,7 +76,11 @@ Tratamos dados pessoais para as finalidades abaixo, sempre amparados por uma bas
 
 ## 6. Plataforma WhatsApp Business e integração com a Meta
 
-O Veltzy utiliza a **Plataforma WhatsApp Business** da **Meta Platforms, Inc.** para viabilizar a comunicação entre as empresas clientes e seus contatos. Atuamos como provedor de tecnologia (Tech Provider) que facilita essa comunicação.
+O Veltzy utiliza a **Plataforma WhatsApp Business** da **Meta Platforms, Inc.** para viabilizar a comunicação entre as empresas clientes e seus contatos. Atuamos como provedor de tecnologia independente (Independent Tech Provider) que facilita essa comunicação.
+
+Cada empresa cliente é proprietária de sua conta do WhatsApp Business Account (WABA) e responsável pelo uso da plataforma perante a Meta.
+
+O Veltzy não atua como Parceiro de Soluções (BSP) da Meta. Os clientes contratam diretamente com a Meta os serviços de mensageria e são responsáveis pelo pagamento das tarifas de mensagens.
 
 Isso significa que:
 - Mensagens, números de telefone e demais dados necessários ao envio e recebimento de mensagens trafegam pela infraestrutura da Meta e ficam sujeitos também às políticas e termos da Meta.
