@@ -13,12 +13,18 @@ const MainLayout = () => {
         <div className="flex-1">
           <Outlet />
         </div>
-        <footer className="px-6 py-3 text-right">
+        <footer className="flex justify-end gap-4 px-6 py-3">
           <Link
             to="/privacidade"
             className="text-xs text-muted-foreground/70 hover:text-muted-foreground"
           >
             Política de Privacidade
+          </Link>
+          <Link
+            to="/termos"
+            className="text-xs text-muted-foreground/70 hover:text-muted-foreground"
+          >
+            Termos de Serviço
           </Link>
         </footer>
       </main>
