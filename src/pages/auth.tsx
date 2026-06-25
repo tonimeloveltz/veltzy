@@ -121,9 +121,13 @@ const AuthPage = () => {
           </CardContent>
         </Card>
 
-        <p className="mt-6 text-center text-xs text-muted-foreground">
+        <p className="mt-6 flex items-center justify-center gap-3 text-center text-xs text-muted-foreground">
           <Link to="/privacidade" className="hover:text-foreground hover:underline">
             Política de Privacidade
+          </Link>
+          <span aria-hidden="true">·</span>
+          <Link to="/termos" className="hover:text-foreground hover:underline">
+            Termos de Serviço
           </Link>
         </p>
       </div>
