@@ -154,6 +154,10 @@ Nos termos do art. 18 da LGPD, você pode, a qualquer momento, solicitar:
 Para exercer seus direitos ou esclarecer dúvidas sobre o tratamento de dados, entre em contato com nosso Encarregado:
 - **E-mail:** privacidade@veltz.group
 
+> Exclusão de dados
+>
+> Para solicitar especificamente a exclusão dos seus dados pessoais do Veltzy, envie um e-mail para privacidade@veltz.group com o assunto "Solicitação de exclusão de dados". Sua solicitação será analisada e respondida em até 15 dias úteis, conforme previsto na LGPD.
+
 Responderemos no prazo e na forma previstos na legislação. Poderemos solicitar informações adicionais para confirmar sua identidade antes de atender à solicitação. Se você for um contato final, sua solicitação poderá ser encaminhada à empresa cliente Controladora dos seus dados.
 
 ---

@@ -123,6 +123,14 @@ const LegalDocumentPage = ({ content, documentTitle, metaDescription, footerExtr
               ol: ({ ...props }) => <ol className="my-4 list-decimal space-y-2 pl-6 text-[15px] leading-7" {...props} />,
               li: ({ ...props }) => <li className="leading-7" {...props} />,
               strong: MarkdownStrong,
+              // Bloco de destaque (callout): usado para chamar atencao a
+              // instrucoes importantes, como a exclusao de dados (exigencia Meta).
+              blockquote: ({ ...props }) => (
+                <blockquote
+                  className="my-6 rounded-xl border border-primary/30 bg-primary/5 px-5 py-4 [&>p:first-child]:mt-0 [&>p:last-child]:mb-0 [&>p:first-child]:text-base [&>p:first-child]:font-semibold [&>p:first-child]:text-foreground"
+                  {...props}
+                />
+              ),
               hr: ({ ...props }) => <hr className="my-8 border-border" {...props} />,
               a: MarkdownLink,
             }}
