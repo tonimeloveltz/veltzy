@@ -4,7 +4,7 @@ import content from '../../docs/legal/politica-privacidade.md?raw'
 const META_DESCRIPTION =
   'Politica de Privacidade do Veltzy: como coletamos, usamos, compartilhamos e protegemos dados pessoais, em conformidade com a LGPD e com as politicas da Plataforma WhatsApp Business da Meta.'
 
-const DPO_EMAIL = 'privacidade@veltzy.com'
+const DPO_EMAIL = 'privacidade@veltz.group'
 
 const PrivacidadePage = () => (
   <LegalDocumentPage

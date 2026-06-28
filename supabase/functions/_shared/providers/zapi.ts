@@ -1,4 +1,4 @@
-import type { WhatsAppProvider, WhatsAppConfig, SendMessagePayload, StatusResult, QrCodeResult, ChatEntry } from '../whatsapp-provider.ts'
+import type { WhatsAppProvider, WhatsAppConfig, SendMessagePayload, SendMessageResult, StatusResult, QrCodeResult, ChatEntry } from '../whatsapp-provider.ts'
 
 export class ZApiProvider implements WhatsAppProvider {
   private buildUrl(config: WhatsAppConfig): string {
@@ -16,7 +16,7 @@ export class ZApiProvider implements WhatsAppProvider {
     }
   }
 
-  async sendMessage(config: WhatsAppConfig, payload: SendMessagePayload): Promise<void> {
+  async sendMessage(config: WhatsAppConfig, payload: SendMessagePayload): Promise<SendMessageResult> {
     const baseUrl = this.buildUrl(config)
     const headers = this.buildHeaders(config)
 
@@ -52,6 +52,7 @@ export class ZApiProvider implements WhatsAppProvider {
     if (!res.ok || data.error) {
       throw new Error(`Z-API error: ${data.error ?? res.status}`)
     }
+    return {}
   }
 
   async getStatus(config: WhatsAppConfig): Promise<StatusResult> {

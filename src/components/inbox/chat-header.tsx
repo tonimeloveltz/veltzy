@@ -23,7 +23,7 @@ const ChatHeader = ({ lead }: ChatHeaderProps) => {
   const { data: pipelines } = useAccessiblePipelines()
   const { data: whatsappStatus } = useWhatsAppStatus()
   const { contactPanelOpen, toggleContactPanel } = useInboxStore()
-  const isEvolution = whatsappStatus?.provider === 'evolution'
+  const showInstanceBadge = whatsappStatus?.provider === 'evolution' || whatsappStatus?.provider === 'cloud_api'
   const avatarSrc = lead.avatar_url || undefined
 
   const pipelineName = pipelines && pipelines.length > 1
@@ -52,7 +52,7 @@ const ChatHeader = ({ lead }: ChatHeaderProps) => {
           {lead.phone}
           {pipelineName && <span className="ml-1.5 text-muted-foreground/60">· {pipelineName}</span>}
         </p>
-        {isEvolution && lead.whatsapp_instance_name && (
+        {showInstanceBadge && lead.whatsapp_instance_name && (
           <p className="flex items-center gap-1 text-[10px] text-muted-foreground/60">
             <Phone className="h-2.5 w-2.5" />
             {lead.whatsapp_instance_name}

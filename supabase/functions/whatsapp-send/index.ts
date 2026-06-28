@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getWhatsAppConfig, getActiveProvider } from '../_shared/whatsapp-config.ts'
 import { createProvider } from '../_shared/whatsapp-factory.ts'
 import { resolveInstanceName } from '../_shared/resolve-instance.ts'
+import { resolveOutboundCloudApiNumber } from '../_shared/cloud-api-resolve.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -83,7 +84,7 @@ Deno.serve(async (req) => {
     // Buscar lead
     const { data: lead } = await supabase
       .from('leads')
-      .select('phone, whatsapp_instance_name, assigned_to, pipeline_id, company_id')
+      .select('phone, whatsapp_instance_name, assigned_to, pipeline_id, company_id, cloud_api_number_id')
       .eq('id', payload.leadId)
       .single()
 
@@ -111,13 +112,16 @@ Deno.serve(async (req) => {
     let deliveryStatus: 'sent' | 'failed' = 'sent'
     let deliveryError: string | null = null
     let source: 'whatsapp' | 'manual' = 'whatsapp'
+    let externalId: string | null = null
 
     if (activeProvider === 'evolution') {
       // Override explicito do payload (admin/manager)
       instanceName = payload.instanceName ?? null
 
       if (!instanceName) {
-        instanceName = await resolveInstanceName(supabase, supabasePublic, {
+        // supabase usa schema 'veltzy'; resolveInstanceName tipa o 1o param com o
+        // SupabaseClient default (schema 'public'). Cast type-only, runtime inalterado.
+        instanceName = await resolveInstanceName(supabase as unknown as typeof supabasePublic, supabasePublic, {
           leadId: payload.leadId,
           companyId,
           userId: profileId ?? undefined,
@@ -146,6 +150,39 @@ Deno.serve(async (req) => {
         })
       } catch (err) {
         console.error('[whatsapp-send] Evolution send failed:', err)
+        deliveryStatus = 'failed'
+        deliveryError = err instanceof Error ? err.message : String(err)
+      }
+    } else if (activeProvider === 'cloud_api') {
+      // Resolve o numero Cloud API: vinculo do lead -> default da empresa.
+      const outbound = await resolveOutboundCloudApiNumber(supabase, {
+        cloud_api_number_id: lead.cloud_api_number_id,
+        company_id: companyId,
+      })
+
+      if (!outbound) {
+        return new Response(JSON.stringify({
+          error: 'Nenhum numero Cloud API configurado para esta empresa (sem vinculo no lead e sem default).',
+        }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      }
+
+      // instance_name = label do numero (auditoria multi-instancia, igual Evolution)
+      instanceName = outbound.instanceLabel
+
+      try {
+        const provider = createProvider('cloud_api')
+        const result = await provider.sendMessage({} as import('../_shared/whatsapp-provider.ts').WhatsAppConfig, {
+          phone: lead.phone,
+          content: payload.content,
+          type: msgType,
+          mediaUrl: payload.fileUrl,
+          fileName: payload.fileName,
+          phoneNumberId: outbound.phoneNumberId,
+          companyId,
+        })
+        externalId = result.externalId ?? null
+      } catch (err) {
+        console.error('[whatsapp-send] Cloud API send failed:', err)
         deliveryStatus = 'failed'
         deliveryError = err instanceof Error ? err.message : String(err)
       }
@@ -190,6 +227,7 @@ Deno.serve(async (req) => {
         instance_name: instanceName,
         delivery_status: deliveryStatus,
         delivery_error: deliveryError,
+        external_id: externalId,
       })
       .select()
       .single()

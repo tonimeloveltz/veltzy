@@ -371,6 +371,9 @@ verify_jwt = false
 [functions.evolution-inbound]
 verify_jwt = false
 
+[functions.cloud-api-inbound]
+verify_jwt = false
+
 [functions.instagram-webhook]
 verify_jwt = false
 

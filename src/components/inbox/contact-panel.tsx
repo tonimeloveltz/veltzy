@@ -76,7 +76,7 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
   const completeTask = useCompleteTask()
   const { isAdmin, isManager } = useRoles()
   const { data: waStatus } = useWhatsAppStatus()
-  const isEvolution = waStatus?.provider === 'evolution'
+  const showInstanceBadge = waStatus?.provider === 'evolution' || waStatus?.provider === 'cloud_api'
   const toggleContactPanel = useInboxStore((s) => s.toggleContactPanel)
 
   const [createTaskOpen, setCreateTaskOpen] = useState(false)
@@ -256,7 +256,7 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold truncate">{displayName}</p>
             <p className="text-xs text-muted-foreground">{lead.phone}</p>
-            {isEvolution && lead.whatsapp_instance_name && (
+            {showInstanceBadge && lead.whatsapp_instance_name && (
               <p className="text-[10px] text-muted-foreground/60 flex items-center gap-0.5 mt-0.5">
                 <Phone className="h-2.5 w-2.5" />
                 {lead.whatsapp_instance_name}
