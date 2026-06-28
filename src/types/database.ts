@@ -4,8 +4,8 @@ export type LeadTemperature = 'cold' | 'warm' | 'hot' | 'fire'
 export type SenderType = 'ai' | 'human' | 'lead' | 'internal'
 export type ConversationStatus = 'unread' | 'read' | 'replied' | 'waiting_client' | 'waiting_internal' | 'resolved'
 export type IntegrationType = 'manual' | 'webhook' | 'whatsapp_api' | 'instagram_api' | 'linkedin_api'
-export type WhatsAppProviderType = 'zapi' | 'evolution'
-export type DeliveryStatus = 'sent' | 'failed' | 'pending'
+export type WhatsAppProviderType = 'zapi' | 'evolution' | 'cloud_api'
+export type DeliveryStatus = 'pending' | 'sent' | 'delivered' | 'read' | 'failed'
 
 export interface CompanyFeatures {
   whatsapp_enabled: boolean
@@ -28,6 +28,20 @@ export interface Company {
   features: CompanyFeatures
   settings: Record<string, unknown>
   is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+/** Mapa phone_number_id -> empresa (veltzy.cloud_api_numbers). Meta Cloud API. */
+export interface CloudApiNumber {
+  id: string
+  company_id: string
+  phone_number_id: string
+  waba_id: string | null
+  display_number: string | null
+  instance_label: string | null
+  access_token: string | null
+  status: 'active' | 'offboarded'
   created_at: string
   updated_at: string
 }

@@ -1,10 +1,12 @@
 import type { WhatsAppProvider, WhatsAppProviderType } from './whatsapp-provider.ts'
 import { ZApiProvider } from './providers/zapi.ts'
 import { EvolutionHubProvider } from './providers/evolution-hub.ts'
+import { CloudApiHubProvider } from './providers/cloud-api.ts'
 
 const providers: Record<string, WhatsAppProvider> = {
   zapi: new ZApiProvider(),
   evolution: new EvolutionHubProvider(),
+  cloud_api: new CloudApiHubProvider(),
 }
 
 export function createProvider(provider: WhatsAppProviderType): WhatsAppProvider {

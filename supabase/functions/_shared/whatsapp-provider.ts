@@ -1,6 +1,6 @@
 // --- Tipos ---
 
-export type WhatsAppProviderType = 'zapi' | 'evolution'
+export type WhatsAppProviderType = 'zapi' | 'evolution' | 'cloud_api'
 
 export interface WhatsAppConfig {
   id: string
@@ -19,6 +19,16 @@ export interface SendMessagePayload {
   type: 'text' | 'image' | 'audio' | 'video' | 'document'
   mediaUrl?: string
   fileName?: string
+  // Metadados de roteamento opcionais, resolvidos por whatsapp-send e lidos pelo
+  // provider correspondente. Ignorados pelos providers que nao os usam.
+  instanceName?: string   // Evolution: instancia do Hub
+  phoneNumberId?: string  // Cloud API: numero Meta resolvido
+  companyId?: string      // Evolution/Cloud API: tenant (m2m com o Hub)
+}
+
+export interface SendMessageResult {
+  /** id do provider para a mensagem enviada (wamid no Cloud API). undefined nos providers que nao retornam. */
+  externalId?: string
 }
 
 export interface StatusResult {
@@ -39,7 +49,7 @@ export interface ChatEntry {
 // --- Interface ---
 
 export interface WhatsAppProvider {
-  sendMessage(config: WhatsAppConfig, payload: SendMessagePayload): Promise<void>
+  sendMessage(config: WhatsAppConfig, payload: SendMessagePayload): Promise<SendMessageResult>
   getStatus(config: WhatsAppConfig): Promise<StatusResult>
   getQrCode(config: WhatsAppConfig): Promise<QrCodeResult>
   disconnect(config: WhatsAppConfig): Promise<void>

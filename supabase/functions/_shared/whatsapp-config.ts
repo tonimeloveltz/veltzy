@@ -2,12 +2,12 @@ import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import type { WhatsAppConfig, WhatsAppProviderType } from './whatsapp-provider.ts'
 
 /**
- * Retorna o provider ativo da empresa: 'zapi' | 'evolution'
+ * Retorna o provider ativo da empresa: 'zapi' | 'evolution' | 'cloud_api'
  */
 export async function getActiveProvider(
   supabase: SupabaseClient,
   companyId: string,
-): Promise<'zapi' | 'evolution'> {
+): Promise<'zapi' | 'evolution' | 'cloud_api'> {
   const { data } = await supabase
     .from('companies')
     .select('active_whatsapp_provider')
@@ -15,7 +15,7 @@ export async function getActiveProvider(
     .single()
 
   const provider = (data?.active_whatsapp_provider as string) ?? 'zapi'
-  if (provider !== 'zapi' && provider !== 'evolution') {
+  if (provider !== 'zapi' && provider !== 'evolution' && provider !== 'cloud_api') {
     console.warn(`[getActiveProvider] Valor inesperado para active_whatsapp_provider: '${provider}' (company_id=${companyId}). Fallback para 'zapi'.`)
     return 'zapi'
   }

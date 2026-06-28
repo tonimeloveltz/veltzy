@@ -2,6 +2,7 @@ import type {
   WhatsAppProvider,
   WhatsAppConfig,
   SendMessagePayload,
+  SendMessageResult,
   StatusResult,
   QrCodeResult,
   ChatEntry,
@@ -42,7 +43,7 @@ export class EvolutionHubProvider implements WhatsAppProvider {
   async sendMessage(
     _config: WhatsAppConfig,
     payload: SendMessagePayload & { instanceName?: string; companyId?: string },
-  ): Promise<void> {
+  ): Promise<SendMessageResult> {
     const instanceName = payload.instanceName
     if (!instanceName) {
       throw new Error('instance_name obrigatorio para Evolution provider')
@@ -58,6 +59,8 @@ export class EvolutionHubProvider implements WhatsAppProvider {
         ? { media: { type: payload.type, url: payload.mediaUrl, caption: payload.content } }
         : { text: payload.content },
     })
+
+    return {}
   }
 
   async getStatus(_config: WhatsAppConfig): Promise<StatusResult> {
