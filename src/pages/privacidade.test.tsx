@@ -46,7 +46,7 @@ describe('PrivacidadePage', () => {
     renderPage()
     const mailto = screen
       .getAllByRole('link')
-      .find((l) => l.getAttribute('href') === 'mailto:privacidade@veltzy.com')
+      .find((l) => l.getAttribute('href') === 'mailto:privacidade@veltz.group')
     expect(mailto).toBeDefined()
   })
 })
