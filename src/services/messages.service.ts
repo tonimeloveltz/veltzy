@@ -126,9 +126,9 @@ export const isWhatsAppConnected = async (companyId: string): Promise<boolean> =
 
   const provider = company?.active_whatsapp_provider ?? 'zapi'
 
-  if (provider === 'evolution') {
-    // Para Evolution, consideramos "conectado" se empresa usa Evolution.
-    // A validacao real acontece no backend ao enviar.
+  if (provider === 'evolution' || provider === 'cloud_api') {
+    // Evolution e Cloud API: empresa "conectada" se usa o provider.
+    // A validacao real (instancia/numero) acontece no backend ao enviar.
     return true
   }
 

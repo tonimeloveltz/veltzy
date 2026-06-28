@@ -26,6 +26,10 @@ export const useWhatsAppStatus = () => {
         return { provider: 'evolution', connected: true }
       }
 
+      if (provider === 'cloud_api') {
+        return { provider: 'cloud_api', connected: true }
+      }
+
       const { data } = await supabase
         .from('oauth_integrations')
         .select('status')
