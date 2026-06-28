@@ -49,4 +49,13 @@ describe('PrivacidadePage', () => {
       .find((l) => l.getAttribute('href') === 'mailto:privacidade@veltz.group')
     expect(mailto).toBeDefined()
   })
+
+  it('exibe o bloco de destaque de exclusao de dados (exigencia Meta)', () => {
+    renderPage()
+    expect(screen.getByText('Exclusão de dados')).toBeInTheDocument()
+    expect(
+      screen.getByText(/com o assunto "Solicitação de exclusão de dados"/i),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/15 dias úteis/i)).toBeInTheDocument()
+  })
 })
