@@ -10,7 +10,7 @@ Ao utilizar o Veltzy, você declara estar ciente desta Política.
 
 ## 1. Quem somos (Controlador)
 
-O Veltzy é uma plataforma de CRM com foco em atendimento e vendas pelo WhatsApp, operada por **RM Desenvolvimento Humano e Educação Corporativa LTDA.**, inscrita no CNPJ sob nº **49.585.305/0001-00**, com sede na **Rua Hermantino Coelho, 793, Mansões Santo Antônio, Campinas - SP, CEP 13087-500** ("Veltzy", "nós").
+O Veltzy é uma plataforma de CRM com foco em atendimento e vendas pelo WhatsApp, operada por **RM Desenvolvimento Humano e Educação Corporativa LTDA.**, inscrita no CNPJ sob nº **49.585.305/0001-00**, com sede na **Rua das Rosas, nº 272, Sala 04 - Pituba - Salvador/BA, CEP 41810-070** ("Veltzy", "nós").
 
 Para questões sobre proteção de dados, entre em contato com nosso Encarregado pelo Tratamento de Dados Pessoais (DPO):
 - **E-mail:** privacidade@veltz.group
@@ -180,4 +180,4 @@ Esta Política é regida pelas leis da República Federativa do Brasil. Fica ele
 
 - **RM Desenvolvimento Humano e Educação Corporativa LTDA.** — CNPJ 49.585.305/0001-00
 - **Encarregado de Dados (DPO):** privacidade@veltz.group
-- **Endereço:** Rua Hermantino Coelho, 793, Mansões Santo Antônio, Campinas - SP, CEP 13087-500
+- **Endereço:** Rua das Rosas, nº 272, Sala 04 - Pituba - Salvador/BA, CEP 41810-070

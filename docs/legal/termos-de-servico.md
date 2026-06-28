@@ -8,7 +8,7 @@ Estes Termos de Serviço ("Termos") regem o acesso e o uso da plataforma Veltzy.
 
 ## 1. Quem somos
 
-O Veltzy é uma plataforma de CRM com foco em atendimento e vendas pelo WhatsApp, operada por **RM Desenvolvimento Humano e Educação Corporativa LTDA.**, inscrita no CNPJ sob nº **49.585.305/0001-00**, com sede na **Rua Hermantino Coelho, 793, Mansões Santo Antônio, Campinas - SP, CEP 13087-500** ("Veltzy", "nós").
+O Veltzy é uma plataforma de CRM com foco em atendimento e vendas pelo WhatsApp, operada por **RM Desenvolvimento Humano e Educação Corporativa LTDA.**, inscrita no CNPJ sob nº **49.585.305/0001-00**, com sede na **Rua das Rosas, nº 272, Sala 04 - Pituba - Salvador/BA, CEP 41810-070** ("Veltzy", "nós").
 
 ---
 
@@ -146,4 +146,4 @@ A eventual tolerância quanto ao descumprimento de qualquer cláusula não const
 - **RM Desenvolvimento Humano e Educação Corporativa LTDA.** — CNPJ 49.585.305/0001-00
 - **Contato:** [suporte@veltzy.com]
 - **Encarregado de Dados (DPO):** privacidade@veltzy.com
-- **Endereço:** Rua Hermantino Coelho, 793, Mansões Santo Antônio, Campinas - SP, CEP 13087-500
+- **Endereço:** Rua das Rosas, nº 272, Sala 04 - Pituba - Salvador/BA, CEP 41810-070
