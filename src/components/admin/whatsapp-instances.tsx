@@ -57,7 +57,7 @@ export const WhatsAppInstances = () => {
                 <MessageCircle className="h-4 w-4 text-muted-foreground" />
               </div>
               <div>
-                <CardTitle className="text-base">WhatsApp (Evolution API)</CardTitle>
+                <CardTitle className="text-base">Conexao via QR Code</CardTitle>
                 <CardDescription>
                   {instanceCount} {instanceCount === 1 ? 'numero conectado' : 'numeros'}
                 </CardDescription>

@@ -68,9 +68,9 @@ const WhatsAppCard = () => {
   const { data: whatsappStatus } = useWhatsAppStatus()
   if (whatsappStatus?.provider === 'evolution') return <WhatsAppInstances />
   if (whatsappStatus?.provider === 'cloud_api') {
-    return <HubManagedCard title="WhatsApp (Cloud API)" description="Numero oficial Meta, gerenciado pelo suporte." icon={MessageCircle} />
+    return <HubManagedCard title="WhatsApp API Oficial" description="Numero oficial, gerenciado pelo suporte." icon={MessageCircle} />
   }
-  return <HubManagedCard title="WhatsApp (Z-API)" description="Envio e recebimento de mensagens via WhatsApp" icon={MessageCircle} />
+  return <HubManagedCard title="WhatsApp" description="Envio e recebimento de mensagens via WhatsApp" icon={MessageCircle} />
 }
 
 // --- Webhook card ---
