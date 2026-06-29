@@ -18,6 +18,12 @@ export interface CompanyFeatures {
   max_leads: number
 }
 
+/** Allowlist de categorias de conexao WhatsApp (Hub-owned, Veltzy le via RLS). */
+export interface WhatsAppCategories {
+  official: boolean
+  qr_code: boolean
+}
+
 export interface Company {
   id: string
   name: string
@@ -27,6 +33,7 @@ export interface Company {
   secondary_color: string
   features: CompanyFeatures
   settings: Record<string, unknown>
+  whatsapp_categories: WhatsAppCategories | null
   is_active: boolean
   created_at: string
   updated_at: string
