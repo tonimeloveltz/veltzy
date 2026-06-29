@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Calendar, MessageCircle, Globe, Mail, Plus, Copy, RefreshCw, Trash2, Loader2 } from 'lucide-react'
+import { Calendar, Globe, Mail, Plus, Copy, RefreshCw, Trash2, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -9,8 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { PaymentIntegrations } from '@/components/admin/payment-integrations'
-import { useWhatsAppStatus } from '@/hooks/use-whatsapp-status'
-import { WhatsAppInstances } from '@/components/admin/whatsapp-instances'
+import { WhatsAppConnectChoice } from '@/components/admin/whatsapp-connect-choice'
 import { useLeadSources } from '@/hooks/use-lead-sources'
 import { usePipelines } from '@/hooks/use-pipelines'
 import {
@@ -64,14 +63,7 @@ const HubManagedCard = ({ title, description, icon: Icon }: { title: string; des
   </Card>
 )
 
-const WhatsAppCard = () => {
-  const { data: whatsappStatus } = useWhatsAppStatus()
-  if (whatsappStatus?.provider === 'evolution') return <WhatsAppInstances />
-  if (whatsappStatus?.provider === 'cloud_api') {
-    return <HubManagedCard title="WhatsApp API Oficial" description="Numero oficial, gerenciado pelo suporte." icon={MessageCircle} />
-  }
-  return <HubManagedCard title="WhatsApp" description="Envio e recebimento de mensagens via WhatsApp" icon={MessageCircle} />
-}
+const WhatsAppCard = () => <WhatsAppConnectChoice />
 
 // --- Webhook card ---
 
