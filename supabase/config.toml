@@ -422,6 +422,10 @@ verify_jwt = true
 [functions.whatsapp-instance-manage]
 verify_jwt = false
 
+# Valida JWT do usuario manualmente (admin/super_admin) e repassa ao Hub via m2m.
+[functions.cloud-api-onboard]
+verify_jwt = false
+
 [edge_runtime]
 enabled = true
 # Supported request policies: `oneshot`, `per_worker`.

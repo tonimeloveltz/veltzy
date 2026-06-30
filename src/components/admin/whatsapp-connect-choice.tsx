@@ -10,6 +10,7 @@ import {
   type WhatsAppCategoryKey,
 } from '@/lib/whatsapp-categories'
 import { WhatsAppInstances } from './whatsapp-instances'
+import { WhatsAppEmbeddedSignup } from './whatsapp-embedded-signup'
 
 const CATEGORY_ICON: Record<WhatsAppCategoryKey, React.ComponentType<{ className?: string }>> = {
   official: BadgeCheck,
@@ -33,6 +34,19 @@ export const WhatsAppConnectChoice = () => {
           Voltar
         </Button>
         <WhatsAppInstances />
+      </div>
+    )
+  }
+
+  // Fluxo oficial selecionado: cadastro incorporado.
+  if (selected === 'official') {
+    return (
+      <div className="space-y-3">
+        <Button variant="ghost" size="sm" className="h-8 gap-1 text-xs" onClick={() => setSelected(null)}>
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Voltar
+        </Button>
+        <WhatsAppEmbeddedSignup />
       </div>
     )
   }
