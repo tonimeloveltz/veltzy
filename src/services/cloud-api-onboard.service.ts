@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase'
 
-const FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/cloud-api-onboard`
+const FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/cloud-api-onboard-proxy`
 
 export interface OnboardPayload {
   code: string
