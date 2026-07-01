@@ -14,7 +14,7 @@ export const WHATSAPP_CATEGORIES: Record<WhatsAppCategoryKey, WhatsAppCategoryMe
     key: 'official',
     label: 'WhatsApp API Oficial',
     description: 'Conexao oficial para o numero da sua empresa.',
-    available: false, // Onda 1: placeholder. Onda 2 liga o Embedded Signup.
+    available: true, // Onda 2: fluxo Embedded Signup ativo. Exposicao controlada pela allowlist do Hub (official ON so para empresas liberadas).
   },
   qr_code: {
     key: 'qr_code',
