@@ -422,6 +422,12 @@ verify_jwt = true
 [functions.whatsapp-instance-manage]
 verify_jwt = false
 
+# Valida JWT do usuario manualmente (admin/super_admin) e repassa ao Hub via m2m.
+# Nome com sufixo -proxy para nao colidir com a edge cloud-api-onboard do Hub
+# (mesmo projeto Supabase Central).
+[functions.cloud-api-onboard-proxy]
+verify_jwt = false
+
 [edge_runtime]
 enabled = true
 # Supported request policies: `oneshot`, `per_worker`.
