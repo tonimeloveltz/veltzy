@@ -9,6 +9,7 @@ import { useSendMessage, useWhatsAppConnected } from '@/hooks/use-messages'
 import { useWhatsAppStatus } from '@/hooks/use-whatsapp-status'
 import { useAuthStore } from '@/stores/auth.store'
 import { supabase } from '@/lib/supabase'
+import { safeStorageName } from '@/lib/storage'
 
 interface ChatInputProps {
   leadId: string
@@ -64,7 +65,10 @@ const ChatInput = ({ leadId, onTyping }: ChatInputProps) => {
 
     setUploading(true)
     try {
-      const path = `${companyId}/${leadId}/${Date.now()}-${file.name}`
+      // Sanitiza SO o segmento do filename (acento/nao-ASCII quebra a key do Storage).
+      // UUIDs de company/lead e timestamp ficam intactos. O nome original com acento
+      // segue em content/fileName para exibicao no chat.
+      const path = `${companyId}/${leadId}/${Date.now()}-${safeStorageName(file.name)}`
       const { error: uploadError } = await supabase.storage
         .from('chat-attachments')
         .upload(path, file)
