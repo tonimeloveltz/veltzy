@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { BadgeCheck, QrCode, ArrowLeft } from 'lucide-react'
+import { BadgeCheck, QrCode, ArrowLeft, CheckCircle2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useWhatsAppCategories } from '@/hooks/use-whatsapp-categories'
+import { useCloudApiConnection } from '@/hooks/use-cloud-api-connection'
 import {
   WHATSAPP_CATEGORIES,
   WHATSAPP_CATEGORY_ORDER,
@@ -19,6 +20,7 @@ const CATEGORY_ICON: Record<WhatsAppCategoryKey, React.ComponentType<{ className
 
 export const WhatsAppConnectChoice = () => {
   const { data: categories, isLoading } = useWhatsAppCategories()
+  const { connected: officialConnected } = useCloudApiConnection()
   const [selected, setSelected] = useState<WhatsAppCategoryKey | null>(null)
 
   if (isLoading || !categories) {
@@ -90,14 +92,26 @@ export const WhatsAppConnectChoice = () => {
               </div>
             </CardHeader>
             <CardContent>
-              <Button
-                size="sm"
-                variant={meta.available ? 'default' : 'outline'}
-                disabled={!meta.available}
-                onClick={() => meta.available && setSelected(key)}
-              >
-                {meta.available ? 'Conectar' : 'Em breve'}
-              </Button>
+              {key === 'official' && officialConnected ? (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-1.5 text-sm font-medium text-green-600">
+                    <CheckCircle2 className="h-4 w-4" />
+                    Conectado
+                  </span>
+                  <Button size="sm" variant="outline" onClick={() => setSelected(key)}>
+                    Gerenciar
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  size="sm"
+                  variant={meta.available ? 'default' : 'outline'}
+                  disabled={!meta.available}
+                  onClick={() => meta.available && setSelected(key)}
+                >
+                  {meta.available ? 'Conectar' : 'Em breve'}
+                </Button>
+              )}
             </CardContent>
           </Card>
         )
