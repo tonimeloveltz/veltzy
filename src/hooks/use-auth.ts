@@ -10,10 +10,17 @@ export const useAuth = () => {
 
   const signIn = async (email: string, password: string) => {
     try {
-      await authService.signIn(email, password)
-      await logAuditEvent('login_success', { method: 'email' })
+      const data = await authService.signIn(email, password)
+      const userId = data.user?.id ?? null
+      // Audit fora do caminho critico: nao bloqueia o login e roda no proximo
+      // tick, longe do pico de refresh/loadUserData, sem chamada de auth extra.
+      setTimeout(() => {
+        void logAuditEvent('login_success', { method: 'email' }, undefined, userId)
+      }, 0)
     } catch (err) {
-      await logAuditEvent('login_failed', { email, method: 'email' })
+      setTimeout(() => {
+        void logAuditEvent('login_failed', { email, method: 'email' }, undefined, null)
+      }, 0)
       throw err
     }
   }

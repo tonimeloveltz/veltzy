@@ -31,6 +31,11 @@ interface AuthState {
   clear: () => void
 }
 
+// Dedupe: userId cuja carga esta em andamento. Impede que dois disparos
+// concorrentes (boot getSession + onAuthStateChange, ou refresh) rodem a
+// enxurrada de queries em paralelo competindo no refresh do token.
+let loadUserDataInFlight: string | null = null
+
 export const useAuthStore = create<AuthState>((set, _get) => ({
   user: null,
   profile: null,
@@ -53,6 +58,17 @@ export const useAuthStore = create<AuthState>((set, _get) => ({
   setIsLoading: (isLoading) => set({ isLoading }),
 
   loadUserData: async (userId: string) => {
+    // Dedupe: se ja existe uma carga em andamento para este mesmo user, nao
+    // redispara (evita queries em paralelo no pico do login). Recargas
+    // sequenciais (ex.: apos aceitar convite) rodam normal pois o flag reseta
+    // no finally.
+    if (loadUserDataInFlight === userId) return
+    loadUserDataInFlight = userId
+
+    // Re-arma o loading: enquanto os dados do usuario (company, roles, etc.)
+    // nao terminam de carregar, o guard de rota segura em spinner em vez de
+    // decidir com estado incompleto (evita tela branca / redirect no login).
+    set({ isLoading: true })
     try {
       // Busca perfil
       const { data: profile } = await supabase
@@ -247,6 +263,8 @@ export const useAuthStore = create<AuthState>((set, _get) => ({
     } catch (error) {
       console.error('[Auth] loadUserData error:', error)
       set({ isLoading: false })
+    } finally {
+      loadUserDataInFlight = null
     }
   },
 
