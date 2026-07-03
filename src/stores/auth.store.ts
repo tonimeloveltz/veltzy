@@ -53,6 +53,10 @@ export const useAuthStore = create<AuthState>((set, _get) => ({
   setIsLoading: (isLoading) => set({ isLoading }),
 
   loadUserData: async (userId: string) => {
+    // Re-arma o loading: enquanto os dados do usuario (company, roles, etc.)
+    // nao terminam de carregar, o guard de rota segura em spinner em vez de
+    // decidir com estado incompleto (evita tela branca / redirect no login).
+    set({ isLoading: true })
     try {
       // Busca perfil
       const { data: profile } = await supabase
