@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button'
 import { useRoles } from '@/hooks/use-roles'
 import { useCloudApiOnboard } from '@/hooks/use-cloud-api-onboard'
+import { useCloudApiConnection } from '@/hooks/use-cloud-api-connection'
 import { launchEmbeddedSignup, EMBEDDED_SIGNUP_CANCELLED } from '@/lib/meta-embedded-signup'
 import { NumberConflictError } from '@/services/cloud-api-onboard.service'
 
@@ -12,8 +13,14 @@ type SignupState = 'idle' | 'loading' | 'exchanging' | 'connected' | 'cancelled'
 export const WhatsAppEmbeddedSignup = () => {
   const { isAdmin } = useRoles()
   const onboard = useCloudApiOnboard()
-  const [state, setState] = useState<SignupState>('idle')
+  const { connected, number, isLoading } = useCloudApiConnection()
+  const [state, setState] = useState<SignupState | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+
+  // Estado efetivo: interacao local (state) tem prioridade; sem interacao,
+  // hidrata do servidor. Enquanto carrega o status, evita mostrar "Conectar".
+  const effectiveState: SignupState =
+    state ?? (isLoading ? 'loading' : connected ? 'connected' : 'idle')
 
   const handleConnect = async () => {
     setErrorMsg(null)
@@ -62,17 +69,24 @@ export const WhatsAppEmbeddedSignup = () => {
           <p className="text-sm text-muted-foreground">
             Apenas administradores podem conectar um numero.
           </p>
-        ) : state === 'connected' ? (
+        ) : state === null && isLoading ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Verificando conexao...
+          </div>
+        ) : effectiveState === 'connected' ? (
           <div className="flex flex-col items-start gap-3">
             <div className="flex items-center gap-2 text-sm font-medium text-green-600">
               <CheckCircle2 className="h-4 w-4" />
-              Numero oficial conectado com sucesso.
+              {number
+                ? `Numero oficial ${number} conectado com sucesso.`
+                : 'Numero oficial conectado com sucesso.'}
             </div>
             <Button size="sm" variant="outline" onClick={() => setState('idle')}>
               Conectar outro numero
             </Button>
           </div>
-        ) : state === 'error' ? (
+        ) : effectiveState === 'error' ? (
           <div className="flex flex-col items-start gap-3">
             <div className="flex items-center gap-2 text-sm font-medium text-destructive">
               <AlertCircle className="h-4 w-4" />
@@ -83,7 +97,7 @@ export const WhatsAppEmbeddedSignup = () => {
               Tentar novamente
             </Button>
           </div>
-        ) : state === 'cancelled' ? (
+        ) : effectiveState === 'cancelled' ? (
           <div className="flex flex-col items-start gap-3">
             <p className="text-sm text-muted-foreground">Conexao cancelada.</p>
             <Button size="sm" variant="outline" onClick={handleConnect}>
