@@ -41,6 +41,9 @@ export const useCloudApiConnection = () => {
   return {
     connected: query.data?.connected ?? false,
     number: query.data?.number ?? null,
-    isLoading: query.isLoading,
+    // Enquanto o companyId nao chegou do auth store, o query fica disabled e
+    // query.isLoading e false (fetchStatus 'idle'). Tratamos essa janela como
+    // loading para o card nao decidir "Conectar" antes de ter a resposta.
+    isLoading: !companyId || query.isLoading,
   }
 }
