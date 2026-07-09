@@ -2,11 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
-} from '@/components/ui/dropdown-menu'
-import { MoreVertical, Kanban, CheckCircle, Phone, PanelRight } from 'lucide-react'
-import { useUpdateLead } from '@/hooks/use-leads'
+import { Kanban, Phone, PanelRight } from 'lucide-react'
 import { useAccessiblePipelines } from '@/hooks/use-pipeline-access'
 import { useWhatsAppStatus } from '@/hooks/use-whatsapp-status'
 import { useInboxStore } from '@/stores/inbox.store'
@@ -19,7 +15,6 @@ interface ChatHeaderProps {
 
 const ChatHeader = ({ lead }: ChatHeaderProps) => {
   const navigate = useNavigate()
-  const updateLead = useUpdateLead()
   const { data: pipelines } = useAccessiblePipelines()
   const { data: whatsappStatus } = useWhatsAppStatus()
   const { contactPanelOpen, toggleContactPanel } = useInboxStore()
@@ -29,10 +24,6 @@ const ChatHeader = ({ lead }: ChatHeaderProps) => {
   const pipelineName = pipelines && pipelines.length > 1
     ? pipelines.find((p) => p.id === lead.pipeline_id)?.name
     : null
-
-  const handleResolve = () => {
-    updateLead.mutate({ leadId: lead.id, data: { conversation_status: 'resolved' } })
-  }
 
   return (
     <div className="flex items-center gap-3 border-b px-4 py-3">
@@ -86,20 +77,6 @@ const ChatHeader = ({ lead }: ChatHeaderProps) => {
         >
           <Kanban className="h-4 w-4" />
         </Button>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8">
-              <MoreVertical className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={handleResolve}>
-              <CheckCircle className="h-4 w-4" />
-              Marcar como resolvido
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
       </div>
     </div>
   )
