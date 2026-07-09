@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Loader2 } from 'lucide-react'
+import { Loader2, AlertCircle } from 'lucide-react'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog'
@@ -48,30 +48,39 @@ const MovePipelineModal = ({ dealId, dealName, currentPipelineId, open, onClose 
         </DialogHeader>
 
         <div className="space-y-2">
-          {availablePipelines.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => setSelectedId(p.id)}
-              className={cn(
-                'w-full flex items-center gap-3 rounded-lg border p-3 text-left text-sm transition-smooth',
-                selectedId === p.id
-                  ? 'border-primary bg-primary/5'
-                  : 'border-border hover:bg-muted'
-              )}
-            >
-              <span className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: p.color }} />
-              <span className="font-medium">{p.name}</span>
-              {p.is_default && (
-                <span className="ml-auto text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                  Padrao
-                </span>
-              )}
-            </button>
-          ))}
+          {availablePipelines.length === 0 ? (
+            <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/50 p-3 text-sm text-muted-foreground">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>Nao ha outro pipeline para mover. Crie outro pipeline primeiro.</span>
+            </div>
+          ) : (
+            availablePipelines.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => setSelectedId(p.id)}
+                className={cn(
+                  'w-full flex items-center gap-3 rounded-lg border p-3 text-left text-sm transition-smooth',
+                  selectedId === p.id
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border hover:bg-muted'
+                )}
+              >
+                <span className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: p.color }} />
+                <span className="font-medium">{p.name}</span>
+                {p.is_default && (
+                  <span className="ml-auto text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                    Padrao
+                  </span>
+                )}
+              </button>
+            ))
+          )}
         </div>
 
         <div className="flex justify-end gap-2 pt-2">
-          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button variant="outline" onClick={onClose}>
+            {availablePipelines.length === 0 ? 'Fechar' : 'Cancelar'}
+          </Button>
           <Button
             onClick={handleConfirm}
             disabled={!selectedId || moveDealToPipeline.isPending}

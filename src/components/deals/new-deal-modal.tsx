@@ -11,6 +11,7 @@ import {
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { CurrencyInput } from '@/components/ui/currency-input'
 import { Label } from '@/components/ui/label'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -285,7 +286,18 @@ const NewDealModal = ({ open, onClose, defaultPipelineId, defaultStageId, locked
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Valor (R$)</Label>
-              <Input type="number" step="0.01" placeholder="0,00" {...register('value', { valueAsNumber: true })} />
+              <Controller
+                control={control}
+                name="value"
+                render={({ field }) => (
+                  <CurrencyInput
+                    placeholder="R$ 0,00"
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                  />
+                )}
+              />
             </div>
             <div className="space-y-2">
               <Label>Responsavel</Label>

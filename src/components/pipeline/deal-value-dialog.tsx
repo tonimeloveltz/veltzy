@@ -4,7 +4,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { CurrencyInput } from '@/components/ui/currency-input'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
 
@@ -16,21 +16,20 @@ interface DealValueDialogProps {
 }
 
 const DealValueDialog = ({ open, onOpenChange, leadName, onConfirm }: DealValueDialogProps) => {
-  const [value, setValue] = useState('')
+  const [value, setValue] = useState<number | undefined>(undefined)
 
   const handleConfirm = () => {
-    const parsed = parseFloat(value.replace(',', '.'))
-    if (!parsed || parsed <= 0) {
+    if (!value || value <= 0) {
       toast.error('Valor invalido', { description: 'Informe um valor maior que zero.' })
       return
     }
-    onConfirm(parsed)
-    setValue('')
+    onConfirm(value)
+    setValue(undefined)
     onOpenChange(false)
   }
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) setValue(''); onOpenChange(v) }}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) setValue(undefined); onOpenChange(v) }}>
       <DialogContent className="sm:max-w-sm" onClick={(e) => e.stopPropagation()}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -43,14 +42,11 @@ const DealValueDialog = ({ open, onOpenChange, leadName, onConfirm }: DealValueD
         </DialogHeader>
         <div className="space-y-2 py-2">
           <Label htmlFor="deal-value">Valor (R$)</Label>
-          <Input
+          <CurrencyInput
             id="deal-value"
-            type="number"
-            step="0.01"
-            min="0.01"
-            placeholder="0,00"
+            placeholder="R$ 0,00"
             value={value}
-            onChange={(e) => setValue(e.target.value)}
+            onChange={setValue}
             onKeyDown={(e) => e.key === 'Enter' && handleConfirm()}
             autoFocus
           />

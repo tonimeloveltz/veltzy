@@ -11,6 +11,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { CurrencyInput } from '@/components/ui/currency-input'
 import { Label } from '@/components/ui/label'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -208,7 +209,18 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label>Valor (R$)</Label>
-                      <Input type="number" step="0.01" {...register('deal_value', { valueAsNumber: true })} />
+                      <Controller
+                        control={control}
+                        name="deal_value"
+                        render={({ field }) => (
+                          <CurrencyInput
+                            placeholder="R$ 0,00"
+                            value={field.value}
+                            onChange={field.onChange}
+                            onBlur={field.onBlur}
+                          />
+                        )}
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label>Fase</Label>
