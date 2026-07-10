@@ -215,7 +215,7 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
                         render={({ field }) => (
                           <CurrencyInput
                             placeholder="R$ 0,00"
-                            value={field.value}
+                            value={field.value ?? 0}
                             onChange={field.onChange}
                             onBlur={field.onBlur}
                           />

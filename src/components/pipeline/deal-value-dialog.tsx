@@ -16,7 +16,7 @@ interface DealValueDialogProps {
 }
 
 const DealValueDialog = ({ open, onOpenChange, leadName, onConfirm }: DealValueDialogProps) => {
-  const [value, setValue] = useState<number | undefined>(undefined)
+  const [value, setValue] = useState<number>(0)
 
   const handleConfirm = () => {
     if (!value || value <= 0) {
@@ -24,12 +24,12 @@ const DealValueDialog = ({ open, onOpenChange, leadName, onConfirm }: DealValueD
       return
     }
     onConfirm(value)
-    setValue(undefined)
+    setValue(0)
     onOpenChange(false)
   }
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) setValue(undefined); onOpenChange(v) }}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) setValue(0); onOpenChange(v) }}>
       <DialogContent className="sm:max-w-sm" onClick={(e) => e.stopPropagation()}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
