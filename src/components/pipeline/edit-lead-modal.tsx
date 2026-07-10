@@ -397,25 +397,6 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
                 </div>
               )}
 
-              <div className="rounded-lg bg-muted/50 p-3 space-y-1">
-                <p className="text-xs text-muted-foreground">
-                  Score IA: <span className="font-medium text-foreground">{lead.ai_score}/100</span>
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Status: <span className="font-medium text-foreground">{lead.conversation_status}</span>
-                </p>
-                {lead.whatsapp_instance_name && (
-                  <p className="text-xs text-muted-foreground">
-                    Instancia WhatsApp: <span className="font-medium text-foreground">{lead.whatsapp_instance_name}</span>
-                  </p>
-                )}
-                <p className="text-xs text-muted-foreground">
-                  Criado em: <span className="font-medium text-foreground">
-                    {new Date(lead.created_at).toLocaleDateString('pt-BR')}
-                  </span>
-                </p>
-              </div>
-
               <div className="space-y-2">
                 <Label>Observações</Label>
                 <textarea
