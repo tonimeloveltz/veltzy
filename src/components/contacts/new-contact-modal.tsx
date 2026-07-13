@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { PhoneInput } from '@/components/ui/phone-input'
 import { Label } from '@/components/ui/label'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -17,6 +18,7 @@ import { useCreateContact } from '@/hooks/use-contacts'
 import { usePipelines, useDefaultPipeline } from '@/hooks/use-pipelines'
 import { useLeadSources } from '@/hooks/use-lead-sources'
 import { useTeamMembers } from '@/hooks/use-team'
+import { isValidPhoneBR, PHONE_ERROR_MSG } from '@/lib/phone'
 import type { CreateLeadInput, Lead } from '@/types/database'
 
 const NO_OWNER = 'none'
@@ -24,7 +26,10 @@ const NO_OWNER = 'none'
 const schema = z.object({
   name: z.string().min(1, 'Nome obrigatorio'),
   // leads.phone e NOT NULL + UNIQUE(company_id, phone): telefone e obrigatorio.
-  phone: z.string().min(8, 'Telefone invalido'),
+  phone: z
+    .string()
+    .min(1, 'Telefone obrigatorio')
+    .refine(isValidPhoneBR, PHONE_ERROR_MSG),
   email: z.string().email('Email invalido').optional().or(z.literal('')),
   company_name: z.string().optional(),
   source_id: z.string().uuid().optional(),
@@ -119,7 +124,18 @@ const NewContactModal = ({ open, onClose, onCreated }: NewContactModalProps) => 
             </div>
             <div className="space-y-2">
               <Label>Telefone *</Label>
-              <Input placeholder="(11) 99999-9999" {...register('phone')} />
+              <Controller
+                control={control}
+                name="phone"
+                render={({ field }) => (
+                  <PhoneInput
+                    value={field.value ?? ''}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    placeholder="(11) 99999-9999"
+                  />
+                )}
+              />
               {errors.phone && <p className="text-xs text-destructive">{errors.phone.message}</p>}
             </div>
           </div>
