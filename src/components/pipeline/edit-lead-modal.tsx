@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { CurrencyInput } from '@/components/ui/currency-input'
+import { PhoneInput } from '@/components/ui/phone-input'
 import { Label } from '@/components/ui/label'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -25,6 +26,7 @@ import { useLeadActivityLogs } from '@/hooks/use-activity-logs'
 import { useTeamMembers } from '@/hooks/use-team'
 import { useRoles } from '@/hooks/use-roles'
 import { triggerCelebration } from '@/lib/celebration'
+import { isValidPhoneBR, PHONE_ERROR_MSG } from '@/lib/phone'
 import { useLeadTasks, useCompleteTask } from '@/hooks/use-tasks'
 import { CreateTaskModal } from '@/components/tarefas/create-task-modal'
 import type { LeadWithDetails, LeadTemperature, ActivityLog, TaskType } from '@/types/database'
@@ -39,7 +41,10 @@ const temperatureBarConfig: Record<LeadTemperature, { width: string; gradient: s
 const schema = z.object({
   // Contato
   name: z.string().optional(),
-  phone: z.string().min(8, 'Telefone invalido'),
+  phone: z
+    .string()
+    .min(1, 'Telefone obrigatorio')
+    .refine(isValidPhoneBR, PHONE_ERROR_MSG),
   email: z.string().email('Email invalido').optional().or(z.literal('')),
   company_name: z.string().optional(),
   source_id: z.string().optional(),
@@ -86,6 +91,8 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
       setTransferOpen(false)
       reset({
         name: lead.name ?? '',
+        // lead.phone vem com 55: PhoneInput/formatPhoneBR removem para exibir mascarado
+        // e o submit e idempotente via normalizePhoneBR na service.
         phone: lead.phone,
         email: lead.email ?? '',
         company_name: lead.company_name ?? '',
@@ -308,7 +315,18 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Telefone *</Label>
-                  <Input {...register('phone')} />
+                  <Controller
+                    control={control}
+                    name="phone"
+                    render={({ field }) => (
+                      <PhoneInput
+                        value={field.value ?? ''}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        placeholder="(11) 99999-9999"
+                      />
+                    )}
+                  />
                   {errors.phone && <p className="text-xs text-destructive">{errors.phone.message}</p>}
                 </div>
                 <div className="space-y-2">
