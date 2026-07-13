@@ -107,7 +107,8 @@ const PipelineBoard = () => {
           d.leads?.phone?.includes(q) ||
           d.leads?.email?.toLowerCase().includes(q) ||
           d.leads?.company_name?.toLowerCase().includes(q) ||
-          d.name?.toLowerCase().includes(q)
+          d.name?.toLowerCase().includes(q) ||
+          d.leads?.tags?.some((t) => t.toLowerCase().includes(q))
       )
     }
     if (filters.temperature) {
