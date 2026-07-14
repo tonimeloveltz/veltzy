@@ -73,6 +73,7 @@ const AutoReplySettings = () => {
   })
 
   const toggleDay = (day: number) => {
+    if (!enabled) return
     const current = selectedDays
     const next = current.includes(day) ? current.filter((d) => d !== day) : [...current, day]
     setValue('schedule.days', next)
@@ -99,10 +100,13 @@ const AutoReplySettings = () => {
           <div className="space-y-2">
             <Label>Mensagem</Label>
             <textarea
-              className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm input-clean"
+              className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm input-clean disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={!enabled}
               {...register('message')}
             />
           </div>
+
+          <Label className="block pt-2 font-semibold">Definir horario comercial</Label>
 
           <div className="space-y-2">
             <Label>Dias da semana</Label>
@@ -111,8 +115,9 @@ const AutoReplySettings = () => {
                 <button
                   key={d.value}
                   type="button"
+                  disabled={!enabled}
                   onClick={() => toggleDay(d.value)}
-                  className={`rounded-md px-2.5 py-1 text-xs font-medium transition-smooth ${
+                  className={`rounded-md px-2.5 py-1 text-xs font-medium transition-smooth disabled:cursor-not-allowed disabled:opacity-50 ${
                     selectedDays.includes(d.value)
                       ? 'bg-primary text-primary-foreground'
                       : 'bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground'
@@ -127,11 +132,11 @@ const AutoReplySettings = () => {
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Inicio</Label>
-              <Input type="time" {...register('schedule.start')} />
+              <Input type="time" disabled={!enabled} {...register('schedule.start')} />
             </div>
             <div className="space-y-2">
               <Label>Fim</Label>
-              <Input type="time" {...register('schedule.end')} />
+              <Input type="time" disabled={!enabled} {...register('schedule.end')} />
             </div>
           </div>
 
