@@ -176,6 +176,8 @@ export const createLead = async (companyId: string, input: CreateLeadInput): Pro
       observations: normalized.observations,
       assigned_to: normalized.assigned_to,
       tags: normalized.tags,
+      instagram_handle: normalized.instagram_handle,
+      linkedin_url: normalized.linkedin_url,
       whatsapp_instance_name: normalized.whatsapp_instance_name,
     })
     .select()

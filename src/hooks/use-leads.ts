@@ -51,6 +51,7 @@ export const useUpdateLead = () => {
       leadsService.updateLead(companyId!, leadId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
+      queryClient.invalidateQueries({ queryKey: ['contacts'] })
       toast.success('Lead atualizado!')
     },
     onError: (err: Error) => {
