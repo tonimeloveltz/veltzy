@@ -41,9 +41,9 @@ const SellerPerformanceTable = ({ days, pipelineId }: SellerPerformanceTableProp
           <thead>
             <tr className="border-b border-border/30">
               <th className="pb-3 text-left font-medium text-muted-foreground text-[11px] uppercase tracking-wider">Vendedor</th>
-              <th className="pb-3 text-right font-medium text-muted-foreground text-[11px] uppercase tracking-wider">Leads</th>
-              <th className="pb-3 text-right font-medium text-muted-foreground text-[11px] uppercase tracking-wider">Deals</th>
-              <th className="pb-3 text-right font-medium text-muted-foreground text-[11px] uppercase tracking-wider">Conversao</th>
+              <th className="pb-3 text-right font-medium text-muted-foreground text-[11px] uppercase tracking-wider">Contatos</th>
+              <th className="pb-3 text-right font-medium text-muted-foreground text-[11px] uppercase tracking-wider">Negócios</th>
+              <th className="pb-3 text-right font-medium text-muted-foreground text-[11px] uppercase tracking-wider">Conversão</th>
               <th className="pb-3 text-right font-medium text-muted-foreground text-[11px] uppercase tracking-wider">Tempo Resp.</th>
               <th className="pb-3 text-right font-medium text-muted-foreground text-[11px] uppercase tracking-wider">Status</th>
             </tr>
