@@ -455,9 +455,10 @@ export const getSellerPerformance = async (companyId: string, days?: number, pip
   }
 
   const responseMap: Record<string, number> = {}
-  ;(responseTimes ?? []).forEach((r: { profile_id: string; avg_response_minutes: number }) => {
-    responseMap[r.profile_id] = r.avg_response_minutes
+  ;(responseTimes ?? []).forEach((r: { user_id: string; avg_response_seconds: number }) => {
+    responseMap[r.user_id] = Math.round(r.avg_response_seconds / 60) // convertendo pra minutos
   })
+
 
   return (profiles ?? []).map((p) => {
     const myDeals = deals?.filter((d) => d.assigned_to === p.id) ?? []
