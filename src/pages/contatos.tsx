@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { AlertCircle, Search, MessageSquare, Download, Upload, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { leadDisplayName } from '@/lib/phone'
-import { useContacts } from '@/hooks/use-contacts'
+import { useContacts, type ContactRow } from '@/hooks/use-contacts'
 import { useLeadSources } from '@/hooks/use-lead-sources'
 import { useExportLeads } from '@/hooks/use-export-leads'
 import { useRoles } from '@/hooks/use-roles'
@@ -48,6 +48,7 @@ const ContatosPage = () => {
   const [temperature, setTemperature] = useState<LeadTemperature | null>(null)
   const [importModalOpen, setImportModalOpen] = useState(false)
   const [newContactOpen, setNewContactOpen] = useState(false)
+  const [editContact, setEditContact] = useState<ContactRow | null>(null)
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -183,7 +184,8 @@ const ContatosPage = () => {
                   return (
                     <tr
                       key={c.id}
-                      className="border-b border-border/10 last:border-0 hover:bg-muted/20 transition-smooth"
+                      onClick={() => setEditContact(c)}
+                      className="border-b border-border/10 last:border-0 hover:bg-muted/20 transition-smooth cursor-pointer"
                     >
                       {/* Contato (identidade rica: nome + telefone no subtitulo) */}
                       <td className="py-3 text-left">
@@ -236,7 +238,7 @@ const ContatosPage = () => {
                       {/* Chat */}
                       <td className="py-3 text-left">
                         <button
-                          onClick={() => navigate(`/inbox?lead=${c.id}`)}
+                          onClick={(e) => { e.stopPropagation(); navigate(`/inbox?lead=${c.id}`) }}
                           className="inline-flex items-center text-muted-foreground hover:text-primary transition-smooth cursor-pointer"
                           title="Abrir conversa"
                         >
@@ -262,6 +264,11 @@ const ContatosPage = () => {
 
       <ImportLeadsModal open={importModalOpen} onClose={() => setImportModalOpen(false)} />
       <NewContactModal open={newContactOpen} onClose={() => setNewContactOpen(false)} />
+      <NewContactModal
+        open={!!editContact}
+        contact={editContact}
+        onClose={() => setEditContact(null)}
+      />
     </div>
   )
 }

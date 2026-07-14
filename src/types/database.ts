@@ -254,6 +254,8 @@ export interface CreateLeadInput {
   observations?: string
   assigned_to?: string
   tags?: string[]
+  instagram_handle?: string
+  linkedin_url?: string
   whatsapp_instance_name?: string | null
 }
 
