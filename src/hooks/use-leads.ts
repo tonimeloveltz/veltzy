@@ -52,6 +52,11 @@ export const useUpdateLead = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
       queryClient.invalidateQueries({ queryKey: ['contacts'] })
+      // Os cards do kanban leem nome/telefone/tags do contato por dentro do
+      // join da query de deals (DEAL_WITH_LEAD_SELECT). Sem isto, o board so
+      // refletia a edicao por carona no invalidate do useUpdateDeal, que nao
+      // roda quando o lead nao tem deal ativo.
+      queryClient.invalidateQueries({ queryKey: ['deals'] })
       toast.success('Lead atualizado!')
     },
     onError: (err: Error) => {

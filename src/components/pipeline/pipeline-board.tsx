@@ -27,13 +27,11 @@ import { DealValueDialog } from '@/components/pipeline/deal-value-dialog'
 import { useAccessiblePipelines } from '@/hooks/use-pipeline-access'
 import { usePipelineStages } from '@/hooks/use-pipeline-stages'
 import { useDealsForKanban, useMoveDealStage, useUpdateDealValueAndMove } from '@/hooks/use-deals'
+import { useLeadDetail } from '@/hooks/use-lead-detail'
 import { usePipelineStore } from '@/stores/pipeline.store'
 import { triggerCelebration } from '@/lib/celebration'
 import { isClosedInCurrentMonth } from '@/lib/current-month'
 import type { DealWithLead } from '@/types/database'
-import { getLeadById } from '@/services/leads.service'
-import { useAuthStore } from '@/stores/auth.store'
-import { useQuery } from '@tanstack/react-query'
 
 function isProposalStage(slug: string) {
   return slug.includes('proposta') || slug.includes('proposal')
@@ -41,7 +39,6 @@ function isProposalStage(slug: string) {
 
 const PipelineBoard = () => {
   const queryClient = useQueryClient()
-  const companyId = useAuthStore((s) => s.company?.id)
   const { data: pipelines, isLoading: pipelinesLoading } = useAccessiblePipelines()
   const { activePipelineId, setActivePipelineId } = usePipelineStore()
 
@@ -74,11 +71,7 @@ const PipelineBoard = () => {
   const [createDealForLead, setCreateDealForLead] = useState<{ leadId: string; leadName: string } | null>(null)
 
   // For EditLeadModal: fetch lead data when editing
-  const { data: selectedLeadData } = useQuery({
-    queryKey: ['lead-for-edit', selectedLeadId, companyId],
-    queryFn: () => getLeadById(companyId!, selectedLeadId!),
-    enabled: !!selectedLeadId && !!companyId,
-  })
+  const { data: selectedLeadData } = useLeadDetail(selectedLeadId)
 
   // For the transfer modal: find the lead_id from the deal
   const transferLeadId = useMemo(() => {
