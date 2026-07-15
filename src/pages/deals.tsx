@@ -27,10 +27,8 @@ import { ImportLeadsModal } from '@/components/pipeline/import-leads-modal'
 import { BulkActionBar } from '@/components/deals/bulk-action-bar'
 import { exportToCsv, exportToPdf, exportToXlsx } from '@/lib/export-leads'
 import type { DealStatus, LeadTemperature } from '@/types/database'
-import { getLeadById } from '@/services/leads.service'
-import { useAuthStore } from '@/stores/auth.store'
+import { useLeadDetail } from '@/hooks/use-lead-detail'
 import { useDebouncedValue } from '@/hooks/use-debounced-value'
-import { useQuery } from '@tanstack/react-query'
 
 const periodOptions = [
   { label: 'Hoje', icon: Clock, days: 1 },
@@ -73,7 +71,6 @@ const thClass = 'pb-3 text-xs font-medium text-muted-foreground'
 
 const DealsPage = () => {
   const navigate = useNavigate()
-  const companyId = useAuthStore((s) => s.company?.id)
   const { roles, isAdmin, isManager } = useRoles()
   const userRole = roles[0] ?? 'seller'
 
@@ -92,11 +89,7 @@ const DealsPage = () => {
   const { data: stages } = usePipelineStages()
 
   // Fetch lead for edit modal
-  const { data: selectedLeadData } = useQuery({
-    queryKey: ['lead-for-edit', selectedLeadId, companyId],
-    queryFn: () => getLeadById(companyId!, selectedLeadId!),
-    enabled: !!selectedLeadId && !!companyId,
-  })
+  const { data: selectedLeadData } = useLeadDetail(selectedLeadId)
 
   const pipelineMap = new Map((pipelines ?? []).map((p) => [p.id, p]))
   const periodDeals = filterByPeriod(allDeals ?? [], selectedDays)

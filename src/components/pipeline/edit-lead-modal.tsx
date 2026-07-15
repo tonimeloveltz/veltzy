@@ -29,7 +29,7 @@ import { triggerCelebration } from '@/lib/celebration'
 import { isValidPhoneBR, PHONE_ERROR_MSG } from '@/lib/phone'
 import { useLeadTasks, useCompleteTask } from '@/hooks/use-tasks'
 import { CreateTaskModal } from '@/components/tarefas/create-task-modal'
-import type { LeadWithDetails, LeadTemperature, ActivityLog, TaskType } from '@/types/database'
+import type { LeadWithDetails, LeadTemperature, ActivityLog, TaskType, UpdateLeadInput } from '@/types/database'
 
 const temperatureBarConfig: Record<LeadTemperature, { width: string; gradient: string; label: string }> = {
   cold:  { width: '25%',  gradient: 'linear-gradient(to right, #bfdbfe, #3b82f6)', label: 'Frio' },
@@ -81,7 +81,7 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
   const [transferOpen, setTransferOpen] = useState(false)
   const [pendingAssignTo, setPendingAssignTo] = useState<string | null>(null)
 
-  const { register, handleSubmit, control, reset, formState: { errors } } = useForm<FormValues>({
+  const { register, handleSubmit, control, reset, formState: { errors, dirtyFields } } = useForm<FormValues>({
     resolver: zodResolver(schema),
   })
 
@@ -116,20 +116,26 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
 
     // Atualizar contato (so dados de pessoa). stage_id/deal_value vao para o
     // deal abaixo; o espelho (trg_mirror_deal_to_lead) replica para o lead.
-    await updateLead.mutateAsync({
-      leadId: lead.id,
-      data: {
-        name: values.name || null,
-        phone: values.phone,
-        email: values.email || null,
-        company_name: values.company_name || null,
-        source_id: values.source_id || null,
-        observations: values.observations || null,
-        tags: values.tags,
-        instagram_handle: values.instagram_handle || null,
-        linkedin_url: values.linkedin_url || null,
-      },
-    })
+    //
+    // A chave so entra no payload quando dirtyFields marca o campo como tocado.
+    // Montar o objeto completo e deixar undefined nos nao-tocados nao serve: a
+    // service repassa o payload direto para o .update(), e um campo que o
+    // usuario nao encostou nao pode viajar para o banco de forma alguma.
+    const contactData: UpdateLeadInput = {}
+    if (dirtyFields.name) contactData.name = values.name || null
+    if (dirtyFields.phone) contactData.phone = values.phone
+    if (dirtyFields.email) contactData.email = values.email || null
+    if (dirtyFields.company_name) contactData.company_name = values.company_name || null
+    if (dirtyFields.source_id) contactData.source_id = values.source_id || null
+    if (dirtyFields.observations) contactData.observations = values.observations || null
+    if (dirtyFields.tags) contactData.tags = values.tags
+    if (dirtyFields.instagram_handle) contactData.instagram_handle = values.instagram_handle || null
+    if (dirtyFields.linkedin_url) contactData.linkedin_url = values.linkedin_url || null
+
+    const hasContactChanges = Object.keys(contactData).length > 0
+    if (hasContactChanges) {
+      await updateLead.mutateAsync({ leadId: lead.id, data: contactData })
+    }
 
     // Atualizar deal se existir
     if (activeDeal) {
@@ -145,6 +151,12 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
       // Transferir responsável (só persiste no Salvar)
       if (pendingAssignTo && pendingAssignTo !== activeDeal.assigned_to) {
         await assignDeal.mutateAsync({ dealId: activeDeal.id, userId: pendingAssignTo })
+      }
+
+      // O toast de sucesso vinha do useUpdateLead, que agora so dispara quando
+      // ha mudanca de contato. Sem isto, editar so o negocio salvaria calado.
+      if (!hasContactChanges) {
+        toast.success('Negócio atualizado!')
       }
     }
 
