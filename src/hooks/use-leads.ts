@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { useAuthStore } from '@/stores/auth.store'
 import { usePipelineStore } from '@/stores/pipeline.store'
 import { useTeamMembers } from '@/hooks/use-team'
+import { invalidateLeadDependentQueries } from '@/lib/query-keys'
 import * as leadsService from '@/services/leads.service'
 import type { UpdateLeadInput } from '@/types/database'
 
@@ -50,13 +51,13 @@ export const useUpdateLead = () => {
     mutationFn: ({ leadId, data }: { leadId: string; data: UpdateLeadInput }) =>
       leadsService.updateLead(companyId!, leadId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['leads'] })
-      queryClient.invalidateQueries({ queryKey: ['contacts'] })
+      // Cobre ['leads'] + ['deals'] + metricas de estado atual do dashboard.
       // Os cards do kanban leem nome/telefone/tags do contato por dentro do
-      // join da query de deals (DEAL_WITH_LEAD_SELECT). Sem isto, o board so
-      // refletia a edicao por carona no invalidate do useUpdateDeal, que nao
-      // roda quando o lead nao tem deal ativo.
-      queryClient.invalidateQueries({ queryKey: ['deals'] })
+      // join da query de deals (DEAL_WITH_LEAD_SELECT). Sem o invalidate de
+      // deals, o board so refletia a edicao por carona no invalidate do
+      // useUpdateDeal, que nao roda quando o lead nao tem deal ativo.
+      invalidateLeadDependentQueries(queryClient)
+      queryClient.invalidateQueries({ queryKey: ['contacts'] })
       toast.success('Lead atualizado!')
     },
     onError: (err: Error) => {
@@ -72,7 +73,7 @@ export const useDeleteLead = () => {
   return useMutation({
     mutationFn: (leadId: string) => leadsService.deleteLead(companyId!, leadId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['leads'] })
+      invalidateLeadDependentQueries(queryClient)
       toast.success('Lead removido!')
     },
     onError: (err: Error) => {
