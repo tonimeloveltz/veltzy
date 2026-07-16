@@ -2,19 +2,7 @@ import { useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth.store'
-
-const DASHBOARD_QUERY_KEYS = [
-  'dashboard-kpis',
-  'leads',
-  'pipeline-overview',
-  'historical-conversion-rates',
-  'monthly-comparison-grid',
-  'monthly-comparison',
-  'leads-by-source',
-  'seller-performance',
-  'dashboard-metrics',
-  'deals',
-]
+import { DASHBOARD_QUERY_KEYS } from '@/lib/query-keys'
 
 export const useDashboardRealtime = () => {
   const queryClient = useQueryClient()
