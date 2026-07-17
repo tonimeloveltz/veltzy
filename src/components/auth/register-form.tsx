@@ -8,15 +8,13 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuth } from '@/hooks/use-auth'
+import { passwordSchema } from '@/lib/password-rules'
+import { PasswordChecklist } from '@/components/auth/password-checklist'
 
 const registerSchema = z.object({
   name: z.string().min(2, 'Minimo 2 caracteres'),
   email: z.string().email('Email invalido'),
-  password: z.string()
-    .min(8, 'Minimo 8 caracteres')
-    .regex(/[A-Z]/, 'Deve conter letra maiuscula')
-    .regex(/[a-z]/, 'Deve conter letra minuscula')
-    .regex(/\d/, 'Deve conter numero'),
+  password: passwordSchema,
   confirmPassword: z.string().min(8, 'Minimo 8 caracteres'),
 }).refine((data) => data.password === data.confirmPassword, {
   message: 'Senhas nao conferem',
@@ -29,9 +27,13 @@ const RegisterForm = () => {
   const { signUp } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
 
-  const { register, handleSubmit, formState: { errors } } = useForm<RegisterValues>({
+  const { register, handleSubmit, watch, formState: { errors } } = useForm<RegisterValues>({
     resolver: zodResolver(registerSchema),
   })
+
+  // watch reavalia a cada tecla, entao o checklist acende em tempo real sem
+  // depender de submit nem blur (o form segue em mode onSubmit para os erros).
+  const senha = watch('password') ?? ''
 
   const onSubmit = async (values: RegisterValues) => {
     setIsLoading(true)
@@ -82,9 +84,9 @@ const RegisterForm = () => {
           autoComplete="new-password"
           {...register('password')}
         />
-        {errors.password && (
-          <p className="text-xs text-destructive">{errors.password.message}</p>
-        )}
+        {/* O checklist substitui a mensagem de erro da senha: cada regra vira
+            um item que acende sozinho. O erro do confirmPassword continua abaixo. */}
+        <PasswordChecklist senha={senha} />
       </div>
 
       <div className="space-y-2">
