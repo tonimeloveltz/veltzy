@@ -12,11 +12,15 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { passwordSchema } from '@/lib/password-rules'
+import { PasswordChecklist } from '@/components/auth/password-checklist'
 import type { Invitation } from '@/types/database'
 
 const registerSchema = z.object({
   full_name: z.string().min(2, 'Mínimo 2 caracteres'),
-  password: z.string().min(8, 'Mínimo 8 caracteres'),
+  // Antes so exigia min(8), aceitando senha fraca. Agora usa a fonte unica:
+  // as 4 regras (maiuscula, minuscula, numero) passam a valer aqui tambem.
+  password: passwordSchema,
   confirm_password: z.string(),
 }).refine((data) => data.password === data.confirm_password, {
   message: 'Senhas não conferem',
@@ -49,9 +53,12 @@ const AceitarConvitePage = () => {
   const [loginPassword, setLoginPassword] = useState('')
   const [loginError, setLoginError] = useState('')
 
-  const { register, handleSubmit, formState: { errors } } = useForm<RegisterValues>({
+  const { register, handleSubmit, watch, formState: { errors } } = useForm<RegisterValues>({
     resolver: zodResolver(registerSchema),
   })
+
+  // watch reavalia a cada tecla: o checklist acende em tempo real.
+  const senha = watch('password') ?? ''
 
   useEffect(() => {
     sessionStorage.setItem('accepting_invite', 'true')
@@ -571,9 +578,8 @@ const AceitarConvitePage = () => {
                 placeholder="Mínimo 8 caracteres"
                 {...register('password')}
               />
-              {errors.password && (
-                <p className="text-xs text-destructive">{errors.password.message}</p>
-              )}
+              {/* Checklist no lugar da mensagem de erro da senha. */}
+              <PasswordChecklist senha={senha} />
             </div>
 
             <div className="space-y-2">
