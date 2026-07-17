@@ -8,6 +8,10 @@ import { toast } from 'sonner'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog'
+import {
+  AlertDialog, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,7 +23,7 @@ import {
 } from '@/components/ui/select'
 import { LeadTagsInput } from '@/components/pipeline/lead-tags-input'
 import { useUpdateLead, useDeleteLead } from '@/hooks/use-leads'
-import { useDealsByLead, useUpdateDeal, useAssignDeal } from '@/hooks/use-deals'
+import { useDealsByLead, useUpdateDeal, useAssignDeal, useDeleteDeal } from '@/hooks/use-deals'
 import { usePipelineStages } from '@/hooks/use-pipeline-stages'
 import { useLeadSources } from '@/hooks/use-lead-sources'
 import { useLeadActivityLogs } from '@/hooks/use-activity-logs'
@@ -71,6 +75,7 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
   const updateLead = useUpdateLead()
   const updateDeal = useUpdateDeal()
   const deleteLead = useDeleteLead()
+  const deleteDeal = useDeleteDeal()
   const assignDeal = useAssignDeal()
   const { data: deals } = useDealsByLead(lead?.id)
   const activeDeal = dealId ? deals?.find((d) => d.id === dealId) : deals?.[0]
@@ -80,6 +85,7 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
   const { isAdmin, isManager } = useRoles()
   const [transferOpen, setTransferOpen] = useState(false)
   const [pendingAssignTo, setPendingAssignTo] = useState<string | null>(null)
+  const [deleteDealOpen, setDeleteDealOpen] = useState(false)
 
   const { register, handleSubmit, control, reset, formState: { errors, dirtyFields } } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -89,6 +95,7 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
     if (lead) {
       setPendingAssignTo(null)
       setTransferOpen(false)
+      setDeleteDealOpen(false)
       reset({
         name: lead.name ?? '',
         // lead.phone vem com 55: PhoneInput/formatPhoneBR removem para exibir mascarado
@@ -178,6 +185,13 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
     onClose()
   }
 
+  const handleDeleteDeal = async () => {
+    if (!activeDeal) return
+    await deleteDeal.mutateAsync(activeDeal.id)
+    setDeleteDealOpen(false)
+    onClose()
+  }
+
   const effectiveAssignTo = pendingAssignTo ?? activeDeal?.assigned_to ?? null
   const currentAssignee = effectiveAssignTo
     ? members?.find((m) => m.id === effectiveAssignTo)
@@ -190,6 +204,7 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
   if (!lead) return null
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
@@ -314,6 +329,28 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
                       </Select>
                     )}
                   </div>
+
+                  {/* Remover negocio: separado por uma linha para nao se confundir
+                      com o "Remover" do contato, que fica no rodape do form. */}
+                  {/* depende da migration do Hub que libera manager no DELETE de deals; ate la, manager recebe recusa silenciosa do RLS */}
+                  {(isAdmin || isManager) && (
+                    <div className="border-t border-border/50 pt-3">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setDeleteDealOpen(true)}
+                        disabled={deleteDeal.isPending}
+                        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      >
+                        <Trash2 className="mr-1 h-4 w-4" />
+                        Remover negócio
+                      </Button>
+                      <p className="mt-1.5 text-[10px] text-muted-foreground">
+                        Remove apenas este negócio. O contato permanece.
+                      </p>
+                    </div>
+                  )}
                 </>
               )}
 
@@ -459,7 +496,8 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
               </div>
 
               <div className="flex items-center justify-between pt-2">
-                <Button
+                {/* depende da migration do Hub que libera manager no DELETE de deals/leads; ate la, manager recebe recusa silenciosa do RLS */}
+                {(isAdmin || isManager) && <Button
                   type="button"
                   variant="destructive"
                   size="sm"
@@ -468,8 +506,10 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
                 >
                   <Trash2 className="mr-1 h-4 w-4" />
                   Remover
-                </Button>
-                <div className="flex gap-2">
+                </Button>}
+                {/* ml-auto ancora o grupo a direita mesmo quando o Remover nao
+                    renderiza e o justify-between fica com um filho so. */}
+                <div className="ml-auto flex gap-2">
                   <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
                   <Button type="submit" disabled={updateLead.isPending || updateDeal.isPending}>
                     {(updateLead.isPending || updateDeal.isPending) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -490,6 +530,45 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
         </Tabs>
       </DialogContent>
     </Dialog>
+
+    <AlertDialog open={deleteDealOpen} onOpenChange={setDeleteDealOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle className="text-destructive">
+            Remover negócio{activeDeal ? `: ${activeDeal.name}` : ''}
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            Isto remove apenas este negócio. O contato e o histórico dele permanecem.
+            Esta ação não pode ser desfeita.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+
+        <AlertDialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => setDeleteDealOpen(false)}
+            disabled={deleteDeal.isPending}
+          >
+            Cancelar
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={handleDeleteDeal}
+            disabled={deleteDeal.isPending}
+          >
+            {deleteDeal.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Removendo...
+              </>
+            ) : (
+              'Remover negócio'
+            )}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   )
 }
 

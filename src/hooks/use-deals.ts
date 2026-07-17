@@ -116,6 +116,24 @@ export const useUpdateDeal = () => {
   })
 }
 
+export const useDeleteDeal = () => {
+  const queryClient = useQueryClient()
+  const companyId = useAuthStore((s) => s.company?.id)
+
+  return useMutation({
+    mutationFn: (dealId: string) => dealsService.deleteDeal(companyId!, dealId),
+    onSuccess: () => {
+      invalidateDealDependentQueries(queryClient)
+      // Contagem de Negocios e LTV do contato caem na pagina Contatos
+      queryClient.invalidateQueries({ queryKey: ['contacts'] })
+      toast.success('Negocio removido!')
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || 'Erro ao remover negocio')
+    },
+  })
+}
+
 export const useMoveDealStage = () => {
   const queryClient = useQueryClient()
   const companyId = useAuthStore((s) => s.company?.id)
