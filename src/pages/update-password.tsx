@@ -10,28 +10,29 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { updatePassword } from '@/services/auth.service'
+import { passwordSchema } from '@/lib/password-rules'
+import { PasswordChecklist } from '@/components/auth/password-checklist'
 
-const passwordSchema = z.object({
-  password: z.string()
-    .min(8, 'Minimo 8 caracteres')
-    .regex(/[A-Z]/, 'Deve conter letra maiuscula')
-    .regex(/[a-z]/, 'Deve conter letra minuscula')
-    .regex(/\d/, 'Deve conter numero'),
+const formSchema = z.object({
+  password: passwordSchema,
   confirmPassword: z.string().min(8, 'Minimo 8 caracteres'),
 }).refine((data) => data.password === data.confirmPassword, {
   message: 'Senhas nao conferem',
   path: ['confirmPassword'],
 })
 
-type PasswordValues = z.infer<typeof passwordSchema>
+type PasswordValues = z.infer<typeof formSchema>
 
 const UpdatePasswordPage = () => {
   const navigate = useNavigate()
   const [isLoading, setIsLoading] = useState(false)
 
-  const { register, handleSubmit, formState: { errors } } = useForm<PasswordValues>({
-    resolver: zodResolver(passwordSchema),
+  const { register, handleSubmit, watch, formState: { errors } } = useForm<PasswordValues>({
+    resolver: zodResolver(formSchema),
   })
+
+  // watch reavalia a cada tecla: o checklist acende em tempo real.
+  const senha = watch('password') ?? ''
 
   const onSubmit = async (values: PasswordValues) => {
     setIsLoading(true)
@@ -65,9 +66,8 @@ const UpdatePasswordPage = () => {
                   placeholder="******"
                   {...register('password')}
                 />
-                {errors.password && (
-                  <p className="text-xs text-destructive">{errors.password.message}</p>
-                )}
+                {/* Checklist no lugar da mensagem de erro da senha. */}
+                <PasswordChecklist senha={senha} />
               </div>
 
               <div className="space-y-2">

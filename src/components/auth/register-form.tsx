@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, type FieldErrors } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
@@ -8,16 +8,16 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuth } from '@/hooks/use-auth'
+import { passwordSchema } from '@/lib/password-rules'
+import { PasswordChecklist } from '@/components/auth/password-checklist'
 
 const registerSchema = z.object({
   name: z.string().min(2, 'Minimo 2 caracteres'),
   email: z.string().email('Email invalido'),
-  password: z.string()
-    .min(8, 'Minimo 8 caracteres')
-    .regex(/[A-Z]/, 'Deve conter letra maiuscula')
-    .regex(/[a-z]/, 'Deve conter letra minuscula')
-    .regex(/\d/, 'Deve conter numero'),
-  confirmPassword: z.string().min(8, 'Minimo 8 caracteres'),
+  password: passwordSchema,
+  // Sem regras de senha aqui: quem valida forca e o passwordSchema acima, e o
+  // feedback visual e o checklist. Este campo so precisa existir para o refine.
+  confirmPassword: z.string().min(1, 'Confirme sua senha'),
 }).refine((data) => data.password === data.confirmPassword, {
   message: 'Senhas nao conferem',
   path: ['confirmPassword'],
@@ -29,9 +29,13 @@ const RegisterForm = () => {
   const { signUp } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
 
-  const { register, handleSubmit, formState: { errors } } = useForm<RegisterValues>({
+  const { register, handleSubmit, watch, formState: { errors } } = useForm<RegisterValues>({
     resolver: zodResolver(registerSchema),
   })
+
+  // watch reavalia a cada tecla, entao o checklist acende em tempo real sem
+  // depender de submit nem blur (o form segue em mode onSubmit para os erros).
+  const senha = watch('password') ?? ''
 
   const onSubmit = async (values: RegisterValues) => {
     setIsLoading(true)
@@ -46,8 +50,27 @@ const RegisterForm = () => {
     }
   }
 
+  /**
+   * O checklist substituiu a mensagem de erro da senha, entao uma senha fraca
+   * fazia o handleSubmit abortar sem nada na tela. Este onInvalid devolve a voz
+   * ao submit: erro de senha vira toast (o detalhe fica no checklist), erro de
+   * confirmacao vira toast proprio.
+   */
+  const onInvalid = (formErrors: FieldErrors<RegisterValues>) => {
+    if (formErrors.password) {
+      toast.error('A senha nao cumpre os requisitos')
+      return
+    }
+    if (formErrors.confirmPassword) {
+      toast.error(formErrors.confirmPassword.message ?? 'Senhas nao conferem')
+      return
+    }
+    const first = formErrors.name ?? formErrors.email
+    if (first?.message) toast.error(first.message)
+  }
+
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+    <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="space-y-4">
       <div className="space-y-2">
         <Label htmlFor="register-name">Nome</Label>
         <Input
@@ -82,9 +105,9 @@ const RegisterForm = () => {
           autoComplete="new-password"
           {...register('password')}
         />
-        {errors.password && (
-          <p className="text-xs text-destructive">{errors.password.message}</p>
-        )}
+        {/* O checklist substitui a mensagem de erro da senha: cada regra vira
+            um item que acende sozinho. O erro do confirmPassword continua abaixo. */}
+        <PasswordChecklist senha={senha} />
       </div>
 
       <div className="space-y-2">
