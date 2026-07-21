@@ -49,6 +49,10 @@ export const useDashboardDeals = (pipelineId?: string | null, showArchived = fal
   return useQuery({
     queryKey: ['deals', 'dashboard', companyId, pipelineId, showArchived, isSeller ? profileId : null, membersReady],
     queryFn: async () => {
+      // Sem filtro de status aqui de proposito: `.eq('status', ...)` e
+      // exclusivo e traria SO arquivados com o toggle ligado. A query busca
+      // todos os status e quem decide mostrar ou esconder arquivado e o
+      // useMemo da tela de Negocios, ponto unico dessa regra.
       const deals = await dealsService.getDealsByCompany(companyId!, {
         pipelineId: pipelineId ?? undefined,
         assignedTo: isSeller ? profileId : undefined,

@@ -112,6 +112,7 @@ export const BulkActionBar = ({ selectedIds, leads, onClear, userRole, mode = 'l
         onClose={() => setArchiveOpen(false)}
         leadIds={selectedArray}
         onSuccess={onClear}
+        mode={mode}
       />
 
       <BulkDeleteDialog
@@ -119,6 +120,7 @@ export const BulkActionBar = ({ selectedIds, leads, onClear, userRole, mode = 'l
         onClose={() => setDeleteOpen(false)}
         leadIds={selectedArray}
         onSuccess={onClear}
+        mode={mode}
       />
     </>
   )

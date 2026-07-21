@@ -3,6 +3,7 @@ import { useAuthStore } from '@/stores/auth.store'
 import { toast } from 'sonner'
 import * as leadsService from '@/services/leads.service'
 import * as dealsService from '@/services/deals.service'
+import { invalidateDealDependentQueries } from '@/lib/query-keys'
 import { exportToCsv, exportToPdf, exportToXlsx } from '@/lib/export-leads'
 import type { LeadWithDetails } from '@/types/database'
 
@@ -68,6 +69,33 @@ export const useBulkArchive = (onSuccess?: () => void) => {
   })
 }
 
+/**
+ * Contraparte de useBulkArchive para a tela de Negocios: escreve em `deals`.
+ * Existe separada (em vez de um parametro dentro do hook de leads) para seguir
+ * o mesmo par useBulkTransfer / useBulkTransferDeals ja adotado no transfer.
+ */
+export const useBulkArchiveDeals = (onSuccess?: () => void) => {
+  const companyId = useAuthStore((s) => s.company?.id)
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ dealIds }: { dealIds: string[] }) => {
+      if (!companyId) throw new Error('Empresa nao encontrada')
+      await dealsService.bulkArchive(companyId, dealIds)
+    },
+    onSuccess: () => {
+      // A tela de Negocios le ['deals','dashboard',...]; o helper cobre esse
+      // prefixo e as metricas que dependem de deals.
+      invalidateDealDependentQueries(queryClient)
+      toast.success('Negócios arquivados com sucesso')
+      onSuccess?.()
+    },
+    onError: () => {
+      toast.error('Erro ao arquivar negócios')
+    },
+  })
+}
+
 export const useBulkDelete = (onSuccess?: () => void) => {
   const companyId = useAuthStore((s) => s.company?.id)
   const user = useAuthStore((s) => s.user)
@@ -87,6 +115,29 @@ export const useBulkDelete = (onSuccess?: () => void) => {
     },
     onError: () => {
       toast.error('Erro ao excluir leads')
+    },
+  })
+}
+
+/** Contraparte de useBulkDelete para a tela de Negocios: apaga de `deals`. */
+export const useBulkDeleteDeals = (onSuccess?: () => void) => {
+  const companyId = useAuthStore((s) => s.company?.id)
+  const user = useAuthStore((s) => s.user)
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ dealIds }: { dealIds: string[] }) => {
+      if (!companyId) throw new Error('Empresa nao encontrada')
+      if (!user?.id) throw new Error('Usuario nao encontrado')
+      await dealsService.bulkDelete(companyId, dealIds, user.id)
+    },
+    onSuccess: () => {
+      invalidateDealDependentQueries(queryClient)
+      toast.success('Negócios excluídos permanentemente')
+      onSuccess?.()
+    },
+    onError: () => {
+      toast.error('Erro ao excluir negócios')
     },
   })
 }
