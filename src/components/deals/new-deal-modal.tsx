@@ -34,6 +34,7 @@ const schema = z.object({
   value: z.number().nonnegative().optional().or(z.nan().transform(() => undefined)),
   assigned_to: z.string().optional(),
   closed_date: z.string().optional(),
+  observations: z.string().optional(),
 })
 
 type FormValues = z.infer<typeof schema>
@@ -70,7 +71,7 @@ const NewDealModal = ({ open, onClose, defaultPipelineId, defaultStageId, locked
 
   const { register, handleSubmit, control, reset, watch, setValue, setError, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { lead_id: '', name: '', value: 0, assigned_to: NO_OWNER },
+    defaultValues: { lead_id: '', name: '', value: 0, assigned_to: NO_OWNER, observations: '' },
   })
 
   const selectedPipelineId = watch('pipeline_id')
@@ -93,7 +94,7 @@ const NewDealModal = ({ open, onClose, defaultPipelineId, defaultStageId, locked
         name: lockedLeadId && lockedLeadName ? `Negocio - ${lockedLeadName}` : '',
         pipeline_id: resolvedPipelineId,
         stage_id: defaultStageId ?? '',
-        value: 0, assigned_to: NO_OWNER, closed_date: todayStr,
+        value: 0, assigned_to: NO_OWNER, closed_date: todayStr, observations: '',
       })
     }
   }, [open, pipelines, reset, todayStr, defaultPipelineId, defaultStageId, lockedLeadId, lockedLeadName])
@@ -152,6 +153,7 @@ const NewDealModal = ({ open, onClose, defaultPipelineId, defaultStageId, locked
       assigned_to: values.assigned_to === NO_OWNER ? null : values.assigned_to,
       status,
       closed_at,
+      observations: values.observations?.trim() || null,
     }
 
     try {
@@ -332,6 +334,17 @@ const NewDealModal = ({ open, onClose, defaultPipelineId, defaultStageId, locked
               {errors.closed_date && <p className="text-xs text-destructive">{errors.closed_date.message}</p>}
             </div>
           )}
+
+          {/* Anotacoes do negocio (opcional) */}
+          <div className="space-y-2">
+            <Label htmlFor="deal-observations">Anotações sobre o negócio</Label>
+            <textarea
+              id="deal-observations"
+              className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 input-clean"
+              placeholder="Contexto, combinados, proximos passos..."
+              {...register('observations')}
+            />
+          </div>
 
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>

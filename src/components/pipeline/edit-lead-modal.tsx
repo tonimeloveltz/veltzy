@@ -55,6 +55,7 @@ const schema = z.object({
   // Negocio
   deal_name: z.string().optional(),
   deal_value: z.number().nonnegative().optional(),
+  deal_observations: z.string().optional(),
   stage_id: z.string().uuid(),
 })
 
@@ -103,6 +104,7 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
         linkedin_url: lead.linkedin_url ?? '',
         deal_name: activeDeal?.name ?? '',
         deal_value: activeDeal?.value ?? lead.deal_value ?? 0,
+        deal_observations: activeDeal?.observations ?? '',
         stage_id: activeDeal?.stage_id ?? lead.stage_id,
       })
     }
@@ -145,6 +147,7 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
           name: values.deal_name || activeDeal.name,
           value: values.deal_value,
           stage_id: values.stage_id,
+          observations: values.deal_observations?.trim() || null,
         },
       })
 
@@ -222,6 +225,18 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
                     <Input
                       placeholder="Ex: Orçamento de treinamento, Brindes fim de ano..."
                       {...register('deal_name')}
+                    />
+                  </div>
+
+                  {/* Anotacoes do negocio: distintas das Observações do contato,
+                      que ficam na secao de baixo e vivem em leads.observations. */}
+                  <div className="space-y-2">
+                    <Label htmlFor="deal-observations">Anotações sobre o negócio</Label>
+                    <textarea
+                      id="deal-observations"
+                      className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 input-clean"
+                      placeholder="Contexto, combinados, proximos passos..."
+                      {...register('deal_observations')}
                     />
                   </div>
 
