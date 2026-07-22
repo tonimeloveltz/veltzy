@@ -33,6 +33,10 @@ export const BulkActionBar = ({ selectedIds, leads, onClear, userRole, mode = 'l
   const canTransfer = userRole === 'admin' || userRole === 'manager' || userRole === 'super_admin'
   const canDelete = userRole === 'admin' || userRole === 'super_admin'
 
+  // Nao faz sentido arquivar itens ja arquivados: esconde o botao quando toda a
+  // selecao ja esta arquivada (ex.: filtro "Mostrar arquivados" ativo).
+  const allArchived = selectedLeads.length > 0 && selectedLeads.every((l) => l.status === 'archived')
+
   return (
     <>
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-background/95 backdrop-blur-sm border border-primary/20 rounded-xl p-3 shadow-2xl shadow-primary/10">
@@ -74,10 +78,12 @@ export const BulkActionBar = ({ selectedIds, leads, onClear, userRole, mode = 'l
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setArchiveOpen(true)}>
-            <Archive className="h-4 w-4" />
-            Arquivar
-          </Button>
+          {!allArchived && (
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setArchiveOpen(true)}>
+              <Archive className="h-4 w-4" />
+              Arquivar
+            </Button>
+          )}
 
           {canDelete && (
             <Button variant="destructive" size="sm" className="gap-1.5" onClick={() => setDeleteOpen(true)}>

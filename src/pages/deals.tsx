@@ -165,6 +165,7 @@ const DealsPage = () => {
       deal_value: d.value,
       assigned_to: d.assigned_to,
       profiles: d.profiles,
+      status: d.status,
     }))
   }, [deals])
 
