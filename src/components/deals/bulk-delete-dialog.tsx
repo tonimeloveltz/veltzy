@@ -6,21 +6,28 @@ import {
   AlertDialog, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { useBulkDelete } from '@/hooks/use-bulk-leads'
+import { useBulkDelete, useBulkDeleteDeals } from '@/hooks/use-bulk-leads'
 
 interface BulkDeleteDialogProps {
   open: boolean
   onClose: () => void
   leadIds: string[]
   onSuccess: () => void
+  mode?: 'leads' | 'deals'
 }
 
-export const BulkDeleteDialog = ({ open, onClose, leadIds, onSuccess }: BulkDeleteDialogProps) => {
+export const BulkDeleteDialog = ({ open, onClose, leadIds, onSuccess, mode = 'leads' }: BulkDeleteDialogProps) => {
   const [confirmText, setConfirmText] = useState('')
-  const bulkDelete = useBulkDelete(() => {
+  const done = () => {
     onSuccess()
     handleClose()
-  })
+  }
+
+  // Em 'deals' os ids sao de deal: o caminho de leads apagaria o contato, nao
+  // o negocio, caso algum id viesse a casar.
+  const bulkDeleteLeads = useBulkDelete(done)
+  const bulkDeleteDeals = useBulkDeleteDeals(done)
+  const bulkDelete = mode === 'deals' ? bulkDeleteDeals : bulkDeleteLeads
 
   const handleClose = () => {
     setConfirmText('')
@@ -29,20 +36,25 @@ export const BulkDeleteDialog = ({ open, onClose, leadIds, onSuccess }: BulkDele
 
   const handleDelete = async () => {
     if (confirmText !== 'EXCLUIR') return
-    await bulkDelete.mutateAsync({ leadIds })
+    if (mode === 'deals') {
+      await bulkDeleteDeals.mutateAsync({ dealIds: leadIds })
+    } else {
+      await bulkDeleteLeads.mutateAsync({ leadIds })
+    }
   }
 
   const isConfirmed = confirmText === 'EXCLUIR'
+  const label = mode === 'deals' ? 'negócio' : 'lead'
 
   return (
     <AlertDialog open={open} onOpenChange={(v) => !v && handleClose()}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle className="text-destructive">
-            Excluir {leadIds.length} lead{leadIds.length > 1 ? 's' : ''} permanentemente
+            Excluir {leadIds.length} {label}{leadIds.length > 1 ? 's' : ''} permanentemente
           </AlertDialogTitle>
           <AlertDialogDescription>
-            Esta acao nao pode ser desfeita. Todos os dados dos leads selecionados serao removidos permanentemente.
+            Esta acao nao pode ser desfeita. Todos os dados dos {label}s selecionados serao removidos permanentemente.
           </AlertDialogDescription>
         </AlertDialogHeader>
 
