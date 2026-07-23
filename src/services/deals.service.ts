@@ -104,6 +104,15 @@ export const updateDeal = async (companyId: string, dealId: string, input: Updat
   return data
 }
 
+export const deleteDeal = async (companyId: string, dealId: string): Promise<void> => {
+  const { error } = await veltzy()
+    .from('deals')
+    .delete()
+    .eq('id', dealId)
+    .eq('company_id', companyId)
+  if (error) throw error
+}
+
 export const moveDealStage = async (
   companyId: string,
   dealId: string,
