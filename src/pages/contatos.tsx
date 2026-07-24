@@ -26,14 +26,6 @@ import type { LeadTemperature } from '@/types/database'
 const fmt = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
 
-// Temperatura compacta: mesmo padrao da pagina Negocios (dot + label reduzido).
-const tempConfig: Record<LeadTemperature, { label: string; dotColor: string }> = {
-  cold: { label: 'Frio', dotColor: 'bg-blue-400' },
-  warm: { label: 'Morno', dotColor: 'bg-yellow-500' },
-  hot:  { label: 'Quente', dotColor: 'bg-orange-500' },
-  fire: { label: 'Pegando Fogo', dotColor: 'bg-red-500' },
-}
-
 const thClass = 'pb-3 text-xs font-medium text-muted-foreground'
 
 const ContatosPage = () => {
@@ -180,7 +172,7 @@ const ContatosPage = () => {
                 )}
 
                 {!isLoading && !isError && rows.map((c) => {
-                  const temp = tempConfig[c.temperature]
+                  const temp = leadTemperatureConfig[c.temperature]
                   return (
                     <tr
                       key={c.id}

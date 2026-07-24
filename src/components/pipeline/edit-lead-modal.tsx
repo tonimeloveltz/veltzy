@@ -33,14 +33,8 @@ import { triggerCelebration } from '@/lib/celebration'
 import { isValidPhoneBR, PHONE_ERROR_MSG } from '@/lib/phone'
 import { useLeadTasks, useCompleteTask } from '@/hooks/use-tasks'
 import { CreateTaskModal } from '@/components/tarefas/create-task-modal'
-import type { LeadWithDetails, LeadTemperature, ActivityLog, TaskType, UpdateLeadInput } from '@/types/database'
-
-const temperatureBarConfig: Record<LeadTemperature, { width: string; gradient: string; label: string }> = {
-  cold:  { width: '25%',  gradient: 'linear-gradient(to right, #bfdbfe, #3b82f6)', label: 'Frio' },
-  warm:  { width: '50%',  gradient: 'linear-gradient(to right, #fde68a, #f59e0b)', label: 'Morno' },
-  hot:   { width: '75%',  gradient: 'linear-gradient(to right, #fed7aa, #f97316)', label: 'Quente' },
-  fire:  { width: '100%', gradient: 'linear-gradient(to right, #f97316, #ef4444, #dc2626)', label: 'Fire' },
-}
+import { leadTemperatureConfig } from '@/lib/lead-config'
+import type { LeadWithDetails, ActivityLog, TaskType, UpdateLeadInput } from '@/types/database'
 
 const schema = z.object({
   // Contato
@@ -298,13 +292,13 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
                         <div
                           className="h-full rounded-full transition-all duration-500 ease-out"
                           style={{
-                            width: temperatureBarConfig[lead.temperature].width,
-                            background: temperatureBarConfig[lead.temperature].gradient,
+                            width: leadTemperatureConfig[lead.temperature].width,
+                            background: leadTemperatureConfig[lead.temperature].gradient,
                           }}
                         />
                       </div>
                       <span className="text-xs font-medium text-muted-foreground shrink-0">
-                        {temperatureBarConfig[lead.temperature].label}
+                        {leadTemperatureConfig[lead.temperature].label}
                       </span>
                     </div>
                     <p className="text-[10px] text-muted-foreground">Calculada automaticamente pela atividade do contato</p>
@@ -474,13 +468,13 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
                         <div
                           className="h-full rounded-full transition-all duration-500 ease-out"
                           style={{
-                            width: temperatureBarConfig[lead.temperature].width,
-                            background: temperatureBarConfig[lead.temperature].gradient,
+                            width: leadTemperatureConfig[lead.temperature].width,
+                            background: leadTemperatureConfig[lead.temperature].gradient,
                           }}
                         />
                       </div>
                       <span className="text-xs font-medium text-muted-foreground shrink-0">
-                        {temperatureBarConfig[lead.temperature].label}
+                        {leadTemperatureConfig[lead.temperature].label}
                       </span>
                     </div>
                   </div>

@@ -26,7 +26,8 @@ import { EditLeadModal } from '@/components/pipeline/edit-lead-modal'
 import { ImportLeadsModal } from '@/components/pipeline/import-leads-modal'
 import { BulkActionBar } from '@/components/deals/bulk-action-bar'
 import { exportToCsv, exportToPdf, exportToXlsx } from '@/lib/export-leads'
-import type { DealStatus, LeadTemperature } from '@/types/database'
+import { dealStatusConfig, leadTemperatureConfig } from '@/lib/lead-config'
+import type { DealStatus } from '@/types/database'
 import { useLeadDetail } from '@/hooks/use-lead-detail'
 import { useDebouncedValue } from '@/hooks/use-debounced-value'
 
@@ -39,23 +40,6 @@ const periodOptions = [
 
 const fmt = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
-
-const tempConfig: Record<LeadTemperature, { label: string; dotColor: string }> = {
-  cold: { label: 'Frio', dotColor: 'bg-blue-400' },
-  warm: { label: 'Morno', dotColor: 'bg-yellow-500' },
-  hot:  { label: 'Quente', dotColor: 'bg-orange-500' },
-  fire: { label: 'Pegando Fogo', dotColor: 'bg-red-500' },
-}
-
-// Badge de status com tokens suaves ja usados na pagina (Aberto=amarelo,
-// Ganho=emerald/success, Perdido=red/danger, Arquivado=muted).
-const statusBadge: Record<DealStatus, { label: string; className: string }> = {
-  open: { label: 'Aberto', className: 'bg-yellow-500/15 text-yellow-500' },
-  pending_assignment: { label: 'Aberto', className: 'bg-yellow-500/15 text-yellow-500' },
-  won: { label: 'Ganho', className: 'bg-emerald-500/15 text-emerald-500' },
-  lost: { label: 'Perdido', className: 'bg-red-500/15 text-red-500' },
-  archived: { label: 'Arquivado', className: 'bg-muted text-muted-foreground' },
-}
 
 // Cor do valor monetario por status: Fechado verde, Perdido vermelho (mesmo
 // token do label), demais neutro (igual ao nome do negocio).
@@ -393,10 +377,10 @@ const DealsPage = () => {
                   const lead = deal.leads
                   const stage = deal.stage_id ? stageMap.get(deal.stage_id) : null
                   const pipeline = deal.pipeline_id ? pipelineMap.get(deal.pipeline_id) : null
-                  const temp = lead ? tempConfig[lead.temperature] : null
+                  const temp = lead ? leadTemperatureConfig[lead.temperature] : null
                   const assignedName = (deal.profiles as { name?: string } | null)?.name
                   const isSelected = selectedIds.has(deal.id)
-                  const status = statusBadge[deal.status]
+                  const status = dealStatusConfig[deal.status]
 
                   // Coluna de identidade: nome do negocio no titulo; contato (+ empresa)
                   // no subtitulo. Sem nome de negocio, o contato vira titulo.

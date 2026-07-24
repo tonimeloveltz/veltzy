@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx'
+import { dealStatusConfig, leadTemperatureConfig } from '@/lib/lead-config'
 import type { LeadWithDetails, DealStatus } from '@/types/database'
 
 /**
@@ -10,6 +11,15 @@ export type ExportLeadRow = LeadWithDetails & {
   deal?: { value: number | null; status: DealStatus } | null
 }
 
+// Status e temperatura saem traduzidos, mas a linha exportada e montada tambem
+// a partir de objetos remontados a mao (ex: dealsAsLeads em /deals, que passa
+// `as never`): valor ausente ou fora do mapa vira string vazia, nunca excecao.
+const statusLabel = (status?: DealStatus | null) =>
+  (status && dealStatusConfig[status]?.label) || ''
+
+const temperatureLabel = (temperature?: LeadWithDetails['temperature'] | null) =>
+  (temperature && leadTemperatureConfig[temperature]?.label) || ''
+
 const getLeadRows = (leads: ExportLeadRow[]) =>
   leads.map((l) => [
     l.name ?? '',
@@ -18,8 +28,8 @@ const getLeadRows = (leads: ExportLeadRow[]) =>
     l.deal?.value != null ? l.deal.value.toString() : '',
     l.pipelines?.name ?? '',
     l.pipeline_stages?.name ?? '',
-    l.deal?.status ?? '',
-    l.temperature,
+    statusLabel(l.deal?.status),
+    temperatureLabel(l.temperature),
     l.profiles?.name ?? '',
     (l.tags ?? []).join(', '),
     l.observations ?? '',
@@ -117,8 +127,8 @@ export const exportToPdf = async (leads: ExportLeadRow[], filename = 'leads.pdf'
     l.deal?.value ? `R$ ${l.deal.value.toLocaleString('pt-BR')}` : '-',
     l.pipelines?.name ?? '-',
     l.pipeline_stages?.name ?? '-',
-    l.deal?.status ?? '-',
-    l.temperature,
+    statusLabel(l.deal?.status) || '-',
+    temperatureLabel(l.temperature) || '-',
     l.profiles?.name ?? '-',
     (l.tags ?? []).join(', ') || '-',
     l.lead_sources?.name ?? '-',
