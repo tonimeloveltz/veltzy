@@ -23,7 +23,7 @@ const temperatureLabel = (temperature?: LeadWithDetails['temperature'] | null) =
 const conversationStatusLabel = (status?: ConversationStatus | null) =>
   (status && conversationStatusLabels[status]) || ''
 
-const getLeadRows = (leads: ExportLeadRow[]) =>
+const getLeadRows = (leads: ExportLeadRow[]) => //recebe leads - dealsasleads aqui
   leads.map((l) => [
     l.name ?? '',
     l.phone,
@@ -42,8 +42,9 @@ const getLeadRows = (leads: ExportLeadRow[]) =>
     l.ai_score?.toString() ?? '',
     conversationStatusLabel(l.conversation_status),
     new Date(l.created_at).toLocaleDateString('pt-BR'),
-    new Date(l.updated_at).toLocaleDateString('pt-BR'),
+    l.updated_at ? new Date(l.updated_at).toLocaleDateString('pt-BR') : '',
   ])
+
 
 const EXPORT_HEADERS = ['Nome', 'Telefone', 'Email', 'Valor do Negocio', 'Pipeline', 'Etapa', 'Status', 'Temperatura', 'Responsavel', 'Tags', 'Observações', 'Origem', 'Instagram', 'LinkedIn', 'AI Score', 'Status Conversa', 'Criado em', 'Atualizado em']
 
