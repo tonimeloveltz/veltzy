@@ -138,7 +138,11 @@ const DealsPage = () => {
   const allSelected = visibleDeals.length > 0 && visibleDeals.every((d) => selectedIds.has(d.id))
   const someSelected = !allSelected && visibleDeals.some((d) => selectedIds.has(d.id))
 
-  // Convert deals to lead-like objects for BulkActionBar + export compatibility
+  // Convert deals to lead-like objects for BulkActionBar + export compatibility.
+  // O export (export-leads.ts) le valor/status via `deal` e os nomes via
+  // `pipelines`/`pipeline_stages`, entao resolvemos esses objetos aqui a partir
+  // dos maps ja montados na tela. Sem isso, as colunas Valor, Pipeline, Etapa e
+  // Status saem vazias no CSV/XLSX/PDF.
   const dealsAsLeads = useMemo(() => {
     return deals.map((d) => ({
       ...(d.leads ?? {}),
@@ -150,8 +154,11 @@ const DealsPage = () => {
       assigned_to: d.assigned_to,
       profiles: d.profiles,
       status: d.status,
+      deal: { value: d.value, status: d.status },
+      pipelines: d.pipeline_id ? pipelineMap.get(d.pipeline_id) ?? null : null,
+      pipeline_stages: d.stage_id ? stageMap.get(d.stage_id) ?? null : null,
     }))
-  }, [deals])
+  }, [deals, pipelineMap, stageMap])
 
   return (
     <div className="min-h-full p-6">

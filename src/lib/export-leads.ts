@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx'
-import { dealStatusConfig, leadTemperatureConfig } from '@/lib/lead-config'
-import type { LeadWithDetails, DealStatus } from '@/types/database'
+import { conversationStatusLabels, dealStatusConfig, leadTemperatureConfig } from '@/lib/lead-config'
+import type { ConversationStatus, LeadWithDetails, DealStatus } from '@/types/database'
 
 /**
  * Lead para export com o negocio representativo anexado. value/status do CSV
@@ -20,6 +20,9 @@ const statusLabel = (status?: DealStatus | null) =>
 const temperatureLabel = (temperature?: LeadWithDetails['temperature'] | null) =>
   (temperature && leadTemperatureConfig[temperature]?.label) || ''
 
+const conversationStatusLabel = (status?: ConversationStatus | null) =>
+  (status && conversationStatusLabels[status]) || ''
+
 const getLeadRows = (leads: ExportLeadRow[]) =>
   leads.map((l) => [
     l.name ?? '',
@@ -37,7 +40,7 @@ const getLeadRows = (leads: ExportLeadRow[]) =>
     l.instagram_id ?? '',
     l.linkedin_id ?? '',
     l.ai_score?.toString() ?? '',
-    l.conversation_status ?? '',
+    conversationStatusLabel(l.conversation_status),
     new Date(l.created_at).toLocaleDateString('pt-BR'),
     new Date(l.updated_at).toLocaleDateString('pt-BR'),
   ])

@@ -1,4 +1,4 @@
-import type { DealStatus, LeadTemperature } from '@/types/database'
+import type { ConversationStatus, DealStatus, LeadTemperature } from '@/types/database'
 
 export interface TemperatureConfig {
   /** Label pt-BR. Reaproveitado no export: precisa casar com TEMP_MAP do import. */
@@ -55,4 +55,14 @@ export const dealStatusConfig: Record<DealStatus, DealStatusConfig> = {
   lost:               { label: 'Perdido',               className: 'bg-red-500/15 text-red-500',                          dotColor: 'bg-red-500' },
   archived:           { label: 'Arquivado',             className: 'bg-muted text-muted-foreground',                      dotColor: 'bg-muted-foreground' },
   pending_assignment: { label: 'Aguardando atribuição', className: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',  dotColor: 'bg-amber-500' },
+}
+
+/** Labels pt-BR do status de conversa (leads.conversation_status), usados no relatorio exportado. */
+export const conversationStatusLabels: Record<ConversationStatus, string> = {
+  unread: 'Não lida',
+  read: 'Lida',
+  replied: 'Respondida',
+  waiting_client: 'Aguardando cliente',
+  waiting_internal: 'Aguardando interno',
+  resolved: 'Resolvida',
 }
