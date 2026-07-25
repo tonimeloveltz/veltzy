@@ -254,6 +254,8 @@ export interface CreateLeadInput {
   observations?: string
   assigned_to?: string
   tags?: string[]
+  instagram_handle?: string
+  linkedin_url?: string
   whatsapp_instance_name?: string | null
 }
 
@@ -291,6 +293,7 @@ export interface Deal {
   assigned_to: string | null
   status: DealStatus
   closed_at: string | null
+  observations: string | null
   created_at: string
   updated_at: string
   // joins
@@ -318,6 +321,7 @@ export interface CreateDealInput {
   assigned_to?: string | null
   status?: DealStatus
   closed_at?: string | null
+  observations?: string | null
 }
 
 export interface UpdateDealInput {
@@ -327,6 +331,7 @@ export interface UpdateDealInput {
   pipeline_id?: string | null
   assigned_to?: string | null
   status?: DealStatus
+  observations?: string | null
 }
 
 export type MessageType = 'text' | 'image' | 'audio' | 'video' | 'document' | 'sticker' | 'location' | 'contact'

@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/stores/auth.store'
 import { useTeamMembers } from '@/hooks/use-team'
+import { invalidateDealDependentQueries } from '@/lib/query-keys'
 import * as dealsService from '@/services/deals.service'
 import type { CreateDealInput, UpdateDealInput, DealWithLead } from '@/types/database'
 
@@ -48,6 +49,10 @@ export const useDashboardDeals = (pipelineId?: string | null, showArchived = fal
   return useQuery({
     queryKey: ['deals', 'dashboard', companyId, pipelineId, showArchived, isSeller ? profileId : null, membersReady],
     queryFn: async () => {
+      // Sem filtro de status aqui de proposito: `.eq('status', ...)` e
+      // exclusivo e traria SO arquivados com o toggle ligado. A query busca
+      // todos os status e quem decide mostrar ou esconder arquivado e o
+      // useMemo da tela de Negocios, ponto unico dessa regra.
       const deals = await dealsService.getDealsByCompany(companyId!, {
         pipelineId: pipelineId ?? undefined,
         assignedTo: isSeller ? profileId : undefined,
@@ -84,7 +89,7 @@ export const useCreateDeal = () => {
   return useMutation({
     mutationFn: (input: CreateDealInput) => dealsService.createDeal(companyId!, input),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['deals'] })
+      invalidateDealDependentQueries(queryClient)
       // Contagem de Negocios e LTV do contato mudam na pagina Contatos
       queryClient.invalidateQueries({ queryKey: ['contacts'] })
       toast.success('Negocio criado com sucesso!')
@@ -107,10 +112,28 @@ export const useUpdateDeal = () => {
     mutationFn: ({ dealId, data }: { dealId: string; data: UpdateDealInput }) =>
       dealsService.updateDeal(companyId!, dealId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['deals'] })
+      invalidateDealDependentQueries(queryClient)
     },
     onError: (err: Error) => {
       toast.error(err.message || 'Erro ao atualizar negocio')
+    },
+  })
+}
+
+export const useDeleteDeal = () => {
+  const queryClient = useQueryClient()
+  const companyId = useAuthStore((s) => s.company?.id)
+
+  return useMutation({
+    mutationFn: (dealId: string) => dealsService.deleteDeal(companyId!, dealId),
+    onSuccess: () => {
+      invalidateDealDependentQueries(queryClient)
+      // Contagem de Negocios e LTV do contato caem na pagina Contatos
+      queryClient.invalidateQueries({ queryKey: ['contacts'] })
+      toast.success('Negocio removido!')
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || 'Erro ao remover negocio')
     },
   })
 }
@@ -137,7 +160,7 @@ export const useMoveDealStage = () => {
       toast.error('Erro ao mover negocio. Tente novamente.')
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['deals'] })
+      invalidateDealDependentQueries(queryClient)
     },
   })
 }
@@ -164,7 +187,7 @@ export const useUpdateDealValueAndMove = () => {
       toast.error('Erro ao mover negocio. Tente novamente.')
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['deals'] })
+      invalidateDealDependentQueries(queryClient)
     },
   })
 }
@@ -177,7 +200,7 @@ export const useMoveDealToPipeline = () => {
     mutationFn: ({ dealId, targetPipelineId }: { dealId: string; targetPipelineId: string }) =>
       dealsService.moveDealToPipeline(companyId!, dealId, targetPipelineId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['deals'] })
+      invalidateDealDependentQueries(queryClient)
       toast.success('Negocio movido para o novo pipeline!')
     },
     onError: (err: Error) => {
@@ -194,7 +217,7 @@ export const useCloseDeal = () => {
     mutationFn: ({ dealId, pipelineId, outcome }: { dealId: string; pipelineId: string; outcome: 'won' | 'lost' }) =>
       dealsService.closeDeal(companyId!, dealId, pipelineId, outcome),
     onSuccess: (_, { outcome }) => {
-      queryClient.invalidateQueries({ queryKey: ['deals'] })
+      invalidateDealDependentQueries(queryClient)
       if (outcome === 'won') {
         toast.success('Negocio fechado com sucesso! 🎉')
       } else {
@@ -215,7 +238,7 @@ export const useAssignDeal = () => {
     mutationFn: ({ dealId, userId }: { dealId: string; userId: string }) =>
       dealsService.assignDeal(companyId!, dealId, userId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['deals'] })
+      invalidateDealDependentQueries(queryClient)
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
       toast.success('Negocio atribuido com sucesso!')
     },

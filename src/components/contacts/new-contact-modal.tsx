@@ -8,28 +8,39 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { PhoneInput } from '@/components/ui/phone-input'
 import { Label } from '@/components/ui/label'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { LeadTagsInput } from '@/components/pipeline/lead-tags-input'
-import { useCreateContact } from '@/hooks/use-contacts'
+import { useCreateContact, type ContactRow } from '@/hooks/use-contacts'
+import { useUpdateLead } from '@/hooks/use-leads'
 import { usePipelines, useDefaultPipeline } from '@/hooks/use-pipelines'
 import { useLeadSources } from '@/hooks/use-lead-sources'
 import { useTeamMembers } from '@/hooks/use-team'
-import type { CreateLeadInput, Lead } from '@/types/database'
+import { isValidPhoneBR, PHONE_ERROR_MSG } from '@/lib/phone'
+import type { CreateLeadInput, UpdateLeadInput, Lead } from '@/types/database'
 
 const NO_OWNER = 'none'
 
 const schema = z.object({
   name: z.string().min(1, 'Nome obrigatorio'),
   // leads.phone e NOT NULL + UNIQUE(company_id, phone): telefone e obrigatorio.
-  phone: z.string().min(8, 'Telefone invalido'),
+  phone: z
+    .string()
+    .min(1, 'Telefone obrigatorio')
+    .refine(isValidPhoneBR, PHONE_ERROR_MSG),
   email: z.string().email('Email invalido').optional().or(z.literal('')),
   company_name: z.string().optional(),
   source_id: z.string().uuid().optional(),
   assigned_to: z.string().optional(),
   tags: z.array(z.string()),
+  observations: z.string().optional(),
+  // String livre opcional: nao usar z.string().url() para nao travar quem digita
+  // o handle/link sem https.
+  instagram_handle: z.string().optional(),
+  linkedin_url: z.string().optional(),
 })
 
 type FormValues = z.infer<typeof schema>
@@ -39,10 +50,14 @@ interface NewContactModalProps {
   onClose: () => void
   /** Disparado com o contato recem-criado (ex: auto-selecionar no Novo Negocio). */
   onCreated?: (lead: Lead) => void
+  /** Quando presente, o modal abre em modo edicao daquele contato. */
+  contact?: ContactRow | null
 }
 
-const NewContactModal = ({ open, onClose, onCreated }: NewContactModalProps) => {
+const NewContactModal = ({ open, onClose, onCreated, contact }: NewContactModalProps) => {
+  const isEdit = !!contact
   const createContact = useCreateContact()
+  const updateLead = useUpdateLead()
   const { data: pipelines } = usePipelines()
   const { data: defaultPipeline } = useDefaultPipeline()
   const { data: sources } = useLeadSources()
@@ -66,15 +81,54 @@ const NewContactModal = ({ open, onClose, onCreated }: NewContactModalProps) => 
   })
 
   useEffect(() => {
-    if (open) {
+    if (!open) return
+    if (contact) {
+      // Modo edicao: pre-preenche a partir do contato. Selects nulos caem no
+      // mesmo default do create (source manual / "none") para nao quebrar o
+      // Select com valor nulo. phone mantem o 55 do banco (PhoneInput exibe
+      // mascarado e o updateLead normaliza de novo no submit).
+      reset({
+        name: contact.name ?? '',
+        phone: contact.phone,
+        email: contact.email ?? '',
+        company_name: contact.company_name ?? '',
+        source_id: contact.source_id ?? manualSource?.id,
+        assigned_to: contact.assigned_to ?? NO_OWNER,
+        tags: contact.tags ?? [],
+        observations: contact.observations ?? '',
+        instagram_handle: contact.instagram_handle ?? '',
+        linkedin_url: contact.linkedin_url ?? '',
+      })
+    } else {
       reset({
         name: '', phone: '', email: '', company_name: '',
         source_id: manualSource?.id, assigned_to: NO_OWNER, tags: [],
+        observations: '', instagram_handle: '', linkedin_url: '',
       })
     }
-  }, [open, manualSource?.id, reset])
+  }, [open, contact, manualSource?.id, reset])
 
   const onSubmit = async (values: FormValues) => {
+    if (contact) {
+      // Modo edicao: atualiza so dados de pessoa. Nao envia pipeline_id nem
+      // stage_id (negocio se edita via deals).
+      const data: UpdateLeadInput = {
+        name: values.name || null,
+        phone: values.phone,
+        email: values.email || null,
+        company_name: values.company_name || null,
+        source_id: values.source_id || null,
+        assigned_to: values.assigned_to === NO_OWNER ? null : values.assigned_to,
+        tags: values.tags,
+        observations: values.observations || null,
+        instagram_handle: values.instagram_handle || null,
+        linkedin_url: values.linkedin_url || null,
+      }
+      await updateLead.mutateAsync({ leadId: contact.id, data })
+      onClose()
+      return
+    }
+
     const input: CreateLeadInput = {
       name: values.name,
       phone: values.phone,
@@ -83,6 +137,9 @@ const NewContactModal = ({ open, onClose, onCreated }: NewContactModalProps) => 
       source_id: values.source_id || undefined,
       assigned_to: values.assigned_to === NO_OWNER ? undefined : values.assigned_to,
       tags: values.tags,
+      observations: values.observations || undefined,
+      instagram_handle: values.instagram_handle || undefined,
+      linkedin_url: values.linkedin_url || undefined,
       pipeline_id: resolvedPipelineId,
       // stage_id e exigido pelo tipo, mas createLead nao grava negocio em leads
       // (coluna nullable). Contato puro nasce sem stage/negocio.
@@ -94,14 +151,19 @@ const NewContactModal = ({ open, onClose, onCreated }: NewContactModalProps) => 
     onClose()
   }
 
-  const noPipeline = !resolvedPipelineId
+  // noPipeline so bloqueia o create (edit nao cria negocio nem depende de pipeline).
+  const noPipeline = !isEdit && !resolvedPipelineId
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Novo Contato</DialogTitle>
-          <DialogDescription>Cadastre uma pessoa. O negocio e criado separadamente.</DialogDescription>
+          <DialogTitle>{isEdit ? 'Editar Contato' : 'Novo Contato'}</DialogTitle>
+          <DialogDescription>
+            {isEdit
+              ? 'Atualize os dados deste contato.'
+              : 'Cadastre uma pessoa. O negocio e criado separadamente.'}
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -119,7 +181,18 @@ const NewContactModal = ({ open, onClose, onCreated }: NewContactModalProps) => 
             </div>
             <div className="space-y-2">
               <Label>Telefone *</Label>
-              <Input placeholder="(11) 99999-9999" {...register('phone')} />
+              <Controller
+                control={control}
+                name="phone"
+                render={({ field }) => (
+                  <PhoneInput
+                    value={field.value ?? ''}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    placeholder="(11) 99999-9999"
+                  />
+                )}
+              />
               {errors.phone && <p className="text-xs text-destructive">{errors.phone.message}</p>}
             </div>
           </div>
@@ -177,6 +250,26 @@ const NewContactModal = ({ open, onClose, onCreated }: NewContactModalProps) => 
             </div>
           </div>
 
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Instagram</Label>
+              <Input placeholder="@usuario" {...register('instagram_handle')} />
+            </div>
+            <div className="space-y-2">
+              <Label>LinkedIn</Label>
+              <Input placeholder="linkedin.com/in/usuario" {...register('linkedin_url')} />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Observacoes</Label>
+            <textarea
+              className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 input-clean"
+              placeholder="Anotacoes sobre o contato..."
+              {...register('observations')}
+            />
+          </div>
+
           <div className="space-y-2">
             <Label>Tags</Label>
             <Controller
@@ -190,9 +283,9 @@ const NewContactModal = ({ open, onClose, onCreated }: NewContactModalProps) => 
 
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
-            <Button type="submit" disabled={createContact.isPending || noPipeline}>
-              {createContact.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Criar Contato
+            <Button type="submit" disabled={createContact.isPending || updateLead.isPending || noPipeline}>
+              {(createContact.isPending || updateLead.isPending) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isEdit ? 'Salvar' : 'Criar Contato'}
             </Button>
           </div>
         </form>

@@ -48,6 +48,18 @@ describe('filterByPeriod (pagina Negocios)', () => {
     expect(result).toEqual(['dentro-lost', 'dentro-won'])
   })
 
+  it('arquivados entram sempre, mesmo sem closed_at e com created_at antigo', () => {
+    // Arquivar so troca o status, nao grava closed_at: filtrar por data cortaria
+    // todo arquivado e o toggle "Mostrar arquivados" nunca mostraria nada.
+    const deals = [
+      deal({ id: 'arq-sem-data', status: 'archived', closed_at: null, created_at: '2020-01-01T00:00:00Z' }),
+      deal({ id: 'arq-data-velha', status: 'archived', closed_at: '2020-01-01T00:00:00Z' }),
+    ]
+    expect(filterByPeriod(deals, 30).map((d) => d.id).sort())
+      .toEqual(['arq-data-velha', 'arq-sem-data'])
+    expect(filterByPeriod(deals, 1)).toHaveLength(2)
+  })
+
   it('combina: abertos constantes + fechados variando por periodo', () => {
     const deals = [
       deal({ id: 'open1', status: 'open', closed_at: null }),

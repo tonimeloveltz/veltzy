@@ -8,25 +8,32 @@ import { toast } from 'sonner'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog'
+import {
+  AlertDialog, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { CurrencyInput } from '@/components/ui/currency-input'
+import { PhoneInput } from '@/components/ui/phone-input'
 import { Label } from '@/components/ui/label'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { LeadTagsInput } from '@/components/pipeline/lead-tags-input'
 import { useUpdateLead, useDeleteLead } from '@/hooks/use-leads'
-import { useDealsByLead, useUpdateDeal, useAssignDeal } from '@/hooks/use-deals'
+import { useDealsByLead, useUpdateDeal, useAssignDeal, useDeleteDeal } from '@/hooks/use-deals'
 import { usePipelineStages } from '@/hooks/use-pipeline-stages'
 import { useLeadSources } from '@/hooks/use-lead-sources'
 import { useLeadActivityLogs } from '@/hooks/use-activity-logs'
 import { useTeamMembers } from '@/hooks/use-team'
 import { useRoles } from '@/hooks/use-roles'
 import { triggerCelebration } from '@/lib/celebration'
+import { isValidPhoneBR, PHONE_ERROR_MSG } from '@/lib/phone'
 import { useLeadTasks, useCompleteTask } from '@/hooks/use-tasks'
 import { CreateTaskModal } from '@/components/tarefas/create-task-modal'
-import type { LeadWithDetails, LeadTemperature, ActivityLog, TaskType } from '@/types/database'
+import type { LeadWithDetails, LeadTemperature, ActivityLog, TaskType, UpdateLeadInput } from '@/types/database'
 
 const temperatureBarConfig: Record<LeadTemperature, { width: string; gradient: string; label: string }> = {
   cold:  { width: '25%',  gradient: 'linear-gradient(to right, #bfdbfe, #3b82f6)', label: 'Frio' },
@@ -38,7 +45,10 @@ const temperatureBarConfig: Record<LeadTemperature, { width: string; gradient: s
 const schema = z.object({
   // Contato
   name: z.string().optional(),
-  phone: z.string().min(8, 'Telefone invalido'),
+  phone: z
+    .string()
+    .min(1, 'Telefone obrigatorio')
+    .refine(isValidPhoneBR, PHONE_ERROR_MSG),
   email: z.string().email('Email invalido').optional().or(z.literal('')),
   company_name: z.string().optional(),
   source_id: z.string().optional(),
@@ -49,6 +59,7 @@ const schema = z.object({
   // Negocio
   deal_name: z.string().optional(),
   deal_value: z.number().nonnegative().optional(),
+  deal_observations: z.string().optional(),
   stage_id: z.string().uuid(),
 })
 
@@ -65,6 +76,7 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
   const updateLead = useUpdateLead()
   const updateDeal = useUpdateDeal()
   const deleteLead = useDeleteLead()
+  const deleteDeal = useDeleteDeal()
   const assignDeal = useAssignDeal()
   const { data: deals } = useDealsByLead(lead?.id)
   const activeDeal = dealId ? deals?.find((d) => d.id === dealId) : deals?.[0]
@@ -74,8 +86,9 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
   const { isAdmin, isManager } = useRoles()
   const [transferOpen, setTransferOpen] = useState(false)
   const [pendingAssignTo, setPendingAssignTo] = useState<string | null>(null)
+  const [deleteDealOpen, setDeleteDealOpen] = useState(false)
 
-  const { register, handleSubmit, control, reset, formState: { errors } } = useForm<FormValues>({
+  const { register, handleSubmit, control, reset, formState: { errors, dirtyFields } } = useForm<FormValues>({
     resolver: zodResolver(schema),
   })
 
@@ -83,8 +96,11 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
     if (lead) {
       setPendingAssignTo(null)
       setTransferOpen(false)
+      setDeleteDealOpen(false)
       reset({
         name: lead.name ?? '',
+        // lead.phone vem com 55: PhoneInput/formatPhoneBR removem para exibir mascarado
+        // e o submit e idempotente via normalizePhoneBR na service.
         phone: lead.phone,
         email: lead.email ?? '',
         company_name: lead.company_name ?? '',
@@ -95,6 +111,7 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
         linkedin_url: lead.linkedin_url ?? '',
         deal_name: activeDeal?.name ?? '',
         deal_value: activeDeal?.value ?? lead.deal_value ?? 0,
+        deal_observations: activeDeal?.observations ?? '',
         stage_id: activeDeal?.stage_id ?? lead.stage_id,
       })
     }
@@ -108,20 +125,26 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
 
     // Atualizar contato (so dados de pessoa). stage_id/deal_value vao para o
     // deal abaixo; o espelho (trg_mirror_deal_to_lead) replica para o lead.
-    await updateLead.mutateAsync({
-      leadId: lead.id,
-      data: {
-        name: values.name || null,
-        phone: values.phone,
-        email: values.email || null,
-        company_name: values.company_name || null,
-        source_id: values.source_id || null,
-        observations: values.observations || null,
-        tags: values.tags,
-        instagram_handle: values.instagram_handle || null,
-        linkedin_url: values.linkedin_url || null,
-      },
-    })
+    //
+    // A chave so entra no payload quando dirtyFields marca o campo como tocado.
+    // Montar o objeto completo e deixar undefined nos nao-tocados nao serve: a
+    // service repassa o payload direto para o .update(), e um campo que o
+    // usuario nao encostou nao pode viajar para o banco de forma alguma.
+    const contactData: UpdateLeadInput = {}
+    if (dirtyFields.name) contactData.name = values.name || null
+    if (dirtyFields.phone) contactData.phone = values.phone
+    if (dirtyFields.email) contactData.email = values.email || null
+    if (dirtyFields.company_name) contactData.company_name = values.company_name || null
+    if (dirtyFields.source_id) contactData.source_id = values.source_id || null
+    if (dirtyFields.observations) contactData.observations = values.observations || null
+    if (dirtyFields.tags) contactData.tags = values.tags
+    if (dirtyFields.instagram_handle) contactData.instagram_handle = values.instagram_handle || null
+    if (dirtyFields.linkedin_url) contactData.linkedin_url = values.linkedin_url || null
+
+    const hasContactChanges = Object.keys(contactData).length > 0
+    if (hasContactChanges) {
+      await updateLead.mutateAsync({ leadId: lead.id, data: contactData })
+    }
 
     // Atualizar deal se existir
     if (activeDeal) {
@@ -131,12 +154,19 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
           name: values.deal_name || activeDeal.name,
           value: values.deal_value,
           stage_id: values.stage_id,
+          observations: values.deal_observations?.trim() || null,
         },
       })
 
       // Transferir responsável (só persiste no Salvar)
       if (pendingAssignTo && pendingAssignTo !== activeDeal.assigned_to) {
         await assignDeal.mutateAsync({ dealId: activeDeal.id, userId: pendingAssignTo })
+      }
+
+      // O toast de sucesso vinha do useUpdateLead, que agora so dispara quando
+      // ha mudanca de contato. Sem isto, editar so o negocio salvaria calado.
+      if (!hasContactChanges) {
+        toast.success('Negócio atualizado!')
       }
     }
 
@@ -158,6 +188,13 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
     onClose()
   }
 
+  const handleDeleteDeal = async () => {
+    if (!activeDeal) return
+    await deleteDeal.mutateAsync(activeDeal.id)
+    setDeleteDealOpen(false)
+    onClose()
+  }
+
   const effectiveAssignTo = pendingAssignTo ?? activeDeal?.assigned_to ?? null
   const currentAssignee = effectiveAssignTo
     ? members?.find((m) => m.id === effectiveAssignTo)
@@ -170,6 +207,7 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
   if (!lead) return null
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
@@ -205,10 +243,33 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
                     />
                   </div>
 
+                  {/* Anotacoes do negocio: distintas das Observações do contato,
+                      que ficam na secao de baixo e vivem em leads.observations. */}
+                  <div className="space-y-2">
+                    <Label htmlFor="deal-observations">Anotações sobre o negócio</Label>
+                    <textarea
+                      id="deal-observations"
+                      className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 input-clean"
+                      placeholder="Contexto, combinados, proximos passos..."
+                      {...register('deal_observations')}
+                    />
+                  </div>
+
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label>Valor (R$)</Label>
-                      <Input type="number" step="0.01" {...register('deal_value', { valueAsNumber: true })} />
+                      <Controller
+                        control={control}
+                        name="deal_value"
+                        render={({ field }) => (
+                          <CurrencyInput
+                            placeholder="R$ 0,00"
+                            value={field.value ?? 0}
+                            onChange={field.onChange}
+                            onBlur={field.onBlur}
+                          />
+                        )}
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label>Fase</Label>
@@ -283,6 +344,28 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
                       </Select>
                     )}
                   </div>
+
+                  {/* Remover negocio: separado por uma linha para nao se confundir
+                      com o "Remover" do contato, que fica no rodape do form. */}
+                  {/* depende da migration do Hub que libera manager no DELETE de deals; ate la, manager recebe recusa silenciosa do RLS */}
+                  {(isAdmin || isManager) && (
+                    <div className="border-t border-border/50 pt-3">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setDeleteDealOpen(true)}
+                        disabled={deleteDeal.isPending}
+                        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      >
+                        <Trash2 className="mr-1 h-4 w-4" />
+                        Remover negócio
+                      </Button>
+                      <p className="mt-1.5 text-[10px] text-muted-foreground">
+                        Remove apenas este negócio. O contato permanece.
+                      </p>
+                    </div>
+                  )}
                 </>
               )}
 
@@ -296,7 +379,18 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Telefone *</Label>
-                  <Input {...register('phone')} />
+                  <Controller
+                    control={control}
+                    name="phone"
+                    render={({ field }) => (
+                      <PhoneInput
+                        value={field.value ?? ''}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        placeholder="(11) 99999-9999"
+                      />
+                    )}
+                  />
                   {errors.phone && <p className="text-xs text-destructive">{errors.phone.message}</p>}
                 </div>
                 <div className="space-y-2">
@@ -397,25 +491,6 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
                 </div>
               )}
 
-              <div className="rounded-lg bg-muted/50 p-3 space-y-1">
-                <p className="text-xs text-muted-foreground">
-                  Score IA: <span className="font-medium text-foreground">{lead.ai_score}/100</span>
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Status: <span className="font-medium text-foreground">{lead.conversation_status}</span>
-                </p>
-                {lead.whatsapp_instance_name && (
-                  <p className="text-xs text-muted-foreground">
-                    Instancia WhatsApp: <span className="font-medium text-foreground">{lead.whatsapp_instance_name}</span>
-                  </p>
-                )}
-                <p className="text-xs text-muted-foreground">
-                  Criado em: <span className="font-medium text-foreground">
-                    {new Date(lead.created_at).toLocaleDateString('pt-BR')}
-                  </span>
-                </p>
-              </div>
-
               <div className="space-y-2">
                 <Label>Observações</Label>
                 <textarea
@@ -436,7 +511,8 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
               </div>
 
               <div className="flex items-center justify-between pt-2">
-                <Button
+                {/* depende da migration do Hub que libera manager no DELETE de deals/leads; ate la, manager recebe recusa silenciosa do RLS */}
+                {(isAdmin || isManager) && <Button
                   type="button"
                   variant="destructive"
                   size="sm"
@@ -445,8 +521,10 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
                 >
                   <Trash2 className="mr-1 h-4 w-4" />
                   Remover
-                </Button>
-                <div className="flex gap-2">
+                </Button>}
+                {/* ml-auto ancora o grupo a direita mesmo quando o Remover nao
+                    renderiza e o justify-between fica com um filho so. */}
+                <div className="ml-auto flex gap-2">
                   <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
                   <Button type="submit" disabled={updateLead.isPending || updateDeal.isPending}>
                     {(updateLead.isPending || updateDeal.isPending) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -467,6 +545,45 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
         </Tabs>
       </DialogContent>
     </Dialog>
+
+    <AlertDialog open={deleteDealOpen} onOpenChange={setDeleteDealOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle className="text-destructive">
+            Remover negócio{activeDeal ? `: ${activeDeal.name}` : ''}
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            Isto remove apenas este negócio. O contato e o histórico dele permanecem.
+            Esta ação não pode ser desfeita.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+
+        <AlertDialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => setDeleteDealOpen(false)}
+            disabled={deleteDeal.isPending}
+          >
+            Cancelar
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={handleDeleteDeal}
+            disabled={deleteDeal.isPending}
+          >
+            {deleteDeal.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Removendo...
+              </>
+            ) : (
+              'Remover negócio'
+            )}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   )
 }
 

@@ -18,7 +18,6 @@ import { TeamHighlightCard } from '@/components/dashboard/team-highlight-card'
 import { SellerPerformanceTable } from '@/components/dashboard/seller-performance-table'
 import { MonthlyComparisonGrid } from '@/components/dashboard/monthly-comparison-grid'
 import { MetricsLineChart } from '@/components/dashboard/metrics-line-chart'
-import { NextActionsCard } from '@/components/dashboard/next-actions-card'
 import { BottleneckDetector } from '@/components/dashboard/bottleneck-detector'
 import { ForecastCard } from '@/components/dashboard/forecast-card'
 import { CopilotCard } from '@/components/dashboard/copilot-card'
@@ -333,15 +332,14 @@ const DashboardPage = () => {
           </div>
         )}
 
-        {/* INTELIGENCIA: ACOES + GARGALOS + PREVISAO */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <NextActionsCard pipelineId={selectedPipelineId} />
+        {/* INTELIGENCIA: GARGALOS + PREVISAO */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <BottleneckDetector pipelineId={selectedPipelineId} />
           <ForecastCard pipelineId={selectedPipelineId} />
         </div>
 
         {/* COPILOTO DE VENDAS */}
-        <CopilotCard />
+        <CopilotCard pipelineId={selectedPipelineId} />
 
         {/* LEADS POR ORIGEM + EQUIPE EM DESTAQUE */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

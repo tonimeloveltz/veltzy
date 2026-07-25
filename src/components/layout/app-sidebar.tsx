@@ -185,14 +185,6 @@ const AppSidebar = () => {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{profile?.name}</p>
                 <p className="text-xs text-muted-foreground truncate">{profile?.email}</p>
-                {(taskCounts?.pending ?? 0) > 0 && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); navigate('/tarefas') }}
-                    className="text-[10px] text-muted-foreground hover:text-primary transition-smooth"
-                  >
-                    {taskCounts!.pending} tarefa{taskCounts!.pending > 1 ? 's' : ''} pendente{taskCounts!.pending > 1 ? 's' : ''}
-                  </button>
-                )}
               </div>
             </button>
           </DropdownMenuTrigger>
