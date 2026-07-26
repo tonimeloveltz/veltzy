@@ -77,53 +77,13 @@ Deno.serve(async (req) => {
       return json({ error: 'Invalid phone' }, 400)
     }
 
-    // 5. Pipeline routing via pipeline_sources
-    const { data: pipelineSource } = await supabase
-      .from('pipeline_sources')
-      .select('pipeline_id')
-      .eq('source_id', sourceId)
-      .limit(1)
-      .maybeSingle()
-
-    let pipelineId = pipelineSource?.pipeline_id ?? undefined
-
-    // Fallback: pipeline default da empresa
-    if (!pipelineId) {
-      const { data: defaultPipeline } = await supabase
-        .from('pipelines')
-        .select('id')
-        .eq('company_id', companyId)
-        .eq('is_default', true)
-        .eq('is_active', true)
-        .maybeSingle()
-
-      if (!defaultPipeline) {
-        const { data: fallback } = await supabase
-          .from('pipelines')
-          .select('id')
-          .eq('company_id', companyId)
-          .eq('is_active', true)
-          .order('position')
-          .limit(1)
-          .maybeSingle()
-        pipelineId = fallback?.id
-      } else {
-        pipelineId = defaultPipeline.id
-      }
-    }
-
-    // 6. Resolver whatsapp_instance_name do pipeline (para SDR transfer)
-    let instanceName: string | null = null
-    if (pipelineId) {
-      const { data: pipeline } = await supabase
-        .from('pipelines')
-        .select('sdr_instance_name')
-        .eq('id', pipelineId)
-        .single()
-      instanceName = pipeline?.sdr_instance_name ?? null
-    }
-
-    // 7. Delegar para handler compartilhado
+    // 5. Delegar para handler compartilhado.
+    // Pipeline agora e decidido pelo resolver (resolve-pipeline-by-origin) DENTRO do handler,
+    // a partir do sourceId (match webhook_source, cobre o legado do pipeline_sources, migrado
+    // em 1C) e dos identificadores de campanha estruturados (utm/campaign/ad). Nao calculamos
+    // mais pipelineId aqui (RF6, fonte unica de decisao).
+    // instanceName: null. A origem do webhook e a source/campanha, nao uma instancia; se o
+    // SDR precisar responder, resolve-instance.ts cai no sdr_instance_name do pipeline roteado.
     const result = await handleInboundMessage({
       supabaseUrl,
       supabaseKey: serviceKey,
@@ -137,10 +97,12 @@ Deno.serve(async (req) => {
       fileName: null,
       fileMimeType: null,
       source: 'webhook',
-      instanceName,
+      instanceName: null,
       adContext: null,
-      pipelineId,
       sourceId,
+      utmCampaign: mapped.utmCampaign,
+      campaignId: mapped.campaignId,
+      adId: mapped.adId,
       useQueue: true,
     })
 

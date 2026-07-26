@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { resolvePipelineByOrigin, type OriginIdentifiers, type ResolvedPipeline } from './resolve-pipeline-by-origin.ts'
 
 // --- Tipos ---
 
@@ -28,6 +29,11 @@ export interface InboundParams {
   pipelineId?: string
   /** Override: lead_source.id (usado por source-webhook) */
   sourceId?: string
+  /** Identificadores de campanha vindos do webhook (Lead Ads / Google / UTM).
+   *  No WhatsApp, o ad_id vem de adContext.ad_id (resolvido no handler). */
+  adId?: string | null
+  campaignId?: string | null
+  utmCampaign?: string | null
   /** Se true, pula atribuicao imediata e coloca lead na fila (distribute-queue) */
   useQueue?: boolean
 }
@@ -42,6 +48,29 @@ export interface InboundResult {
 export async function handleInboundMessage(params: InboundParams): Promise<InboundResult> {
   const supabase = createClient(params.supabaseUrl, params.supabaseKey, { db: { schema: 'veltzy' } })
   const supabasePublic = createClient(params.supabaseUrl, params.supabaseKey)
+
+  // 0. Origem -> pipeline: resolver UMA vez (RF6, elimina o ponto duplo de decisao).
+  //    source_id: webhook usa o override (params.sourceId); WhatsApp/IG resolve pelo slug 'whatsapp'.
+  //    Alimenta tanto o resolver (habilita catch-all webhook_source) quanto a coluna deals.source_id (RF5).
+  let originSourceId: string | null = params.sourceId ?? null
+  if (!originSourceId) {
+    const { data: whatsappSource } = await supabase
+      .from('lead_sources')
+      .select('id')
+      .eq('company_id', params.companyId)
+      .eq('slug', 'whatsapp')
+      .maybeSingle()
+    originSourceId = whatsappSource?.id ?? null
+  }
+  const adCtx = (params.adContext ?? {}) as Record<string, unknown>
+  const origin: OriginIdentifiers = {
+    adId: params.adId ?? (adCtx.ad_id as string | undefined) ?? null,
+    campaignId: params.campaignId ?? null,
+    utmCampaign: params.utmCampaign ?? null,
+    instanceName: params.instanceName ?? null,
+    sourceId: originSourceId,
+  }
+  const resolved = await resolvePipelineByOrigin(supabase, params.companyId, origin)
 
   // 1. Buscar lead existente
   let { data: lead } = await supabase
@@ -67,7 +96,7 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
 
   // 2. Criar lead se nao existe
   if (!lead) {
-    lead = await createLead(supabase, supabasePublic, params)
+    lead = await createLead(supabase, supabasePublic, params, resolved, originSourceId)
   }
 
   if (!lead) {
@@ -75,7 +104,7 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
   }
 
   // 2.5. Criar deal para o lead (novo ou existente)
-  await createDealForLead(supabase, supabasePublic, params, lead, isNewLead)
+  await createDealForLead(supabase, supabasePublic, params, lead, isNewLead, resolved, origin)
 
   // 3. Buscar avatar do WhatsApp (se solicitado e lead sem avatar)
   // Webhook: sem avatar (lead de formulario, nao tem WhatsApp profile)
@@ -285,53 +314,12 @@ async function createLead(
   supabase: SupabaseClient,
   supabasePublic: SupabaseClient,
   params: InboundParams,
+  resolved: ResolvedPipeline,
+  sourceId: string | null,
 ): Promise<{ id: string; assigned_to: string | null; avatar_url: string | null; name: string | null; whatsapp_instance_name: string | null } | null> {
-  // Pipeline: usar override (webhook) ou buscar default (whatsapp/instagram)
-  let pipelineId: string | undefined = params.pipelineId
-
-  if (!pipelineId) {
-    const { data: rawDefault, error: defaultError } = await supabase
-      .from('pipelines')
-      .select('id')
-      .eq('company_id', params.companyId)
-      .eq('is_default', true)
-      .eq('is_active', true)
-      .maybeSingle()
-
-    if (defaultError) {
-      console.error('[lead-inbound] Error fetching default pipeline:', JSON.stringify(defaultError))
-    }
-
-    pipelineId = rawDefault?.id
-
-    if (!pipelineId) {
-      const { data: fallback, error: fallbackError } = await supabase
-        .from('pipelines')
-        .select('id')
-        .eq('company_id', params.companyId)
-        .eq('is_active', true)
-        .order('position')
-        .order('created_at')
-        .limit(1)
-        .maybeSingle()
-      if (fallbackError) {
-        console.error('[lead-inbound] Error fetching fallback pipeline:', JSON.stringify(fallbackError))
-      }
-      pipelineId = fallback?.id
-    }
-  }
-
-  // Source: usar override (webhook) ou buscar por slug 'whatsapp'
-  let sourceId: string | null = params.sourceId ?? null
-  if (!sourceId) {
-    const { data: whatsappSource } = await supabase
-      .from('lead_sources')
-      .select('id')
-      .eq('company_id', params.companyId)
-      .eq('slug', 'whatsapp')
-      .maybeSingle()
-    sourceId = whatsappSource?.id ?? null
-  }
+  // Pipeline e source_id ja resolvidos UMA vez no handler (RF6): sem calculo proprio aqui.
+  // leads.pipeline_id e NOT NULL (migration 027); createLead so roda para lead NOVO (D-3).
+  const pipelineId = resolved.pipelineId ?? undefined
 
   // Atribuicao: webhook usa fila (distribute-queue), outros atribuem imediatamente
   let assignedTo: string | null = null
@@ -605,38 +593,17 @@ async function createDealForLead(
   params: InboundParams,
   lead: { id: string; assigned_to: string | null; avatar_url: string | null; name: string | null; whatsapp_instance_name: string | null },
   isNewLead: boolean,
+  resolved: ResolvedPipeline,
+  origin: OriginIdentifiers,
 ): Promise<void> {
   try {
-    // Buscar pipeline: usar override (webhook) ou default
-    let pipeline: { id: string; name: string } | null = null
-
-    if (params.pipelineId) {
-      const { data } = await supabase
-        .from('pipelines')
-        .select('id, name')
-        .eq('id', params.pipelineId)
-        .single()
-      pipeline = data
-    }
-
-    if (!pipeline) {
-      const { data: defaultPipeline } = await supabase
-        .from('pipelines')
-        .select('id, name')
-        .eq('company_id', params.companyId)
-        .eq('is_default', true)
-        .eq('is_active', true)
-        .maybeSingle()
-
-      pipeline = defaultPipeline ?? (await supabase
-        .from('pipelines')
-        .select('id, name')
-        .eq('company_id', params.companyId)
-        .eq('is_active', true)
-        .order('position')
-        .limit(1)
-        .single()).data
-    }
+    // Pipeline ja decidido UMA vez pela origem (RF6). Buscar o nome para o titulo do deal.
+    if (!resolved.pipelineId) return
+    const { data: pipeline } = await supabase
+      .from('pipelines')
+      .select('id, name')
+      .eq('id', resolved.pipelineId)
+      .maybeSingle()
 
     if (!pipeline) return
 
@@ -646,9 +613,19 @@ async function createDealForLead(
       .eq('pipeline_id', pipeline.id)
       .order('position')
       .limit(1)
-      .single()
+      .maybeSingle()
 
     if (!firstStage) return
+
+    // Origem do negocio (RF5): preenchida em TODOS os inserts de deal.
+    const originFields = {
+      source_id: origin.sourceId ?? null,
+      origin_instance_name: origin.instanceName ?? null,
+      origin_ad_id: origin.adId ?? null,
+      origin_campaign_id: origin.campaignId ?? null,
+      origin_utm_campaign: origin.utmCampaign ?? null,
+      routing_rule_id: resolved.ruleId ?? null,
+    }
 
     // Guard global: lead ja tem deal (qualquer status) neste pipeline?
     // Opcao B: 1 contato = max 1 deal automatico por pipeline.
@@ -672,11 +649,34 @@ async function createDealForLead(
         stage_id: firstStage.id,
         status: 'open',
         assigned_to: lead.assigned_to,
+        ...originFields,
       })
       return
     }
 
-    // Lead existente: verificar conflito de territorio
+    // D-2: roteamento explicito por origem VENCE o guard de territorio.
+    // Se a origem casou uma regra (matchType !== 'default'), o negocio nasce 'open'
+    // no funil roteado sem virar pending_assignment (caso Joao: 2o negocio via anuncio).
+    // O guard 1:1 acima continua valendo (idempotencia por pipeline).
+    // DEFERRAL D-4: se o vendedor atribuido nao enxergar o pipeline roteado
+    // (user_pipeline_access), NAO ha fallback pra fila/gestor nesta fase: limitacao
+    // conhecida, baixo risco (user_pipeline_access e permissivo por default).
+    const explicitlyRouted = resolved.matchType !== 'default'
+    if (explicitlyRouted) {
+      await supabase.from('deals').insert({
+        company_id: params.companyId,
+        lead_id: lead.id,
+        name: `Negocio - ${pipeline.name}`,
+        pipeline_id: pipeline.id,
+        stage_id: firstStage.id,
+        status: 'open',
+        assigned_to: lead.assigned_to,
+        ...originFields,
+      })
+      return
+    }
+
+    // Lead existente SEM roteamento explicito (caiu no default): manter a logica de conflito atual.
     const { data: existingDeals } = await supabase
       .from('deals')
       .select('id, assigned_to, pipeline_id, status')
@@ -699,6 +699,7 @@ async function createDealForLead(
         stage_id: firstStage.id,
         status: 'pending_assignment',
         assigned_to: null,
+        ...originFields,
       }).select('id').single()
 
       if (newDeal) {
@@ -722,6 +723,7 @@ async function createDealForLead(
         stage_id: firstStage.id,
         status: 'open',
         assigned_to: existingAssignee ?? lead.assigned_to,
+        ...originFields,
       })
     }
     // Se ja tem deals no mesmo pipeline, nao cria duplicata

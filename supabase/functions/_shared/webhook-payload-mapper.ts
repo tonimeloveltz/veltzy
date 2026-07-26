@@ -17,6 +17,11 @@ export interface MappedPayload {
   email: string | null
   tags: string[]
   observations: string | null
+  // Campanha estruturada (RF4): flui para o roteamento por origem e para as colunas de origem do deal.
+  utmCampaign: string | null
+  campaignId: string | null
+  adId: string | null
+  gclid: string | null
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -43,12 +48,18 @@ export function mapPayload(preset: WebhookPreset, raw: unknown): MappedPayload {
  * Espera: { phone, name?, email?, tags?, observations? }
  */
 function mapGeneric(data: RawPayload): MappedPayload {
+  // generic SO extrai campanha dos campos top-level; nao ha buildObservations aqui,
+  // entao nao ha duplicacao a remover (observations le so o campo explicito).
   return {
     phone: str(data.phone ?? data.telefone ?? data.cel ?? data.celular ?? ''),
     name: str(data.name ?? data.nome ?? null),
     email: str(data.email ?? data.e_mail ?? null),
     tags: toStringArray(data.tags),
     observations: str(data.observations ?? data.observacoes ?? data.obs ?? null),
+    utmCampaign: str(data.utm_campaign ?? null),
+    campaignId: str(data.campaign_id ?? null),
+    adId: str(data.ad_id ?? null),
+    gclid: str(data.gclid ?? null),
   }
 }
 
@@ -63,7 +74,13 @@ function mapMetaLeadAds(data: RawPayload): MappedPayload {
     name: str(data.full_name ?? data.name ?? data.nome ?? null),
     email: str(data.email ?? null),
     tags: toStringArray(data.tags ?? ['meta-ads']),
-    observations: buildObservations(data, ['full_name', 'phone_number', 'email', 'name', 'phone', 'tags']),
+    // strip dos campos de campanha do knownKeys pra nao duplicarem estruturado + texto.
+    observations: buildObservations(data, ['full_name', 'phone_number', 'email', 'name', 'phone', 'tags',
+      'campaign_id', 'adset_id', 'ad_id', 'form_id', 'utm_campaign', 'utm_source', 'utm_medium', 'gclid']),
+    utmCampaign: str(data.utm_campaign ?? null),
+    campaignId: str(data.campaign_id ?? null),
+    adId: str(data.ad_id ?? null),
+    gclid: null,
   }
 }
 
@@ -74,14 +91,25 @@ function mapMetaLeadAds(data: RawPayload): MappedPayload {
  */
 function mapGoogleLeadForm(data: RawPayload): MappedPayload {
   const columns: Array<{ column_id: string; string_value: string }> = data.user_column_data
-  if (Array.isArray(columns)) {
-    const get = (id: string) => columns.find((c) => c.column_id === id)?.string_value ?? null
+  const hasColumns = Array.isArray(columns)
+  const get = (id: string) => hasColumns ? (columns.find((c) => c.column_id === id)?.string_value ?? null) : null
+
+  // Campanha: Google traz gclid/campaign_id no top-level ou nas colunas (CAMPAIGN_ID/GCLID). Sem ad_id.
+  const campaign = {
+    utmCampaign: str(data.utm_campaign ?? null),
+    campaignId: str(data.campaign_id ?? get('CAMPAIGN_ID')),
+    adId: null,
+    gclid: str(data.gclid ?? get('GCLID')),
+  }
+
+  if (hasColumns) {
     return {
       phone: str(get('PHONE_NUMBER') ?? get('PHONE') ?? ''),
       name: str(get('FULL_NAME') ?? get('NAME') ?? null),
       email: str(get('EMAIL') ?? null),
       tags: ['google-ads'],
       observations: null,
+      ...campaign,
     }
   }
   // Fallback: tentar formato achatado
@@ -91,6 +119,7 @@ function mapGoogleLeadForm(data: RawPayload): MappedPayload {
     email: str(data.email ?? null),
     tags: ['google-ads'],
     observations: null,
+    ...campaign,
   }
 }
 
@@ -107,6 +136,11 @@ function mapRdStation(data: RawPayload): MappedPayload {
     email: str(lead?.email ?? null),
     tags: toStringArray(lead?.tags ?? ['rd-station']),
     observations: str(lead?.notes ?? lead?.observations ?? null),
+    // RD Station: fora do escopo de anuncio (sem campanha estruturada).
+    utmCampaign: null,
+    campaignId: null,
+    adId: null,
+    gclid: null,
   }
 }
 
