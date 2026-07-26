@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { ColorPicker } from '@/components/shared/color-picker'
 import { useAuthStore } from '@/stores/auth.store'
 import { getAllLeadSources, createLeadSource, toggleLeadSourceActive, deleteLeadSource } from '@/services/lead-sources.service'
+import type { CompanyFeatures } from '@/types/database'
 
 const sourceIconMap: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
   instagram: Camera,
@@ -18,14 +19,29 @@ const sourceIconMap: Record<string, React.ComponentType<{ className?: string; st
 
 const getSourceIcon = (slug: string) => sourceIconMap[slug] ?? Globe
 
+// Origens de sistema atreladas a um canal: so aparecem se o canal estiver habilitado
+// em company.features (filtro UI-only; nao apaga nada no banco).
+const CHANNEL_FLAG: Partial<Record<string, keyof CompanyFeatures>> = {
+  instagram: 'instagram_enabled',
+  // futuro: linkedin: 'linkedin_enabled', etc.
+}
+
 const LeadSourcesManager = () => {
-  const companyId = useAuthStore((s) => s.company?.id)
+  const company = useAuthStore((s) => s.company)
+  const companyId = company?.id
   const queryClient = useQueryClient()
 
   const { data: sources, isLoading } = useQuery({
     queryKey: ['lead-sources-all', companyId],
     queryFn: () => getAllLeadSources(companyId!),
     enabled: !!companyId,
+  })
+
+  // Esconde origens de canal nao habilitado (ex.: Instagram sem instagram_enabled).
+  // UI-only: WhatsApp/Manual/custom sempre aparecem; nada muda no banco.
+  const visibleSources = sources?.filter((s) => {
+    const flag = CHANNEL_FLAG[s.slug]
+    return !flag || company?.features?.[flag] === true
   })
 
   const [newName, setNewName] = useState('')
@@ -60,7 +76,7 @@ const LeadSourcesManager = () => {
   }
 
   const handleDelete = async (id: string, isSystem: boolean) => {
-    if (isSystem) { toast.error('Origens do sistema nao podem ser removidas'); return }
+    if (isSystem) { toast.error('Origens do sistema não podem ser removidas'); return }
     if (!confirm('Remover esta origem?')) return
     if (!companyId) return
     try {
@@ -76,7 +92,7 @@ const LeadSourcesManager = () => {
     <Card>
       <CardHeader>
         <CardTitle>Origens de Lead</CardTitle>
-        <CardDescription>Gerencie as origens de captura de leads</CardDescription>
+        <CardDescription>{"Origens que rotulam seus leads e alimentam os webhooks e as regras de 'Origem → funil'."}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {isLoading && (
@@ -91,7 +107,7 @@ const LeadSourcesManager = () => {
           </div>
         )}
 
-        {sources?.map((s) => {
+        {visibleSources?.map((s) => {
           const Icon = getSourceIcon(s.slug)
           return (
             <div key={s.id} className="flex items-center gap-3 rounded-lg border border-border/30 p-3">
