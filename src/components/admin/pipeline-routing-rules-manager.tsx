@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { Plus, Trash2, Route } from 'lucide-react'
+import { Plus, Trash2, Route, HelpCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useRoles } from '@/hooks/use-roles'
 import { useWhatsAppInstances } from '@/hooks/use-whatsapp-instances'
 import { useLeadSources } from '@/hooks/use-lead-sources'
@@ -18,10 +19,10 @@ import {
 import type { RoutingMatchType } from '@/types/database'
 
 const MATCH_TYPE_LABELS: Record<RoutingMatchType, string> = {
-  ad_id: 'Campanha: ID do anuncio',
+  ad_id: 'Campanha: ID do anúncio',
   campaign_id: 'Campanha: ID da campanha',
   utm_campaign: 'Campanha: UTM',
-  instance: 'Instancia WhatsApp',
+  instance: 'Número de WhatsApp',
   webhook_source: 'Webhook / Origem',
 }
 
@@ -67,7 +68,7 @@ const PipelineRoutingRulesManager = ({ pipelineId }: PipelineRoutingRulesManager
     } catch (err) {
       const code = (err as { code?: string })?.code
       if (code === '23505') {
-        toast.error('Ja existe uma regra para essa origem')
+        toast.error('Já existe uma regra para essa origem')
       } else {
         toast.error(err instanceof Error ? err.message : 'Erro ao criar regra')
       }
@@ -97,11 +98,20 @@ const PipelineRoutingRulesManager = ({ pipelineId }: PipelineRoutingRulesManager
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Route className="h-4 w-4" />
-          Roteamento por origem
+          Origem &rarr; funil
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button type="button" className="text-muted-foreground hover:text-foreground" aria-label="Como funciona a precedência">
+                <HelpCircle className="h-3.5 w-3.5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-xs">
+              Quando um negócio se encaixa em mais de uma regra, vence a mais específica: anúncio &gt; campanha &gt; UTM &gt; número &gt; webhook.
+            </TooltipContent>
+          </Tooltip>
         </CardTitle>
         <CardDescription>
-          Direcione automaticamente cada negocio para este funil conforme a origem (instancia, campanha ou webhook).
-          Quando mais de uma regra casa, a mais especifica vence: anuncio &gt; campanha &gt; UTM &gt; instancia &gt; webhook.
+          Cada negócio entra neste funil pela origem. Vale a regra mais específica; sem regra, vai para o funil padrão.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -123,7 +133,7 @@ const PipelineRoutingRulesManager = ({ pipelineId }: PipelineRoutingRulesManager
 
         {pipelineId && !isLoading && rules?.length === 0 && (
           <p className="text-sm text-muted-foreground">
-            Nenhuma regra. Sem regra que case, o negocio segue para o funil padrao da empresa.
+            Nenhuma regra. Sem regra que case, o negócio segue para o funil padrão da empresa.
           </p>
         )}
 
@@ -164,7 +174,7 @@ const PipelineRoutingRulesManager = ({ pipelineId }: PipelineRoutingRulesManager
 
             {newType === 'instance' ? (
               <Select value={newValue} onValueChange={setNewValue}>
-                <SelectTrigger className="h-8 flex-1"><SelectValue placeholder="Escolha a instancia" /></SelectTrigger>
+                <SelectTrigger className="h-8 flex-1"><SelectValue placeholder="Escolha o número" /></SelectTrigger>
                 <SelectContent>
                   {instances?.map((i) => (
                     <SelectItem key={i.instance_name} value={i.instance_name}>
@@ -184,7 +194,7 @@ const PipelineRoutingRulesManager = ({ pipelineId }: PipelineRoutingRulesManager
               </Select>
             ) : (
               <Input
-                placeholder={newType === 'utm_campaign' ? 'Valor da UTM...' : 'ID da campanha/anuncio...'}
+                placeholder={newType === 'utm_campaign' ? 'Valor da UTM...' : 'ID da campanha/anúncio...'}
                 value={newValue}
                 onChange={(e) => setNewValue(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
