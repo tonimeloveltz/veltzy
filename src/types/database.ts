@@ -187,6 +187,21 @@ export interface PipelineStage {
   updated_at: string
 }
 
+/** Tipos de origem que uma regra de roteamento pode casar (mais especifico vence). */
+export type RoutingMatchType = 'ad_id' | 'campaign_id' | 'utm_campaign' | 'instance' | 'webhook_source'
+
+/** Regra origem -> pipeline, por empresa. Tabela veltzy.pipeline_routing_rules. */
+export interface PipelineRoutingRule {
+  id: string
+  company_id: string
+  pipeline_id: string
+  match_type: RoutingMatchType
+  match_value: string
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
 export interface AdContext {
   ad_id?: string
   ad_title?: string
@@ -294,6 +309,13 @@ export interface Deal {
   status: DealStatus
   closed_at: string | null
   observations: string | null
+  // origem (feature origem-por-pipeline: roteamento e relatorio de conversao)
+  source_id: string | null
+  origin_instance_name: string | null
+  origin_ad_id: string | null
+  origin_campaign_id: string | null
+  origin_utm_campaign: string | null
+  routing_rule_id: string | null
   created_at: string
   updated_at: string
   // joins
