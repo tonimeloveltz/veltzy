@@ -45,25 +45,28 @@ export const getWebhookIntegrations = async (companyId: string): Promise<Webhook
   if (error) throw error
   if (!integrations || integrations.length === 0) return []
 
-  // Buscar lead_sources e pipeline_sources para enriquecer
+  // Buscar lead_sources e as regras de roteamento (webhook_source) para enriquecer.
+  // Fonte unica: le pipeline_routing_rules (match_value = source_id), mesmo lugar que o resolver.
   const sourceIds = [...new Set(integrations.map((i) => i.source_id))]
   const { data: sources } = await veltzy()
     .from('lead_sources')
     .select('id, name, slug')
     .in('id', sourceIds)
 
-  const { data: pipelineSources } = await veltzy()
-    .from('pipeline_sources')
-    .select('source_id, pipeline_id')
-    .in('source_id', sourceIds)
+  const { data: routingRules } = await veltzy()
+    .from('pipeline_routing_rules')
+    .select('match_value, pipeline_id')
+    .eq('company_id', companyId)
+    .eq('match_type', 'webhook_source')
+    .in('match_value', sourceIds)
 
-  const pipelineIds = [...new Set((pipelineSources ?? []).map((ps) => ps.pipeline_id))]
+  const pipelineIds = [...new Set((routingRules ?? []).map((r) => r.pipeline_id))]
   const { data: pipelines } = pipelineIds.length > 0
     ? await veltzy().from('pipelines').select('id, name').in('id', pipelineIds)
     : { data: [] }
 
   const sourceMap = new Map((sources ?? []).map((s) => [s.id, s]))
-  const pipelineSourceMap = new Map((pipelineSources ?? []).map((ps) => [ps.source_id, ps.pipeline_id]))
+  const pipelineSourceMap = new Map((routingRules ?? []).map((r) => [r.match_value, r.pipeline_id]))
   const pipelineMap = new Map((pipelines ?? []).map((p) => [p.id, p]))
 
   return integrations.map((integration) => {
@@ -103,17 +106,18 @@ export const createWebhookIntegration = async (
     .single()
   if (error) throw error
 
-  // Criar pipeline_sources (mapeamento source -> pipeline)
-  const { error: psError } = await veltzy()
-    .from('pipeline_sources')
+  // Criar a regra de roteamento webhook_source (origem -> pipeline) no lugar unico
+  // que o resolver le. match_value guarda o source_id (uuid) como texto.
+  const { error: prError } = await veltzy()
+    .from('pipeline_routing_rules')
     .upsert(
-      { pipeline_id: pipelineId, source_id: sourceId },
-      { onConflict: 'pipeline_id,source_id' }
+      { company_id: companyId, pipeline_id: pipelineId, match_type: 'webhook_source', match_value: sourceId },
+      { onConflict: 'company_id,match_type,match_value' }
     )
-  if (psError) {
+  if (prError) {
     // Rollback: deletar a integracao criada
     await veltzy().from('source_integrations').delete().eq('id', data.id)
-    throw psError
+    throw prError
   }
 
   return data
