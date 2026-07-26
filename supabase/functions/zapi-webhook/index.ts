@@ -109,6 +109,9 @@ Deno.serve(async (req) => {
       fileMimeType = payload.document.mimeType ?? null
     }
 
+    // Nota (feature origem-por-pipeline, §5): o referral do Z-API (legado) NAO traz ad_id.
+    // Logo, o roteamento por campanha (ad_id) nao casa por este caminho: degrada para
+    // instancia/default. Nao e bug, e limitacao do provider legado. Evolution/Cloud API trazem ad_id.
     const adContext = payload.referral ? {
       ad_title: payload.referral.headline,
       ad_body: payload.referral.body,

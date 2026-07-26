@@ -3,6 +3,7 @@ import { StageManagerInline } from '@/components/admin/stage-manager-inline'
 import { LeadSourcesManager } from '@/components/admin/lead-sources-manager'
 import { PipelineListManager } from '@/components/admin/pipeline-list-manager'
 import { PipelineSdrConfig } from '@/components/admin/pipeline-sdr-config'
+import { PipelineRoutingRulesManager } from '@/components/admin/pipeline-routing-rules-manager'
 import { usePipelines } from '@/hooks/use-pipelines'
 
 const PipelineTab = () => {
@@ -24,6 +25,7 @@ const PipelineTab = () => {
       />
       <StageManagerInline pipelineId={selectedPipelineId} />
       <PipelineSdrConfig pipelineId={selectedPipelineId} />
+      <PipelineRoutingRulesManager pipelineId={selectedPipelineId} />
       <LeadSourcesManager />
     </div>
   )
