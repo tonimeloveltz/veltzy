@@ -19,6 +19,7 @@ import type { DealWithLead } from '@/types/database'
 import { useNavigate } from 'react-router-dom'
 import { Phone, MoreVertical, Pencil, ArrowRightLeft, UserRoundPen, Clock, MessageSquare, Bot, CheckSquare, FolderInput, ArrowLeftRight, AlertTriangle, AlertCircle, Plus } from 'lucide-react'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { dealStatusConfig, leadTemperatureConfig } from '@/lib/lead-config'
 import type { LeadTemperature } from '@/types/database'
 
 function isProposalStage(slug: string) {
@@ -43,15 +44,8 @@ interface DealCardProps {
   fireOnly?: boolean
 }
 
-const temperatureConfig: Record<LeadTemperature, { width: string; gradient: string }> = {
-  cold:  { width: '25%',  gradient: 'linear-gradient(to right, #bfdbfe, #3b82f6)' },
-  warm:  { width: '50%',  gradient: 'linear-gradient(to right, #fde68a, #f59e0b)' },
-  hot:   { width: '75%',  gradient: 'linear-gradient(to right, #fed7aa, #f97316)' },
-  fire:  { width: '100%', gradient: 'linear-gradient(to right, #f97316, #ef4444, #dc2626)' },
-}
-
 const TemperatureBar = ({ temperature }: { temperature: LeadTemperature }) => {
-  const config = temperatureConfig[temperature]
+  const config = leadTemperatureConfig[temperature]
   return (
     <div className="h-1 w-full rounded-full bg-muted overflow-hidden">
       <div
@@ -119,7 +113,7 @@ const DealCard = ({ deal, onEditDeal, onTransfer, onMovePipeline, onCreateDeal, 
         {isPendingAssignment && (
           <div className="flex items-center gap-1.5 rounded-md bg-amber-500/15 border border-amber-500/25 px-2 py-1 text-[10px] font-medium text-amber-700 dark:text-amber-400">
             <AlertCircle className="h-3 w-3 shrink-0" />
-            Aguardando atribuicao
+            {dealStatusConfig.pending_assignment.label}
           </div>
         )}
 

@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx'
-import type { LeadWithDetails, DealStatus } from '@/types/database'
+import { conversationStatusLabels, dealStatusConfig, leadTemperatureConfig } from '@/lib/lead-config'
+import type { ConversationStatus, LeadWithDetails, DealStatus } from '@/types/database'
 
 /**
  * Lead para export com o negocio representativo anexado. value/status do CSV
@@ -10,7 +11,19 @@ export type ExportLeadRow = LeadWithDetails & {
   deal?: { value: number | null; status: DealStatus } | null
 }
 
-const getLeadRows = (leads: ExportLeadRow[]) =>
+// Status e temperatura saem traduzidos, mas a linha exportada e montada tambem
+// a partir de objetos remontados a mao (ex: dealsAsLeads em /deals, que passa
+// `as never`): valor ausente ou fora do mapa vira string vazia, nunca excecao.
+const statusLabel = (status?: DealStatus | null) =>
+  (status && dealStatusConfig[status]?.label) || ''
+
+const temperatureLabel = (temperature?: LeadWithDetails['temperature'] | null) =>
+  (temperature && leadTemperatureConfig[temperature]?.label) || ''
+
+const conversationStatusLabel = (status?: ConversationStatus | null) =>
+  (status && conversationStatusLabels[status]) || ''
+
+const getLeadRows = (leads: ExportLeadRow[]) => //recebe leads - dealsasleads aqui
   leads.map((l) => [
     l.name ?? '',
     l.phone,
@@ -18,8 +31,8 @@ const getLeadRows = (leads: ExportLeadRow[]) =>
     l.deal?.value != null ? l.deal.value.toString() : '',
     l.pipelines?.name ?? '',
     l.pipeline_stages?.name ?? '',
-    l.deal?.status ?? '',
-    l.temperature,
+    statusLabel(l.deal?.status),
+    temperatureLabel(l.temperature),
     l.profiles?.name ?? '',
     (l.tags ?? []).join(', '),
     l.observations ?? '',
@@ -27,10 +40,11 @@ const getLeadRows = (leads: ExportLeadRow[]) =>
     l.instagram_id ?? '',
     l.linkedin_id ?? '',
     l.ai_score?.toString() ?? '',
-    l.conversation_status ?? '',
+    conversationStatusLabel(l.conversation_status),
     new Date(l.created_at).toLocaleDateString('pt-BR'),
-    new Date(l.updated_at).toLocaleDateString('pt-BR'),
+    l.updated_at ? new Date(l.updated_at).toLocaleDateString('pt-BR') : '',
   ])
+
 
 const EXPORT_HEADERS = ['Nome', 'Telefone', 'Email', 'Valor do Negocio', 'Pipeline', 'Etapa', 'Status', 'Temperatura', 'Responsavel', 'Tags', 'Observações', 'Origem', 'Instagram', 'LinkedIn', 'AI Score', 'Status Conversa', 'Criado em', 'Atualizado em']
 
@@ -117,8 +131,8 @@ export const exportToPdf = async (leads: ExportLeadRow[], filename = 'leads.pdf'
     l.deal?.value ? `R$ ${l.deal.value.toLocaleString('pt-BR')}` : '-',
     l.pipelines?.name ?? '-',
     l.pipeline_stages?.name ?? '-',
-    l.deal?.status ?? '-',
-    l.temperature,
+    statusLabel(l.deal?.status) || '-',
+    temperatureLabel(l.temperature) || '-',
     l.profiles?.name ?? '-',
     (l.tags ?? []).join(', ') || '-',
     l.lead_sources?.name ?? '-',

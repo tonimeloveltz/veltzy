@@ -169,9 +169,6 @@ const PipelineHeader = ({ onAddLead, onManageStages, fireOnly, onToggleFireOnly,
               <DropdownMenuItem onClick={() => doExport('xlsx', activePipelineId)}>
                 Exportar Excel (.xlsx)
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => doExport('pdf', activePipelineId)}>
-                Exportar PDF
-              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         )}
