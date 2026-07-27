@@ -17,6 +17,10 @@ export interface InboundParams {
   fileMimeType: string | null
   source: 'whatsapp' | 'instagram' | 'webhook'
   instanceName: string | null
+  /** Número Cloud API que originou a conversa (V2 multi-número). Carimba
+   *  leads.cloud_api_number_id para o outbound responder pelo número certo.
+   *  null para Evolution/Z-API. */
+  cloudApiNumberId?: string | null
   adContext: Record<string, unknown> | null
   /** Se true, tenta buscar foto de perfil via WhatsApp provider */
   fetchAvatar?: {
@@ -75,7 +79,7 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
   // 1. Buscar lead existente
   let { data: lead } = await supabase
     .from('leads')
-    .select('id, assigned_to, avatar_url, name, whatsapp_instance_name')
+    .select('id, assigned_to, avatar_url, name, whatsapp_instance_name, cloud_api_number_id')
     .eq('company_id', params.companyId)
     .eq('phone', params.phone)
     .maybeSingle()
@@ -89,6 +93,15 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
   if (lead && params.instanceName && lead.whatsapp_instance_name !== params.instanceName) {
     await supabase.from('leads')
       .update({ whatsapp_instance_name: params.instanceName })
+      .eq('id', lead.id)
+  }
+
+  // Carimbar o numero Cloud API de origem se veio e mudou (V2 multi-numero):
+  // o outbound (whatsapp-send) le leads.cloud_api_number_id para responder
+  // pelo numero certo. Espelha a logica de whatsapp_instance_name acima.
+  if (lead && params.cloudApiNumberId && lead.cloud_api_number_id !== params.cloudApiNumberId) {
+    await supabase.from('leads')
+      .update({ cloud_api_number_id: params.cloudApiNumberId })
       .eq('id', lead.id)
   }
 
@@ -316,7 +329,7 @@ async function createLead(
   params: InboundParams,
   resolved: ResolvedPipeline,
   sourceId: string | null,
-): Promise<{ id: string; assigned_to: string | null; avatar_url: string | null; name: string | null; whatsapp_instance_name: string | null } | null> {
+): Promise<{ id: string; assigned_to: string | null; avatar_url: string | null; name: string | null; whatsapp_instance_name: string | null; cloud_api_number_id: string | null } | null> {
   // Pipeline e source_id ja resolvidos UMA vez no handler (RF6): sem calculo proprio aqui.
   // leads.pipeline_id e NOT NULL (migration 027); createLead so roda para lead NOVO (D-3).
   const pipelineId = resolved.pipelineId ?? undefined
@@ -401,8 +414,9 @@ async function createLead(
       is_queued: !assignedTo,
       ad_context: params.adContext,
       whatsapp_instance_name: params.instanceName,
+      cloud_api_number_id: params.cloudApiNumberId ?? null,
     })
-    .select('id, assigned_to, avatar_url, name, whatsapp_instance_name')
+    .select('id, assigned_to, avatar_url, name, whatsapp_instance_name, cloud_api_number_id')
     .single()
 
   return newLead

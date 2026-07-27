@@ -213,6 +213,7 @@ async function processMessage(
       fileMimeType,
       source: 'whatsapp',
       instanceName: resolved.instanceLabel,
+      cloudApiNumberId: resolved.id,
       adContext,
       profilePicUrl: null,
     })
