@@ -49,6 +49,13 @@ export interface InboundParams {
    *  (mensagens do proprio dono ou historicas): nao devem fazer a IA responder
    *  nem gerar oportunidade/automacao. Default false (comportamento atual). */
   skipSideEffects?: boolean
+  /** Se true, marca a mensagem como historica (is_history=true, coluna da
+   *  migration 070) — dump de history do onboarding coexistence. A chave
+   *  is_history so entra no INSERT quando true, entao mensagens normais nao
+   *  referenciam a coluna e o codigo NAO depende da 070 estar aplicada: sem a
+   *  migration, so a importacao de history falha, o inbound normal segue intacto.
+   *  O caller de history passa isHistory e skipSideEffects juntos. Default false. */
+  isHistory?: boolean
 }
 
 export interface InboundResult {
@@ -197,6 +204,9 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
         external_id: params.externalId,
         instance_name: params.instanceName,
         delivery_status: 'sent',
+        // is_history so entra quando historica (migration 070): mensagens
+        // normais nao referenciam a coluna -> deploy nao depende da 070.
+        ...(params.isHistory ? { is_history: true } : {}),
       }).select('id').single()
 
       // Race condition: unique violation entre check e insert → tratar como duplicata

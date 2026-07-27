@@ -106,6 +106,23 @@ Deno.serve(async (req) => {
           }
         }
 
+        // 5. History (dump de ate 180d do onboarding coexistence). A Meta entrega
+        //    em chunks/fases (varios webhooks); cada invocacao trata um pedaco.
+        //    Grava com is_history=true (coluna da migration 070) + skipSideEffects.
+        //    FLAG-DAY: sem a 070 aplicada, so estes inserts falham; o inbound
+        //    normal segue intacto (mensagens normais nao referenciam a coluna).
+        if (Array.isArray(value.history)) {
+          for (const h of value.history) {
+            await processHistory(url, key, resolved, h)
+          }
+        }
+
+        // 6. smb_app_state_sync (contatos): nesta onda apenas logar/contar (V1.3).
+        if (change.field === 'smb_app_state_sync') {
+          const n = Array.isArray(value.contacts) ? value.contacts.length : 0
+          console.log(`[cloud-api-inbound] smb_app_state_sync recebido (V1.3, so log): ${n} contato(s), company=${resolved.companyId}`)
+        }
+
         // statuses[] e eventos de coexistencia: Fase 3 (nao processados aqui)
       }
     }
@@ -183,6 +200,7 @@ async function normalizeCloudApiContent(
   resolved: ResolvedNumber,
   // deno-lint-ignore no-explicit-any
   m: any,
+  opts: { skipMedia?: boolean } = {},
 ): Promise<{ messageType: string; content: string; fileUrl: string | null; fileName: string | null; fileMimeType: string | null }> {
   let messageType = m.type as string
   let content = ''
@@ -205,7 +223,9 @@ async function normalizeCloudApiContent(
       content = media?.caption ?? ''
       fileName = media?.filename ?? null
       fileMimeType = media?.mime_type ?? null
-      if (media?.id && token) {
+      // History (skipMedia): nao baixa a midia (pode estar expirada e o volume
+      // travaria o webhook). Preserva tipo/caption/mime; a midia fica sem URL.
+      if (media?.id && token && !opts.skipMedia) {
         const persisted = await downloadAndPersistCloudApiMedia(
           url, key, resolved.companyId, media.id, token, fileMimeType,
         )
@@ -310,5 +330,75 @@ async function processEcho(
     console.log(`[cloud-api-inbound] echo processed: leadId=${result.leadId}, isNew=${result.isNewLead}, wamid=${m.id}`)
   } catch (err) {
     console.error('[cloud-api-inbound] processEcho error:', err)
+  }
+}
+
+/**
+ * Processa um item de `history` (dump de ate 180d do onboarding coexistence).
+ * Estrutura: history[].threads[].messages[]. O telefone do lead e o id da thread
+ * (o contato); o sender_type de cada mensagem e derivado de quem enviou
+ * (from == contato -> 'lead', senao a empresa -> 'human'). Grava com
+ * is_history=true (coluna da migration 070) + skipSideEffects=true. Best-effort
+ * por mensagem: erro numa nao derruba as demais nem o 200.
+ *
+ * FLAG-DAY: is_history e coluna da 070; o PVO desta frente espera a 070 aplicada
+ * pelo Toni. Midia nao e baixada aqui (skipMedia) para nao travar o webhook.
+ */
+async function processHistory(
+  url: string,
+  key: string,
+  resolved: ResolvedNumber,
+  // deno-lint-ignore no-explicit-any
+  h: any,
+): Promise<void> {
+  const threads = Array.isArray(h?.threads) ? h.threads : []
+  for (const thread of threads) {
+    const leadPhone = normalizePhoneBR(thread?.id ?? '')
+    if (!leadPhone) {
+      console.warn('[cloud-api-inbound] history thread sem id valido, pulando')
+      continue
+    }
+
+    const messages = Array.isArray(thread?.messages) ? thread.messages : []
+    for (const m of messages) {
+      try {
+        // edit/revoke historicos: so registrar (D-V1)
+        if (m.type === 'revoke' || m.type === 'edit') {
+          console.log(`[cloud-api-inbound] history '${m.type}' registrado (D-V1): wamid=${m.id}`)
+          continue
+        }
+
+        // Quem enviou: from == contato (leadPhone) -> 'lead'; senao a empresa -> 'human'
+        const senderType: 'lead' | 'human' =
+          normalizePhoneBR(m.from ?? '') === leadPhone ? 'lead' : 'human'
+
+        const { messageType, content, fileUrl, fileName, fileMimeType } =
+          await normalizeCloudApiContent(url, key, resolved, m, { skipMedia: true })
+
+        await handleInboundMessage({
+          supabaseUrl: url,
+          supabaseKey: key,
+          companyId: resolved.companyId,
+          phone: leadPhone,
+          senderName: null,
+          content,
+          messageType,
+          externalId: m.id ?? null,
+          fileUrl,
+          fileName,
+          fileMimeType,
+          source: 'whatsapp',
+          instanceName: resolved.instanceLabel,
+          cloudApiNumberId: resolved.id,
+          adContext: null,
+          profilePicUrl: null,
+          senderType,
+          skipSideEffects: true,
+          isHistory: true,
+        })
+      } catch (err) {
+        console.error('[cloud-api-inbound] processHistory message error:', err)
+      }
+    }
   }
 }
