@@ -90,10 +90,19 @@ Deno.serve(async (req) => {
           continue
         }
 
-        // 3. Mensagens
+        // 3. Mensagens (contato -> empresa)
         if (Array.isArray(value.messages)) {
           for (const m of value.messages) {
             await processMessage(url, key, resolved, value, m)
+          }
+        }
+
+        // 4. Echoes de coexistence (smb_message_echoes): mensagens que o DONO
+        //    mandou pelo app WhatsApp Business. Guard de provider (V1.5) ja
+        //    aplicado acima. Entram como sender_type='human' sem side-effects.
+        if (Array.isArray(value.message_echoes)) {
+          for (const m of value.message_echoes) {
+            await processEcho(url, key, resolved, m)
           }
         }
 
@@ -125,70 +134,8 @@ async function processMessage(
     const phone = normalizePhoneBR(m.from)
     const senderName = value?.contacts?.[0]?.profile?.name ?? null
 
-    let messageType = m.type as string
-    let content = ''
-    let fileUrl: string | null = null
-    let fileName: string | null = null
-    let fileMimeType: string | null = null
-
-    const token = resolved.accessToken ?? Deno.env.get('META_SYSTEM_USER_TOKEN') ?? ''
-
-    switch (m.type) {
-      case 'text':
-        content = m.text?.body ?? ''
-        break
-      case 'image':
-      case 'audio':
-      case 'video':
-      case 'document':
-      case 'sticker': {
-        const media = m[m.type]
-        content = media?.caption ?? ''
-        fileName = media?.filename ?? null
-        fileMimeType = media?.mime_type ?? null
-        if (media?.id && token) {
-          const persisted = await downloadAndPersistCloudApiMedia(
-            url, key, resolved.companyId, media.id, token, fileMimeType,
-          )
-          if (persisted) {
-            fileUrl = persisted.fileUrl
-            fileMimeType = persisted.mimeType
-          }
-        }
-        break
-      }
-      case 'location':
-        content = `${m.location?.latitude},${m.location?.longitude}`
-        break
-      case 'contacts': {
-        const c = m.contacts?.[0]
-        content = `${c?.name?.formatted_name ?? ''}\n${c?.phones?.[0]?.phone ?? ''}`.trim()
-        messageType = 'contact'
-        break
-      }
-      case 'reaction':
-        messageType = 'text'
-        content = m.reaction?.emoji ?? ''
-        break
-      case 'interactive':
-        messageType = 'text'
-        content = m.interactive?.button_reply?.title ?? m.interactive?.list_reply?.title ?? ''
-        break
-      case 'button':
-        messageType = 'text'
-        content = m.button?.text ?? ''
-        break
-      default:
-        messageType = 'text'
-        content = ''
-    }
-
-    // Tipos fora do CHECK do banco caem para 'text' (igual evolution-inbound)
-    const validTypes = ['text', 'image', 'audio', 'video', 'document', 'sticker', 'location', 'contact']
-    if (!validTypes.includes(messageType)) {
-      console.warn(`[cloud-api-inbound] tipo '${messageType}' desconhecido, fallback para text`)
-      messageType = 'text'
-    }
+    const { messageType, content, fileUrl, fileName, fileMimeType } =
+      await normalizeCloudApiContent(url, key, resolved, m)
 
     const adContext = m.referral
       ? {
@@ -221,5 +168,147 @@ async function processMessage(
     console.log(`[cloud-api-inbound] processed: leadId=${result.leadId}, isNew=${result.isNewLead}, wamid=${m.id}`)
   } catch (err) {
     console.error('[cloud-api-inbound] processMessage error:', err)
+  }
+}
+
+/**
+ * Normaliza o conteudo de uma mensagem/eco da Cloud API (tipo + texto + midia)
+ * para os campos de InboundParams. Compartilhada por processMessage (inbound do
+ * contato) e processEcho (echo do dono) para os dois nao divergirem.
+ * Tipos fora do CHECK do banco caem para 'text' (igual evolution-inbound).
+ */
+async function normalizeCloudApiContent(
+  url: string,
+  key: string,
+  resolved: ResolvedNumber,
+  // deno-lint-ignore no-explicit-any
+  m: any,
+): Promise<{ messageType: string; content: string; fileUrl: string | null; fileName: string | null; fileMimeType: string | null }> {
+  let messageType = m.type as string
+  let content = ''
+  let fileUrl: string | null = null
+  let fileName: string | null = null
+  let fileMimeType: string | null = null
+
+  const token = resolved.accessToken ?? Deno.env.get('META_SYSTEM_USER_TOKEN') ?? ''
+
+  switch (m.type) {
+    case 'text':
+      content = m.text?.body ?? ''
+      break
+    case 'image':
+    case 'audio':
+    case 'video':
+    case 'document':
+    case 'sticker': {
+      const media = m[m.type]
+      content = media?.caption ?? ''
+      fileName = media?.filename ?? null
+      fileMimeType = media?.mime_type ?? null
+      if (media?.id && token) {
+        const persisted = await downloadAndPersistCloudApiMedia(
+          url, key, resolved.companyId, media.id, token, fileMimeType,
+        )
+        if (persisted) {
+          fileUrl = persisted.fileUrl
+          fileMimeType = persisted.mimeType
+        }
+      }
+      break
+    }
+    case 'location':
+      content = `${m.location?.latitude},${m.location?.longitude}`
+      break
+    case 'contacts': {
+      const c = m.contacts?.[0]
+      content = `${c?.name?.formatted_name ?? ''}\n${c?.phones?.[0]?.phone ?? ''}`.trim()
+      messageType = 'contact'
+      break
+    }
+    case 'reaction':
+      messageType = 'text'
+      content = m.reaction?.emoji ?? ''
+      break
+    case 'interactive':
+      messageType = 'text'
+      content = m.interactive?.button_reply?.title ?? m.interactive?.list_reply?.title ?? ''
+      break
+    case 'button':
+      messageType = 'text'
+      content = m.button?.text ?? ''
+      break
+    default:
+      messageType = 'text'
+      content = ''
+  }
+
+  const validTypes = ['text', 'image', 'audio', 'video', 'document', 'sticker', 'location', 'contact']
+  if (!validTypes.includes(messageType)) {
+    console.warn(`[cloud-api-inbound] tipo '${messageType}' desconhecido, fallback para text`)
+    messageType = 'text'
+  }
+
+  return { messageType, content, fileUrl, fileName, fileMimeType }
+}
+
+/**
+ * Processa um smb_message_echoes[]: mensagem que o DONO do numero mandou pelo
+ * app WhatsApp Business (coexistence). Entra no inbox como sender_type='human'
+ * do lead cujo telefone e `to`, SEM disparar SDR/automacao/auto-reply/deal
+ * (skipSideEffects=true).
+ *
+ * V1.4 anti-dup: external_id=wamid. O handler dedupa por external_id, entao o
+ * eco das mensagens que NOS mesmos enviamos via Cloud API (ja gravadas com
+ * external_id=wamid pelo whatsapp-send) cai no dedupe e nao vira INSERT novo.
+ *
+ * D-V1: edit/revoke apenas registrados (log), sem tratamento a fundo nesta onda.
+ */
+async function processEcho(
+  url: string,
+  key: string,
+  resolved: ResolvedNumber,
+  // deno-lint-ignore no-explicit-any
+  m: any,
+): Promise<void> {
+  try {
+    if (m.type === 'revoke' || m.type === 'edit') {
+      console.log(`[cloud-api-inbound] echo '${m.type}' registrado (nao tratado, D-V1): wamid=${m.id}`)
+      return
+    }
+
+    // No echo, o destinatario (o lead) e `to`; `from` e o proprio numero da empresa.
+    const phone = normalizePhoneBR(m.to)
+    if (!phone) {
+      console.warn(`[cloud-api-inbound] echo sem 'to' valido: wamid=${m.id}`)
+      return
+    }
+
+    const { messageType, content, fileUrl, fileName, fileMimeType } =
+      await normalizeCloudApiContent(url, key, resolved, m)
+
+    const result = await handleInboundMessage({
+      supabaseUrl: url,
+      supabaseKey: key,
+      companyId: resolved.companyId,
+      phone,
+      senderName: null, // echo nao traz o profile do destinatario
+      content,
+      messageType,
+      externalId: m.id ?? null,
+      fileUrl,
+      fileName,
+      fileMimeType,
+      source: 'whatsapp',
+      instanceName: resolved.instanceLabel,
+      cloudApiNumberId: resolved.id,
+      adContext: null,
+      profilePicUrl: null,
+      senderType: 'human',   // o dono mandou pelo app
+      skipSideEffects: true, // nao acionar SDR/automacao/auto-reply/deal
+    })
+
+    console.log(`[cloud-api-inbound] echo processed: leadId=${result.leadId}, isNew=${result.isNewLead}, wamid=${m.id}`)
+  } catch (err) {
+    console.error('[cloud-api-inbound] processEcho error:', err)
   }
 }
