@@ -40,6 +40,15 @@ export interface InboundParams {
   utmCampaign?: string | null
   /** Se true, pula atribuicao imediata e coloca lead na fila (distribute-queue) */
   useQueue?: boolean
+  /** sender_type da mensagem gravada. Default 'lead' (o contato escreveu).
+   *  'human' = eco do dono pelo app (smb_message_echoes, coexistence);
+   *  'ai' reservado. */
+  senderType?: 'lead' | 'human' | 'ai'
+  /** Se true, pula os efeitos de engajamento automatico: criacao de deal,
+   *  SDR, automacoes e auto-reply. Usado por echoes/history da coexistence
+   *  (mensagens do proprio dono ou historicas): nao devem fazer a IA responder
+   *  nem gerar oportunidade/automacao. Default false (comportamento atual). */
+  skipSideEffects?: boolean
 }
 
 export interface InboundResult {
@@ -52,6 +61,10 @@ export interface InboundResult {
 export async function handleInboundMessage(params: InboundParams): Promise<InboundResult> {
   const supabase = createClient(params.supabaseUrl, params.supabaseKey, { db: { schema: 'veltzy' } })
   const supabasePublic = createClient(params.supabaseUrl, params.supabaseKey)
+
+  // Echoes (dono mandou pelo app) e history (dump) nao disparam engajamento
+  // automatico: sem deal novo, sem SDR, sem automacao, sem auto-reply.
+  const skipSideEffects = params.skipSideEffects ?? false
 
   // 0. Origem -> pipeline: resolver UMA vez (RF6, elimina o ponto duplo de decisao).
   //    source_id: webhook usa o override (params.sourceId); WhatsApp/IG resolve pelo slug 'whatsapp'.
@@ -116,8 +129,11 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
     throw new Error('Failed to create lead')
   }
 
-  // 2.5. Criar deal para o lead (novo ou existente)
-  await createDealForLead(supabase, supabasePublic, params, lead, isNewLead, resolved, origin)
+  // 2.5. Criar deal para o lead (novo ou existente).
+  // skipSideEffects (echoes/history): nao gerar oportunidade automatica.
+  if (!skipSideEffects) {
+    await createDealForLead(supabase, supabasePublic, params, lead, isNewLead, resolved, origin)
+  }
 
   // 3. Buscar avatar do WhatsApp (se solicitado e lead sem avatar)
   // Webhook: sem avatar (lead de formulario, nao tem WhatsApp profile)
@@ -172,7 +188,7 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
         lead_id: lead.id,
         company_id: params.companyId,
         content: params.content,
-        sender_type: 'lead',
+        sender_type: params.senderType ?? 'lead',
         message_type: params.messageType,
         file_url: params.fileUrl,
         file_name: params.fileName,
@@ -237,8 +253,10 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
   // 7. Disparar SDR e automacoes (async, best-effort)
   const fnHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${params.supabaseKey}` }
 
-  // SDR dispatch: apenas para WhatsApp/Instagram (precisa de mensagem para responder)
-  if (params.source !== 'webhook') {
+  // SDR dispatch: apenas para WhatsApp/Instagram (precisa de mensagem para responder).
+  // skipSideEffects (echoes/history): nao acionar a IA (senao ela responde a
+  // propria mensagem do dono / mensagens antigas).
+  if (params.source !== 'webhook' && !skipSideEffects) {
     try {
       const { data: leadFull } = await supabase
         .from('leads')
@@ -299,22 +317,26 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
     } catch { /* best-effort */ }
   }
 
-  // Automacoes: dispara para TODOS os sources (webhook incluso)
-  try {
-    fetch(`${params.supabaseUrl}/functions/v1/run-automations`, {
-      method: 'POST',
-      headers: fnHeaders,
-      body: JSON.stringify({
-        trigger: isNewLead ? 'lead_created' : 'message_received',
-        leadId: lead.id,
-        companyId: params.companyId,
-        triggerData: { messageContent: params.content, source: params.source },
-      }),
-    }).catch(() => {})
-  } catch { /* best-effort */ }
+  // Automacoes: dispara para TODOS os sources (webhook incluso).
+  // skipSideEffects (echoes/history): nao disparar automacao.
+  if (!skipSideEffects) {
+    try {
+      fetch(`${params.supabaseUrl}/functions/v1/run-automations`, {
+        method: 'POST',
+        headers: fnHeaders,
+        body: JSON.stringify({
+          trigger: isNewLead ? 'lead_created' : 'message_received',
+          leadId: lead.id,
+          companyId: params.companyId,
+          triggerData: { messageContent: params.content, source: params.source },
+        }),
+      }).catch(() => {})
+    } catch { /* best-effort */ }
+  }
 
-  // 8. Auto-reply fora do horario (apenas para leads novos de WhatsApp/Instagram)
-  if (params.source !== 'webhook' && isNewLead) {
+  // 8. Auto-reply fora do horario (apenas para leads novos de WhatsApp/Instagram).
+  // skipSideEffects (echoes/history): nao responder automaticamente.
+  if (params.source !== 'webhook' && isNewLead && !skipSideEffects) {
     await handleAutoReply(supabase, params, lead.id)
   }
 
