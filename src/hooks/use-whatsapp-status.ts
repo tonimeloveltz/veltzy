@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/auth.store'
-import { supabase } from '@/lib/supabase'
+import { supabase, veltzy } from '@/lib/supabase'
 import type { WhatsAppProviderType } from '@/types/database'
 
 interface WhatsAppStatusResult {
@@ -27,7 +27,17 @@ export const useWhatsAppStatus = () => {
       }
 
       if (provider === 'cloud_api') {
-        return { provider: 'cloud_api', connected: true }
+        // Deriva de existir >=1 numero Cloud API ativo (V3), nao mais fixo true.
+        // cloud_api_numbers vive no schema veltzy.
+        const { data } = await veltzy()
+          .from('cloud_api_numbers')
+          .select('id')
+          .eq('company_id', companyId!)
+          .eq('status', 'active')
+          .limit(1)
+          .maybeSingle()
+
+        return { provider: 'cloud_api', connected: !!data }
       }
 
       const { data } = await supabase
