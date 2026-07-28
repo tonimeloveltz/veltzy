@@ -36,7 +36,13 @@ Mudanças em `cloud-api-inbound/index.ts`:
 - `type` `revoke` → marcar mensagem apagada; `edit` → atualizar conteúdo. **D-V1 (fechada): só registrar** nesta onda, sem tratar edit/revoke a fundo (o CHECK de `message_type` nem aceita esses tipos, cai no fallback text). Registrar e logar.
 
 ### V1.2 `history`
-Dump de até 180 dias em 3 fases. Cada item vira `messages` histórica com `sender_type` derivado de `from`/`to` (`'human'` quando o dono mandou, `'lead'` quando o contato mandou; ver §0.1), e a flag **`is_history=true`** (coluna NOVA, migration que precede a V1) para não disparar automações/SDR/notepushes. Idempotência por `external_id`. Volume pode ser alto: processar em lote, sem bloquear o webhook (responder 200 rápido e enfileirar via `process-message-queue` se necessário). **D-V2 (fechada): importar com flag `is_history` e limitar a exibição** (não poluir as conversas ativas); a importação em si pode trazer os 180d, mas a UI limita o que mostra por padrão.
+Dump de até 180 dias. Estrutura do payload: `value.history[].threads[].messages[]`; o telefone do lead é o `id` da thread (o contato) e o `sender_type` de cada mensagem é derivado de quem enviou (`from` == contato → `'lead'`, senão a empresa → `'human'`; ver §0.1). Grava com a flag **`is_history=true`** (coluna NOVA, migration 070 que precede a V1) para não disparar automações/SDR/auto-reply. Idempotência por `external_id`. Mídia histórica **não** é baixada (`skipMedia`): pode estar expirada e o volume travaria o webhook; preserva tipo/caption/mime, `file_url` fica null.
+
+**Processamento (correção da spec original):** a Meta entrega o history **fragmentado em chunks/fases** (vários webhooks), então cada invocação trata um pedaço — processar **inline por chunk**, best-effort por mensagem. `process-message-queue` **NÃO serve** aqui: é fila de OUTBOUND (lê `message_queue` e envia via provider, grava `sender_type='ai'`); history é ingestão inbound. Se o PVO mostrar volume alto por chunk, evoluir para ingestão assíncrona (ver ressalva de timeout no §PVO).
+
+**Flag-day suavizado:** a chave `is_history` só entra no INSERT quando `isHistory=true` (spread condicional no handler). Mensagens normais não referenciam a coluna, então o deploy do código **não** fica refém da 070: sem a migration, só a importação de history falha, o inbound normal segue intacto. O PVO da importação ainda espera a 070 aplicada pelo Toni, mas o merge não depende dela.
+
+**D-V2 (fechada): importar com flag `is_history` e limitar a exibição** (não poluir as conversas ativas); a importação em si pode trazer os 180d, mas a UI limita o que mostra por padrão.
 
 ### V1.3 `smb_app_state_sync` (contatos)
 Nesta onda: apenas logar/contar (não materializar contatos no CRM). Decisão D-H3 no Hub.
@@ -96,6 +102,11 @@ Hoje `use-cloud-api-connection` faz `limit(1)` (mostra só 1 número oficial). P
 7. V4 (UI + evento coexistence). V4.2 (multi-número) é a última.
 8. V5 (health).
 9. PVO E2E com a Veltz Demonstração (receber msg, mandar pelo app e ver o eco com `sender_type='human'`, responder pelo Veltzy). Nada em produção/cliente real antes desse PVO passar.
+
+### Checklist obrigatório do PVO (V1.2 history)
+- **Migration 070 aplicada** pelo Toni (Dashboard) antes de exercitar o import de history.
+- **Config do Embedded Signup** habilitada para "business app numbers" no painel Meta (ação do Toni) — necessária para o fluxo coexistence e para o evento `FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING` (V4.1).
+- **Medir tempo por chunk de history** (RISCO a validar): hoje o loop de history é aguardado ANTES do `return 200`. Se um chunk vier com muitas mensagens, cada uma faz várias queries em série (buscar/criar lead + dedupe + insert) e pode passar do tempo que a Meta tolera, causando **re-entrega do chunk** (o dedupe por `external_id` evita duplicar, mas a re-entrega repetida desperdiça). `skipMedia` já tirou a parte mais lenta. **Mitigação se estourar:** responder 200 na hora e processar o history detached via `EdgeRuntime.waitUntil` (Supabase). Não implementado agora para não fazer over-engineering antes de medir com volume real.
 
 ## Evidências obrigatórias por PR
 `npx tsc --noEmit` limpo · `npm run build` limpo · `git diff` nos arquivos certos · teste no browser (staging/preview) para as frentes com UI.
