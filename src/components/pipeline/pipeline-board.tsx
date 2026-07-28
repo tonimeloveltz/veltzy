@@ -335,7 +335,7 @@ const PipelineBoard = () => {
           </div>
         )}
 
-        <DragOverlay>
+        <DragOverlay dropAnimation={null}>
           {activeDeal ? (
             <div className="w-[280px] rotate-2 scale-105 opacity-90 shadow-2xl">
               <DealCard deal={activeDeal} fireOnly={fireOnly} />

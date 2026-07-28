@@ -18,12 +18,27 @@ interface StageColumnProps {
 }
 
 const StageColumn = ({ stage, deals, onAddLead, onEditDeal, onTransferDeal, onMovePipeline, onCreateDeal, fireOnly }: StageColumnProps) => {
-  const { setNodeRef, isOver } = useDroppable({ id: stage.id })
+  const { setNodeRef, isOver, over, active } = useDroppable({ id: stage.id })
 
   const dealIds = deals.map((d) => d.id)
 
+  // Cada card e droppable proprio (useSortable), e com closestCorners os cantos de
+  // um card ficam mais perto que os da coluna inteira. Entao ao pairar sobre a lista
+  // o over vira o id do card e isOver da coluna fica false: destacar so por isOver
+  // acenderia o ring apenas em coluna vazia.
+  const isOverColumn = !!active && (isOver || deals.some((d) => d.id === over?.id))
+
   return (
-    <div className="flex w-[300px] min-w-[280px] max-w-[320px] flex-shrink-0 flex-col h-full">
+    // Droppable e a coluna INTEIRA (cabecalho + lista + botao). Sem overflow aqui:
+    // a rolagem fica no container interno, senao a zona de drop seria recortada
+    // ao viewport da lista e soltar num ponto rolado nao contaria.
+    <div
+      ref={setNodeRef}
+      className={cn(
+        'flex w-[300px] min-w-[280px] max-w-[320px] flex-shrink-0 flex-col h-full rounded-xl transition-shadow',
+        isOverColumn && 'ring-2 ring-inset ring-primary/40'
+      )}
+    >
       <div
         className="mb-2 rounded-t-xl px-3 py-2.5"
         style={{
@@ -54,10 +69,11 @@ const StageColumn = ({ stage, deals, onAddLead, onEditDeal, onTransferDeal, onMo
 
       <SortableContext items={dealIds} strategy={verticalListSortingStrategy}>
         <div
-          ref={setNodeRef}
           className={cn(
-            'kanban-column flex-1 space-y-2 rounded-xl p-2 transition-colors overflow-y-auto scrollbar-minimal',
-            isOver && 'bg-primary/5 ring-2 ring-primary/20'
+            // O tint vai aqui, e nao no wrapper: .kanban-column tem bg-muted/30 e
+            // cobriria um fundo pintado no elemento de tras.
+            'kanban-column flex-1 space-y-2 rounded-xl p-2 overflow-y-auto scrollbar-minimal transition-colors',
+            isOverColumn && 'bg-primary/5'
           )}
         >
           {deals.map((deal) => (
