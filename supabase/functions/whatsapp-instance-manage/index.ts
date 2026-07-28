@@ -5,6 +5,7 @@ const HUB_SERVICE_KEY = Deno.env.get('HUB_SERVICE_ROLE_KEY') ?? Deno.env.get('SU
 
 const allowedOrigins = [
   'https://app.veltzy.com',
+  'https://develop.veltzy.com',
   'https://develop.app.veltzy.com',
   'http://localhost:5173',
 ]

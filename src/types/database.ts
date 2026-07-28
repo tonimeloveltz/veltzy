@@ -238,6 +238,7 @@ export interface Lead {
   avatar_url: string | null
   ad_context: AdContext | null
   whatsapp_instance_name: string | null
+  cloud_api_number_id: string | null
   company_name: string | null
   transfer_summary: string | null
   last_customer_message_at: string | null
@@ -272,6 +273,7 @@ export interface CreateLeadInput {
   instagram_handle?: string
   linkedin_url?: string
   whatsapp_instance_name?: string | null
+  cloud_api_number_id?: string | null
 }
 
 export interface UpdateLeadInput {

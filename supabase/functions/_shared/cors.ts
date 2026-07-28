@@ -2,6 +2,7 @@ const allowedOrigins = [
   'https://hub.veltz.group',
   'https://develop.hub.veltz.group',
   'https://app.veltzy.com',
+  'https://develop.veltzy.com',
   'https://develop.app.veltzy.com',
   'http://localhost:5173',
 ]
