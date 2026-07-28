@@ -4,7 +4,7 @@ import {
   TrendingUp, Target, DollarSign, Users, Equal,
 } from 'lucide-react'
 import {
-  ComposedChart, Line, Area, Bar, ResponsiveContainer,
+  ComposedChart, Line, Area, Bar, ResponsiveContainer, Tooltip,
   RadialBarChart, RadialBar, PolarAngleAxis,
 } from 'recharts'
 import { cn } from '@/lib/utils'
@@ -36,13 +36,43 @@ const periodOptions = [
 const fmt = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
 
+interface KpiTrendTooltipProps {
+  active?: boolean
+  payload?: Array<{ value: number; payload: MonthlyGridData }>
+  unit?: string
+}
+
+// Ex: "mar/26 · 14 deals". O campo month ja vem formatado do service.
+const KpiTrendTooltip = ({ active, payload, unit }: KpiTrendTooltipProps) => {
+  if (!active || !payload?.length) return null
+  const [point] = payload
+
+  return (
+    <div className="glass-card rounded-lg px-2.5 py-1.5 shadow-lg text-[11px] whitespace-nowrap">
+      <span className="text-muted-foreground">{point.payload.month}</span>
+      <span className="mx-1 text-muted-foreground">·</span>
+      <span className="font-semibold text-foreground">
+        {point.value}{unit ? ` ${unit}` : ''}
+      </span>
+    </div>
+  )
+}
+
 interface KpiTrendProps {
   data: MonthlyGridData[]
   dataKey: keyof MonthlyGridData
   variant?: 'line' | 'bar'
+  showTooltip?: boolean
+  tooltipUnit?: string
 }
 
-const KpiTrend = ({ data, dataKey, variant = 'line' }: KpiTrendProps) => {
+const KpiTrend = ({
+  data,
+  dataKey,
+  variant = 'line',
+  showTooltip = false,
+  tooltipUnit = '',
+}: KpiTrendProps) => {
   const values = data.map((d) => d[dataKey])
 
   // Uma minitendencia so significa algo com pelo menos dois pontos e alguma variacao:
@@ -53,9 +83,11 @@ const KpiTrend = ({ data, dataKey, variant = 'line' }: KpiTrendProps) => {
   }
 
   return (
-    <div className="h-[80px] mt-4 opacity-60">
+    // Sem opacity quando ha tooltip: o wrapper do recharts fica dentro desta div,
+    // e o balao herdaria o fade junto com a linha.
+    <div className={cn('h-[80px] mt-4 relative', !showTooltip && 'opacity-60')}>
       <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
-        <ComposedChart data={data} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+        <ComposedChart data={data} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
           <defs>
             <linearGradient id="kpiGradient" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.5} />
@@ -82,9 +114,18 @@ const KpiTrend = ({ data, dataKey, variant = 'line' }: KpiTrendProps) => {
               type="monotone"
               dataKey={dataKey}
               stroke="hsl(var(--primary))"
-              strokeWidth={2.5}
+              strokeWidth={showTooltip ? 2 : 2.5}
               dot={false}
+              activeDot={{ r: 3, strokeWidth: 0 }}
               filter="url(#glow)"
+            />
+          )}
+          {showTooltip && (
+            <Tooltip
+              content={<KpiTrendTooltip unit={tooltipUnit} />}
+              cursor={{ stroke: 'hsl(var(--border))', strokeWidth: 1 }}
+              allowEscapeViewBox={{ x: false, y: true }}
+              wrapperStyle={{ zIndex: 20, outline: 'none' }}
             />
           )}
           {variant === 'bar' && (
@@ -346,7 +387,7 @@ const DashboardPage = () => {
                 {selectedDays && <VariationBadge current={kpis?.dealsClosed ?? 0} previous={kpis?.prevDealsClosed ?? 0} />}
               </div>
               <p className="text-sm text-muted-foreground mt-1">Negócios concluídos com sucesso</p>
-              {/* <KpiTrend data={trendData} dataKey="deals" variant="bar" /> */}
+              <KpiTrend data={trendData} dataKey="deals" showTooltip tooltipUnit="deals" />
             </div>
 
             {/* LINHA 2 - Cards com breakdown */}
