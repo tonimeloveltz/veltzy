@@ -58,7 +58,10 @@ export async function launchEmbeddedSignup(): Promise<EmbeddedSignupResult> {
 
       if (parsed.type !== 'WA_EMBEDDED_SIGNUP') return
 
-      if (parsed.event === 'FINISH') {
+      // 'FINISH' = fluxo padrao (migracao/novo numero).
+      // 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING' = coexistence (numero segue no
+      // app WhatsApp Business). Ambos entregam code/phone_number_id/waba_id igual.
+      if (parsed.event === 'FINISH' || parsed.event === 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING') {
         const d = parsed.data
         if (d?.phone_number_id && d?.waba_id) {
           session = { phoneNumberId: d.phone_number_id, wabaId: d.waba_id }

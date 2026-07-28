@@ -10,18 +10,11 @@ import {
 import { useDealsByLead, useCloseDeal } from '@/hooks/use-deals'
 import { NewDealModal } from '@/components/deals/new-deal-modal'
 import { triggerCelebration } from '@/lib/celebration'
-import type { DealStatus, DealWithLead } from '@/types/database'
+import { dealStatusConfig } from '@/lib/lead-config'
+import type { DealWithLead } from '@/types/database'
 
 const fmt = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
-
-const statusLabel: Record<DealStatus, { label: string; color: string }> = {
-  open: { label: 'Aberto', color: 'bg-yellow-500' },
-  won: { label: 'Fechado', color: 'bg-emerald-500' },
-  lost: { label: 'Perdido', color: 'bg-red-500' },
-  archived: { label: 'Arquivado', color: 'bg-muted-foreground' },
-  pending_assignment: { label: 'Sem dono', color: 'bg-amber-500' },
-}
 
 interface LeadDealsPanelProps {
   leadId: string
@@ -75,7 +68,7 @@ const LeadDealsPanel = ({ leadId, leadName }: LeadDealsPanelProps) => {
               <p className="text-[10px] text-muted-foreground/60 py-1">Nenhum negocio</p>
             )}
             {allDeals.map((deal) => {
-              const status = statusLabel[deal.status]
+              const status = dealStatusConfig[deal.status]
               const isActive = deal.status === 'open' || deal.status === 'pending_assignment'
               return (
                 <div
@@ -86,7 +79,7 @@ const LeadDealsPanel = ({ leadId, leadName }: LeadDealsPanelProps) => {
                     onClick={() => navigate('/pipeline')}
                     className="flex flex-1 items-center gap-2 text-left min-w-0"
                   >
-                    <span className={cn('h-2 w-2 rounded-full shrink-0', status.color)} />
+                    <span className={cn('h-2 w-2 rounded-full shrink-0', status.dotColor)} />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium truncate">{deal.name}</p>
                       <p className="text-[10px] text-muted-foreground">

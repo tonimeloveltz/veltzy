@@ -7,6 +7,7 @@ const HUB_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
 const allowedOrigins = [
   'https://app.veltzy.com',
+  'https://develop.veltzy.com',
   'https://develop.app.veltzy.com',
   'http://localhost:5173',
   'http://localhost:5174', // dominio de dev do cadastro incorporado

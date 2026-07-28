@@ -25,15 +25,8 @@ import { useInboxStore } from '@/stores/inbox.store'
 import { useAuthStore } from '@/stores/auth.store'
 import { leadDisplayName } from '@/lib/phone'
 import { updateLead as updateLeadService } from '@/services/leads.service'
-import type { LeadWithLastMessage, LeadTemperature, TaskType } from '@/types/database'
-
-// --- Temperature bar (same as pipeline cards) ---
-const temperatureConfig: Record<LeadTemperature, { width: string; gradient: string; label: string }> = {
-  cold:  { width: '25%',  gradient: 'linear-gradient(to right, #bfdbfe, #3b82f6)', label: 'Frio' },
-  warm:  { width: '50%',  gradient: 'linear-gradient(to right, #fde68a, #f59e0b)', label: 'Morno' },
-  hot:   { width: '75%',  gradient: 'linear-gradient(to right, #fed7aa, #f97316)', label: 'Quente' },
-  fire:  { width: '100%', gradient: 'linear-gradient(to right, #f97316, #ef4444, #dc2626)', label: 'Fire' },
-}
+import { leadTemperatureConfig } from '@/lib/lead-config'
+import type { LeadWithLastMessage, TaskType } from '@/types/database'
 
 // --- Task config ---
 const taskTypeIcons: Record<TaskType, typeof CheckSquare> = {
@@ -276,11 +269,11 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
             <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
               <div
                 className="h-full rounded-full transition-all duration-500 ease-out"
-                style={{ width: temperatureConfig[lead.temperature].width, background: temperatureConfig[lead.temperature].gradient }}
+                style={{ width: leadTemperatureConfig[lead.temperature].width, background: leadTemperatureConfig[lead.temperature].gradient }}
               />
             </div>
             <span className="text-[10px] font-medium text-muted-foreground shrink-0">
-              {temperatureConfig[lead.temperature].label}
+              {leadTemperatureConfig[lead.temperature].label}
             </span>
           </div>
         </div>
