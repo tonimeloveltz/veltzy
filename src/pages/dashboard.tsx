@@ -3,7 +3,10 @@ import {
   AlertCircle, ArrowUp, ArrowDown, Building2, Clock, Calendar, CalendarDays, BarChart3,
   TrendingUp, Target, DollarSign, Users, Equal,
 } from 'lucide-react'
-import { ComposedChart, Line, Area, Bar, ResponsiveContainer } from 'recharts'
+import {
+  ComposedChart, Line, Area, Bar, ResponsiveContainer,
+  RadialBarChart, RadialBar, PolarAngleAxis,
+} from 'recharts'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -46,7 +49,7 @@ const KpiTrend = ({ data, dataKey, variant = 'line' }: KpiTrendProps) => {
   // serie toda zerada desenharia uma reta falsa no chao do card.
   // Reserva a mesma altura pra nao deslocar o layout.
   if (values.length < 2 || values.every((v) => v === 0)) {
-    return <div className="h-[80px] mt-4" aria-hidden />
+    return <div className="h-[80px] mt-4" aria-hidden /> //acho que nao precisa mais dessa verificação
   }
 
   return (
@@ -95,6 +98,48 @@ const KpiTrend = ({ data, dataKey, variant = 'line' }: KpiTrendProps) => {
           )}
         </ComposedChart>
       </ResponsiveContainer>
+    </div>
+  )
+}
+
+// Retrato do valor atual (0-100%), nao a serie mensal: o anel preenche a fracao
+// do dominio fixo [0, 100], entao 46% ocupa ~46% do circulo.
+const PercentGauge = ({ value }: { value: number }) => {
+  const safeValue = Math.min(Math.max(value, 0), 100)
+
+  return (
+    <div className="relative mx-auto mt-4 h-[120px] w-[150px]">
+      <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+        <RadialBarChart
+          data={[{ value: safeValue }]}
+          cx="50%"
+          cy="50%"
+          innerRadius="76%"
+          outerRadius="100%"
+          startAngle={90}
+          endAngle={-270}
+        >
+          <PolarAngleAxis
+            type="number"
+            domain={[0, 100]}
+            angleAxisId={0}
+            tick={false}
+            axisLine={false}
+          />
+          <RadialBar
+            dataKey="value"
+            angleAxisId={0}
+            background={{ fill: 'hsl(var(--muted))' }}
+            fill="hsl(var(--primary))"
+            cornerRadius={99}
+            isAnimationActive={false}
+          />
+        </RadialBarChart>
+      </ResponsiveContainer>
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <span className="text-3xl font-bold text-foreground">{Math.round(safeValue)}%</span>
+      </div>
+      {/* Percentual sobreposto ao centro: assumiu o lugar do numero grande do topo */}
     </div>
   )
 }
@@ -264,14 +309,11 @@ const DashboardPage = () => {
                   <TrendingUp className="h-5 w-5 text-primary" />
                 </div>
               </div>
-              <div className="flex items-center gap-2 mt-2">
-                <p className="text-3xl font-bold text-foreground">
-                  {kpis?.conversionRate ?? 0}%
-                </p>
+              <PercentGauge value={kpis?.conversionRate ?? 0} />
+              <div className="flex flex-col items-center gap-2 mt-4">
+                <p className="text-sm text-muted-foreground">Leads convertidos em deals</p>
                 {selectedDays && <VariationBadge current={kpis?.conversionRate ?? 0} previous={kpis?.prevConversionRate ?? 0} />}
               </div>
-              <p className="text-sm text-muted-foreground mt-1">Leads convertidos em deals</p>
-              <KpiTrend data={trendData} dataKey="conversion" />
             </div>
 
             {/* Score Medio IA */}
@@ -282,14 +324,11 @@ const DashboardPage = () => {
                   <Target className="h-5 w-5 text-primary" />
                 </div>
               </div>
-              <div className="flex items-center gap-2 mt-2">
-                <p className="text-3xl font-bold text-foreground">
-                  {kpis?.avgAiScore ?? 0}%
-                </p>
+              <PercentGauge value={kpis?.avgAiScore ?? 0} />
+              <div className="flex flex-col items-center gap-2 mt-4">
+                <p className="text-sm text-muted-foreground">Qualificação média dos leads</p>
                 {selectedDays && <VariationBadge current={kpis?.avgAiScore ?? 0} previous={kpis?.prevAvgAiScore ?? 0} />}
               </div>
-              <p className="text-sm text-muted-foreground mt-1">Qualificação média dos leads</p>
-              <KpiTrend data={trendData} dataKey="score" />
             </div>
 
             {/* Deals Fechados */}
@@ -307,7 +346,7 @@ const DashboardPage = () => {
                 {selectedDays && <VariationBadge current={kpis?.dealsClosed ?? 0} previous={kpis?.prevDealsClosed ?? 0} />}
               </div>
               <p className="text-sm text-muted-foreground mt-1">Negócios concluídos com sucesso</p>
-              <KpiTrend data={trendData} dataKey="deals" variant="bar" />
+              {/* <KpiTrend data={trendData} dataKey="deals" variant="bar" /> */}
             </div>
 
             {/* LINHA 2 - Cards com breakdown */}
