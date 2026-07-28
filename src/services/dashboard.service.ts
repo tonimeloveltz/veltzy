@@ -296,6 +296,7 @@ export interface MonthlyGridData {
   conversion: number
   deals: number
   value: number
+  score: number
 }
 
 export const getMonthlyComparisonGrid = async (companyId: string, months = 6, pipelineId?: string, sellerProfileId?: string): Promise<MonthlyGridData[]> => {
@@ -304,7 +305,7 @@ export const getMonthlyComparisonGrid = async (companyId: string, months = 6, pi
   const startIso = startDate.toISOString()
 
   // Leads per month
-  let leadsQuery = veltzy().from('leads').select('created_at').eq('company_id', companyId).gte('created_at', startIso)
+  let leadsQuery = veltzy().from('leads').select('created_at, ai_score').eq('company_id', companyId).gte('created_at', startIso)
   if (pipelineId) leadsQuery = leadsQuery.eq('pipeline_id', pipelineId)
   if (sellerProfileId) leadsQuery = leadsQuery.eq('assigned_to', sellerProfileId)
   const { data: leads, error: leadsError } = await leadsQuery
@@ -326,23 +327,29 @@ export const getMonthlyComparisonGrid = async (companyId: string, months = 6, pi
     cursor.setMonth(cursor.getMonth() + 1)
   }
 
-  const buckets: Record<string, { leads: number; deals: number; value: number }> = {}
+  const emptyBucket = () => ({ leads: 0, deals: 0, value: 0, scoreSum: 0, scoreCount: 0 })
+  const buckets: Record<string, ReturnType<typeof emptyBucket>> = {}
   allMonths.forEach((key) => {
-    buckets[key] = { leads: 0, deals: 0, value: 0 }
+    buckets[key] = emptyBucket()
   })
 
   leads?.forEach((l) => {
     const d = new Date(l.created_at)
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-    if (!buckets[key]) buckets[key] = { leads: 0, deals: 0, value: 0 }
+    if (!buckets[key]) buckets[key] = emptyBucket()
     buckets[key].leads++
+    // Score medio do mes considera apenas leads ja pontuados pela IA
+    if (l.ai_score !== null && l.ai_score !== undefined) {
+      buckets[key].scoreSum += Number(l.ai_score) || 0
+      buckets[key].scoreCount++
+    }
   })
 
   deals?.forEach((deal) => {
     if (deal.status !== 'won') return
     const d = new Date(deal.created_at)
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-    if (!buckets[key]) buckets[key] = { leads: 0, deals: 0, value: 0 }
+    if (!buckets[key]) buckets[key] = emptyBucket()
     buckets[key].deals++
     buckets[key].value += Number(deal.value) || 0
   })
@@ -358,6 +365,7 @@ export const getMonthlyComparisonGrid = async (companyId: string, months = 6, pi
       conversion: data.leads > 0 ? Math.round((data.deals / data.leads) * 100) : 0,
       deals: data.deals,
       value: data.value,
+      score: data.scoreCount > 0 ? Math.round(data.scoreSum / data.scoreCount) : 0,
     }
   })
 }

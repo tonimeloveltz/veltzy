@@ -3,12 +3,13 @@ import {
   AlertCircle, ArrowUp, ArrowDown, Building2, Clock, Calendar, CalendarDays, BarChart3,
   TrendingUp, Target, DollarSign, Users, Equal,
 } from 'lucide-react'
-import { ComposedChart, Line, Area, ResponsiveContainer } from 'recharts'
+import { ComposedChart, Line, Area, Bar, ResponsiveContainer } from 'recharts'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuthStore } from '@/stores/auth.store'
-import { useDashboardKpis } from '@/hooks/use-dashboard-metrics'
+import { useDashboardKpis, useMonthlyComparisonGrid } from '@/hooks/use-dashboard-metrics'
+import type { MonthlyGridData } from '@/services/dashboard.service'
 import { useDashboardRealtime } from '@/hooks/use-dashboard-realtime'
 import { useAccessiblePipelines } from '@/hooks/use-pipeline-access'
 import { PipelineFilter } from '@/components/shared/pipeline-filter'
@@ -22,8 +23,6 @@ import { BottleneckDetector } from '@/components/dashboard/bottleneck-detector'
 import { ForecastCard } from '@/components/dashboard/forecast-card'
 import { CopilotCard } from '@/components/dashboard/copilot-card'
 
-const curveData = [5, 8, 15, 35, 60, 75, 60, 35, 15, 8, 5].map((v, i) => ({ x: i, y: v }))
-
 const periodOptions = [
   { label: 'Hoje', icon: Clock, days: 1 },
   { label: 'Semana', icon: Calendar, days: 7 },
@@ -34,41 +33,71 @@ const periodOptions = [
 const fmt = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
 
-const DecorativeLine = () => (
-  <div className="h-[80px] mt-4 opacity-60">
-    <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
-      <ComposedChart data={curveData} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-        <defs>
-          <linearGradient id="kpiGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.5} />
-            <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0.05} />
-          </linearGradient>
-          <filter id="glow">
-            <feGaussianBlur stdDeviation="3" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-        </defs>
-        <Area
-          type="monotone"
-          dataKey="y"
-          fill="url(#kpiGradient)"
-          stroke="none"
-        />
-        <Line
-          type="monotone"
-          dataKey="y"
-          stroke="hsl(var(--primary))"
-          strokeWidth={2.5}
-          dot={false}
-          filter="url(#glow)"
-        />
-      </ComposedChart>
-    </ResponsiveContainer>
-  </div>
-)
+interface KpiTrendProps {
+  data: MonthlyGridData[]
+  dataKey: keyof MonthlyGridData
+  variant?: 'line' | 'bar'
+}
+
+const KpiTrend = ({ data, dataKey, variant = 'line' }: KpiTrendProps) => {
+  const values = data.map((d) => d[dataKey])
+
+  // Uma minitendencia so significa algo com pelo menos dois pontos e alguma variacao:
+  // serie toda zerada desenharia uma reta falsa no chao do card.
+  // Reserva a mesma altura pra nao deslocar o layout.
+  if (values.length < 2 || values.every((v) => v === 0)) {
+    return <div className="h-[80px] mt-4" aria-hidden />
+  }
+
+  return (
+    <div className="h-[80px] mt-4 opacity-60">
+      <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+        <ComposedChart data={data} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+          <defs>
+            <linearGradient id="kpiGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.5} />
+              <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0.05} />
+            </linearGradient>
+            <filter id="glow">
+              <feGaussianBlur stdDeviation="3" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+          {variant === 'line' && (
+            <Area
+              type="monotone"
+              dataKey={dataKey}
+              fill="url(#kpiGradient)"
+              stroke="none"
+            />
+          )}
+          {variant === 'line' && (
+            <Line
+              type="monotone"
+              dataKey={dataKey}
+              stroke="hsl(var(--primary))"
+              strokeWidth={2.5}
+              dot={false}
+              filter="url(#glow)"
+            />
+          )}
+          {variant === 'bar' && (
+            <Bar
+              dataKey={dataKey}
+              fill="url(#kpiGradient)"
+              stroke="hsl(var(--primary))"
+              strokeWidth={1}
+              radius={[3, 3, 0, 0]}
+            />
+          )}
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
 
 interface BreakdownItem {
   value: string
@@ -143,7 +172,11 @@ const DashboardPage = () => {
   const [selectedPipelineId, setSelectedPipelineId] = useState<string | null>(null)
   const { data: pipelines } = useAccessiblePipelines()
   const { data: kpis, isLoading, isError, refetch } = useDashboardKpis(selectedDays, selectedPipelineId)
+  // Mesmo range/pipeline do Comparativo Mensal, pra minitendencia bater com o bloco de baixo
+  const { data: monthlySeries } = useMonthlyComparisonGrid(monthlyRange, selectedPipelineId)
   useDashboardRealtime()
+
+  const trendData = monthlySeries ?? []
 
   const displayName = profile?.name || company?.name || 'usuario'
 
@@ -238,7 +271,7 @@ const DashboardPage = () => {
                 {selectedDays && <VariationBadge current={kpis?.conversionRate ?? 0} previous={kpis?.prevConversionRate ?? 0} />}
               </div>
               <p className="text-sm text-muted-foreground mt-1">Leads convertidos em deals</p>
-              <DecorativeLine />
+              <KpiTrend data={trendData} dataKey="conversion" />
             </div>
 
             {/* Score Medio IA */}
@@ -256,7 +289,7 @@ const DashboardPage = () => {
                 {selectedDays && <VariationBadge current={kpis?.avgAiScore ?? 0} previous={kpis?.prevAvgAiScore ?? 0} />}
               </div>
               <p className="text-sm text-muted-foreground mt-1">Qualificação média dos leads</p>
-              <DecorativeLine />
+              <KpiTrend data={trendData} dataKey="score" />
             </div>
 
             {/* Deals Fechados */}
@@ -274,7 +307,7 @@ const DashboardPage = () => {
                 {selectedDays && <VariationBadge current={kpis?.dealsClosed ?? 0} previous={kpis?.prevDealsClosed ?? 0} />}
               </div>
               <p className="text-sm text-muted-foreground mt-1">Negócios concluídos com sucesso</p>
-              <DecorativeLine />
+              <KpiTrend data={trendData} dataKey="deals" variant="bar" />
             </div>
 
             {/* LINHA 2 - Cards com breakdown */}
@@ -332,14 +365,12 @@ const DashboardPage = () => {
           </div>
         )}
 
-        {/* INTELIGENCIA: GARGALOS + PREVISAO */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* INTELIGENCIA: GARGALOS + PREVISAO + COPILOTO */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <BottleneckDetector pipelineId={selectedPipelineId} />
           <ForecastCard pipelineId={selectedPipelineId} />
+          <CopilotCard pipelineId={selectedPipelineId} />
         </div>
-
-        {/* COPILOTO DE VENDAS */}
-        <CopilotCard pipelineId={selectedPipelineId} />
 
         {/* LEADS POR ORIGEM + EQUIPE EM DESTAQUE */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
