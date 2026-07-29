@@ -586,6 +586,7 @@ const actionConfig: Record<string, { icon: typeof UserPlus; label: string }> = {
   stage_changed: { icon: ArrowRight, label: 'Movido para' },
   assigned: { icon: User, label: 'Atribuído a' },
   message_sent: { icon: MessageSquare, label: 'Mensagem enviada' },
+  status_changed: { icon: ArrowRight, label: 'Status alterado para' },
 }
 
 const formatActivityLabel = (log: ActivityLog, stages?: { id: string; name: string }[]) => {
@@ -599,6 +600,9 @@ const formatActivityLabel = (log: ActivityLog, stages?: { id: string; name: stri
   }
   if (log.action === 'assigned' && meta.to) {
     return `${config.label} ${(meta.to_name as string) ?? 'outro vendedor'}`
+  }
+  if(log.action === 'status_changed' && meta.to_status) {
+    return `${config.label} ${(meta.to_status as string) ?? 'outro status'}`
   }
   return config.label
 }
