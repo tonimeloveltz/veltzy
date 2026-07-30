@@ -93,7 +93,10 @@ export async function launchEmbeddedSignup(): Promise<EmbeddedSignupResult> {
         config_id: META_ES_CONFIG_ID,
         response_type: 'code',
         override_default_response_type: true,
-        extras: { sessionInfoVersion: META_SESSION_INFO_VERSION },
+        extras: {
+          sessionInfoVersion: META_SESSION_INFO_VERSION,
+          featureType: 'whatsapp_business_app_onboarding',
+        },
       },
     )
   })
