@@ -128,7 +128,7 @@ const AceitarConvitePage = () => {
 
       const { data: pendingInvite, error: inviteError } = await supabase
         .from('invitations')
-        .select('*, companies(name)')
+        .select('*')
         .eq('email', userEmail)
         .eq('status', 'pending')
         .gt('expires_at', new Date().toISOString())
@@ -146,9 +146,8 @@ const AceitarConvitePage = () => {
       }
 
       // Encontrou convite — mostra formulário para criar senha
-      const inviteCompanyName = (pendingInvite.companies as unknown as { name: string })?.name ?? ''
       setInvite(pendingInvite)
-      setCompanyName(inviteCompanyName)
+      setCompanyName(pendingInvite.company_name ?? '')
       setState('needs_register')
     } catch (err) {
       console.error('[Convite] Erro:', err)
@@ -162,7 +161,7 @@ const AceitarConvitePage = () => {
 
     const { data, error } = await supabase
       .from('invitations')
-      .select('*, companies(name)')
+      .select('*')
       .eq('token', t)
       .single()
 
@@ -198,7 +197,7 @@ const AceitarConvitePage = () => {
     localStorage.setItem('pending_invite_token', t)
 
     setInvite(data)
-    setCompanyName((data.companies as unknown as { name: string })?.name ?? '')
+    setCompanyName(data.company_name ?? '')
 
     if (user) {
       setState('valid')

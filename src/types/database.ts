@@ -98,6 +98,8 @@ export interface Invitation {
   expires_at: string
   accepted_at: string | null
   created_at: string
+  // Desnormalizado no momento do convite. Null nos convites criados antes da adição da coluna.
+  company_name: string | null
 }
 
 export type TransferRequestType = 'duplicate_conflict' | 'queue_transfer' | 'manual_transfer'
@@ -505,6 +507,7 @@ export interface CompanyInvite {
   expires_at: string
   accepted_at: string | null
   created_at: string
+  company_name: string | null
 }
 
 export interface ProfileWithRole extends Profile {
