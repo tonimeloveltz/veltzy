@@ -43,11 +43,13 @@ async function validateTemplateForSend(
   companyId: string,
   tpl: NonNullable<SendPayload['template']>,
 ): Promise<string | null> {
-  let q = supabase.from('whatsapp_templates').select('status, components')
+  // Sempre filtra por company_id (defesa em profundidade contra cross-tenant),
+  // inclusive no ramo do meta_template_id.
+  let q = supabase.from('whatsapp_templates').select('status, components').eq('company_id', companyId)
   if (tpl.templateId) {
     q = q.eq('meta_template_id', tpl.templateId)
   } else {
-    q = q.eq('company_id', companyId).eq('name', tpl.name).eq('language', tpl.language)
+    q = q.eq('name', tpl.name).eq('language', tpl.language)
   }
   const { data: row } = await q.limit(1).maybeSingle()
 
