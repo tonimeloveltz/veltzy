@@ -54,7 +54,7 @@ export const WhatsAppConnectChoice = () => {
         {officialConnected ? (
           <Tabs defaultValue="numeros">
             <TabsList>
-              <TabsTrigger value="numeros">Numeros</TabsTrigger>
+              <TabsTrigger value="numeros">Números</TabsTrigger>
               <TabsTrigger value="templates">Templates</TabsTrigger>
             </TabsList>
             <TabsContent value="numeros" className="mt-3">

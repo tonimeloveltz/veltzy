@@ -8,7 +8,7 @@ import type { QualityRating, TemplateStatus } from '@/types/whatsapp-template'
 
 const STATUS_META: Record<TemplateStatus, { label: string; className: string }> = {
   APPROVED: { label: 'Aprovado', className: 'bg-green-100 text-green-700' },
-  IN_REVIEW: { label: 'Em revisao', className: 'bg-amber-100 text-amber-700' },
+  IN_REVIEW: { label: 'Em revisão', className: 'bg-amber-100 text-amber-700' },
   PENDING: { label: 'Pendente', className: 'bg-muted text-muted-foreground' },
   REJECTED: { label: 'Rejeitado', className: 'bg-red-100 text-red-700' },
   PAUSED: { label: 'Pausado', className: 'bg-orange-100 text-orange-700' },
@@ -17,14 +17,14 @@ const STATUS_META: Record<TemplateStatus, { label: string; className: string }> 
 
 const QUALITY_META: Record<QualityRating, { label: string; className: string }> = {
   GREEN: { label: 'Alta', className: 'bg-green-500' },
-  YELLOW: { label: 'Media', className: 'bg-amber-500' },
+  YELLOW: { label: 'Média', className: 'bg-amber-500' },
   RED: { label: 'Baixa', className: 'bg-red-500' },
 }
 
 const CATEGORY_LABEL: Record<string, string> = {
   UTILITY: 'Utilidade',
   MARKETING: 'Marketing',
-  AUTHENTICATION: 'Autenticacao',
+  AUTHENTICATION: 'Autenticação',
 }
 
 export const WhatsAppTemplatesManager = () => {
@@ -63,7 +63,7 @@ export const WhatsAppTemplatesManager = () => {
       <Card className="border-dashed">
         <CardContent className="flex flex-col items-center gap-2 py-8 text-center">
           <AlertCircle className="h-5 w-5 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">Nao foi possivel carregar os templates.</p>
+          <p className="text-sm text-muted-foreground">Não foi possível carregar os templates.</p>
           <Button size="sm" variant="outline" onClick={() => refetch()}>
             Tentar novamente
           </Button>
