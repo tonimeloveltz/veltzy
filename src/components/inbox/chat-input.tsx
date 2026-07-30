@@ -145,9 +145,11 @@ const ChatInput = ({ leadId, onTyping }: ChatInputProps) => {
       <div className="relative flex items-end gap-2">
         {!isRecording && (
           <>
-            <div className="relative">
-              <ReplyTemplatesPopover onSelect={(t) => { setContent(t); textareaRef.current?.focus() }} />
-            </div>
+            {!windowClosed && (
+              <div className="relative">
+                <ReplyTemplatesPopover onSelect={(t) => { setContent(t); textareaRef.current?.focus() }} />
+              </div>
+            )}
             {isCloudApi && (
               <div className="relative">
                 <TemplateSelectorPopover onPick={openTemplate} highlight={windowClosed} />
