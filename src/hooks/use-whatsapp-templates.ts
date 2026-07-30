@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/auth.store'
-import { listTemplates, syncTemplatesFromMeta } from '@/services/whatsapp-templates.service'
+import { createTemplate, listTemplates, syncTemplatesFromMeta } from '@/services/whatsapp-templates.service'
 
 /** Catalogo local de templates da empresa (veltzy.whatsapp_templates). */
 export function useWhatsAppTemplates() {
@@ -22,6 +22,18 @@ export function useSyncTemplates() {
 
   return useMutation({
     mutationFn: syncTemplatesFromMeta,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-templates'] })
+    },
+  })
+}
+
+/** Cria + submete um template. Invalida a lista pra mostrar a linha PENDING/IN_REVIEW. */
+export function useCreateTemplate() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: createTemplate,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['whatsapp-templates'] })
     },

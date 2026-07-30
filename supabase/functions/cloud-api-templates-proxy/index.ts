@@ -131,6 +131,42 @@ interface RawTemplate {
   quality_score?: { score?: string }
 }
 
+// Payload estruturado do form (action 'create'). O proxy monta o components Graph.
+interface CreateInput {
+  name?: string
+  language?: string
+  category?: string
+  body?: { text: string; examples?: string[] }
+  header?: { format: string; text: string }
+  footer?: { text: string }
+  buttons?: unknown[]
+}
+
+// Monta o array components no formato Graph UMA vez (usado pro Hub E pro banco, 1:1).
+// Ordem canonica da Graph: HEADER, BODY, FOOTER, BUTTONS.
+function buildComponents(input: CreateInput): Record<string, unknown>[] {
+  const components: Record<string, unknown>[] = []
+
+  if (input.header?.text) {
+    components.push({ type: 'HEADER', format: input.header.format ?? 'TEXT', text: input.header.text })
+  }
+
+  const body: Record<string, unknown> = { type: 'BODY', text: input.body?.text ?? '' }
+  if (input.body?.examples?.length) {
+    body.example = { body_text: [input.body.examples] }
+  }
+  components.push(body)
+
+  if (input.footer?.text) {
+    components.push({ type: 'FOOTER', text: input.footer.text })
+  }
+  if (input.buttons?.length) {
+    components.push({ type: 'BUTTONS', buttons: input.buttons })
+  }
+
+  return components
+}
+
 Deno.serve(async (req: Request) => {
   const cors = getCorsHeaders(req)
   const headers = { ...cors, 'Content-Type': 'application/json' }
@@ -150,11 +186,12 @@ Deno.serve(async (req: Request) => {
     if (authResult instanceof Response) {
       return new Response(authResult.body, { status: authResult.status, headers })
     }
-    const { companyId } = authResult
+    const { companyId, userId } = authResult
 
-    const { action } = await req.json()
+    const reqBody = await req.json()
+    const action = reqBody.action
 
-    if (action !== 'list') {
+    if (action !== 'list' && action !== 'create') {
       return new Response(JSON.stringify({ error: 'Acao nao suportada' }), { status: 400, headers })
     }
 
@@ -180,7 +217,81 @@ Deno.serve(async (req: Request) => {
     const wabaId = number.waba_id as string
     const cloudApiNumberId = number.id as string
 
-    // O Hub resolve o token da WABA e chama a Graph (GET /{waba_id}/message_templates).
+    if (action === 'list') {
+      // O Hub resolve o token da WABA e chama a Graph (GET /{waba_id}/message_templates).
+      const hubRes = await fetch(`${HUB_URL}/functions/v1/cloud-api-templates`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': HUB_SERVICE_KEY,
+          'Authorization': `Bearer ${HUB_SERVICE_KEY}`,
+        },
+        body: JSON.stringify({ action: 'list', waba_id: wabaId }),
+      })
+
+      if (!hubRes.ok) {
+        const hubBody = await hubRes.text()
+        return new Response(
+          hubBody || JSON.stringify({ error: 'Falha ao listar os templates' }),
+          { status: hubRes.status, headers },
+        )
+      }
+
+      const { data: rawTemplates } = (await hubRes.json()) as { data?: RawTemplate[] }
+      const templates = rawTemplates ?? []
+
+      // Normaliza (CHECK-safe) e monta as linhas do upsert.
+      const rows = templates
+        .map((t) => {
+          const category = typeof t.category === 'string' ? t.category.toUpperCase() : ''
+          if (!VALID_CATEGORIES.includes(category)) {
+            console.warn(`cloud-api-templates: categoria inesperada "${t.category}" no template "${t.name}" -> pulando`)
+            return null
+          }
+          if (!t.name || !t.language) return null
+          return {
+            company_id: companyId,
+            cloud_api_number_id: cloudApiNumberId,
+            waba_id: wabaId,
+            meta_template_id: t.id ?? null,
+            name: t.name,
+            language: t.language,
+            category,
+            status: normStatus(t.status),
+            quality_rating: normQuality(t.quality_score?.score),
+            components: t.components ?? [],
+          }
+        })
+        .filter((r): r is NonNullable<typeof r> => r !== null)
+
+      if (rows.length > 0) {
+        // NAO enviamos created_by/created_at: o update do upsert preserva os originais.
+        const { error: upsertError } = await supabaseVeltzy
+          .from('whatsapp_templates')
+          .upsert(rows, { onConflict: 'company_id,waba_id,name,language' })
+
+        if (upsertError) {
+          console.error('cloud-api-templates upsert erro:', upsertError.message)
+          return new Response(JSON.stringify({ error: 'Erro ao salvar os templates' }), { status: 500, headers })
+        }
+      }
+
+      return new Response(JSON.stringify({ success: true, count: rows.length }), { status: 200, headers })
+    }
+
+    // action === 'create': o proxy monta o components Graph 1x e usa pro Hub E pro banco.
+    const input = reqBody as CreateInput
+    const category = typeof input.category === 'string' ? input.category.toUpperCase() : ''
+    if (!input.name || !input.language || !VALID_CATEGORIES.includes(category) || !input.body?.text) {
+      return new Response(
+        JSON.stringify({ error: 'Campos obrigatorios: name, language, category valida e body.text' }),
+        { status: 400, headers },
+      )
+    }
+
+    const components = buildComponents(input)
+
+    // Hub recebe o components JA pronto e so repassa pro POST /{waba_id}/message_templates.
     const hubRes = await fetch(`${HUB_URL}/functions/v1/cloud-api-templates`, {
       method: 'POST',
       headers: {
@@ -188,57 +299,58 @@ Deno.serve(async (req: Request) => {
         'apikey': HUB_SERVICE_KEY,
         'Authorization': `Bearer ${HUB_SERVICE_KEY}`,
       },
-      body: JSON.stringify({ action: 'list', waba_id: wabaId }),
+      body: JSON.stringify({
+        action: 'create',
+        waba_id: wabaId,
+        template: { name: input.name, language: input.language, category, components },
+      }),
     })
 
     if (!hubRes.ok) {
+      // Repassa o corpo do erro (a Meta detalha, ex: mis-tag de categoria); o front exibe amigavel.
       const hubBody = await hubRes.text()
       return new Response(
-        hubBody || JSON.stringify({ error: 'Falha ao listar os templates' }),
+        hubBody || JSON.stringify({ error: 'Falha ao criar o template' }),
         { status: hubRes.status, headers },
       )
     }
 
-    const { data: rawTemplates } = (await hubRes.json()) as { data?: RawTemplate[] }
-    const templates = rawTemplates ?? []
+    // Hub retorna { id, status, category } no top-level (nao embrulha em { data }).
+    const created = (await hubRes.json()) as { id?: string; status?: string }
+    const metaId = created.id ?? null
 
-    // Normaliza (CHECK-safe) e monta as linhas do upsert.
-    const rows = templates
-      .map((t) => {
-        const category = typeof t.category === 'string' ? t.category.toUpperCase() : ''
-        if (!VALID_CATEGORIES.includes(category)) {
-          console.warn(`cloud-api-templates: categoria inesperada "${t.category}" no template "${t.name}" -> pulando`)
-          return null
-        }
-        if (!t.name || !t.language) return null
-        return {
+    // Grava a linha local ja em status normalizado (PENDING/IN_REVIEW). components identico
+    // ao submetido. upsert defensivo: se a Meta aceitar e o nome ja existir, atualiza.
+    const { error: createError } = await supabaseVeltzy
+      .from('whatsapp_templates')
+      .upsert(
+        {
           company_id: companyId,
           cloud_api_number_id: cloudApiNumberId,
           waba_id: wabaId,
-          meta_template_id: t.id ?? null,
-          name: t.name,
-          language: t.language,
+          meta_template_id: metaId,
+          name: input.name,
+          language: input.language,
           category,
-          status: normStatus(t.status),
-          quality_rating: normQuality(t.quality_score?.score),
-          components: t.components ?? [],
-        }
-      })
-      .filter((r): r is NonNullable<typeof r> => r !== null)
+          status: normStatus(created.status),
+          components,
+          created_by: userId,
+        },
+        { onConflict: 'company_id,waba_id,name,language' },
+      )
 
-    if (rows.length > 0) {
-      // NAO enviamos created_by/created_at: o update do upsert preserva os originais.
-      const { error: upsertError } = await supabaseVeltzy
-        .from('whatsapp_templates')
-        .upsert(rows, { onConflict: 'company_id,waba_id,name,language' })
-
-      if (upsertError) {
-        console.error('cloud-api-templates upsert erro:', upsertError.message)
-        return new Response(JSON.stringify({ error: 'Erro ao salvar os templates' }), { status: 500, headers })
-      }
+    if (createError) {
+      console.error('cloud-api-templates create upsert erro:', createError.message)
+      return new Response(
+        JSON.stringify({ error: 'Template criado na Meta, mas falhou ao salvar localmente' }),
+        { status: 500, headers },
+      )
     }
 
-    return new Response(JSON.stringify({ success: true, count: rows.length }), { status: 200, headers })
+    return new Response(
+      JSON.stringify({ success: true, meta_template_id: metaId, status: normStatus(created.status) }),
+      { status: 200, headers },
+    )
   } catch (err) {
     console.error('cloud-api-templates erro:', err)
     return new Response(

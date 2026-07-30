@@ -43,3 +43,22 @@ export interface TemplateVariable {
   index: number
   example?: string
 }
+
+// Botao de template (Fase 1: resposta rapida e URL). Formato Graph 1:1.
+export interface TemplateButton {
+  type: 'QUICK_REPLY' | 'URL'
+  text: string
+  url?: string
+}
+
+// Payload estruturado que o front manda pro proxy (action 'create').
+// O proxy monta o components Graph a partir daqui.
+export interface CreateTemplateInput {
+  name: string
+  language: string
+  category: TemplateCategory
+  body: { text: string; examples?: string[] }
+  header?: { format: 'TEXT'; text: string }
+  footer?: { text: string }
+  buttons?: TemplateButton[]
+}
