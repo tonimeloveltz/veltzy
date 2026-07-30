@@ -43,7 +43,14 @@ export const grantConsent = async (
     })
     .select()
     .single()
-  if (error) throw error
+  if (error) {
+    // Indice unico parcial (company_id, lead_id, finalidade) WHERE revogado_em IS
+    // NULL: 2 opt-ins ATIVOS colidem. Traduz pra msg amigavel (corrida de abas).
+    if ((error as { code?: string }).code === '23505') {
+      throw new Error('Este contato ja tem opt-in ativo para essa finalidade.')
+    }
+    throw error
+  }
   return data as LeadConsent
 }
 

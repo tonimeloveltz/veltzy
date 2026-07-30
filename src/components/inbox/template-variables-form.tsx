@@ -54,13 +54,16 @@ export const TemplateVariablesForm = ({
   )
 
   const allFilled = vars.every((n) => (values[n] ?? '').trim().length > 0)
-  const needsConsent = !!isMarketing && !consent.data && !consent.isLoading
-  const canSend = !!template && allFilled && !needsConsent && !send.isPending
+  // MARKETING so libera com consent PRESENTE (bloqueia inclusive durante o loading,
+  // pra nao enviar as cegas). O CTA/banner aparece so quando ja SABEMOS que nao ha.
+  const marketingReady = !isMarketing || !!consent.data
+  const showConsentCta = !!isMarketing && !consent.data && !consent.isLoading
+  const canSend = !!template && allFilled && marketingReady && !send.isPending
 
   const reset = () => setValues({})
 
   const handleSend = () => {
-    if (!template || needsConsent) return
+    if (!template || !marketingReady) return
     const parameters = vars.map((n) => values[n].trim())
     send.mutate(
       {
@@ -117,11 +120,11 @@ export const TemplateVariablesForm = ({
               </div>
             </div>
 
-            {needsConsent && (
+            {showConsentCta && (
               <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
                 <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
                 <div className="space-y-1.5">
-                  <p>Este contato nao tem consentimento para marketing. Registre o opt-in ou use um template de utilidade.</p>
+                  <p>Este contato não tem consentimento para marketing. Registre o opt-in ou use um template de utilidade.</p>
                   <Button size="sm" variant="outline" className="h-7" onClick={() => setConsentOpen(true)}>
                     Registrar opt-in
                   </Button>

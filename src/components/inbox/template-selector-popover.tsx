@@ -58,7 +58,7 @@ export const TemplateSelectorPopover = ({ onPick, highlight }: TemplateSelectorP
       <div className="max-h-48 overflow-y-auto scrollbar-minimal space-y-1">
         {filtered.length === 0 && (
           <p className="px-2 py-3 text-center text-xs text-muted-foreground">
-            Nenhum template aprovado. Crie em Integracoes {'>'} WhatsApp.
+            Nenhum template aprovado. Crie em Integrações {'>'} WhatsApp.
           </p>
         )}
         {filtered.map((t) => (
