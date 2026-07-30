@@ -4,12 +4,16 @@ import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { ReplyTemplatesPopover } from '@/components/inbox/reply-templates-popover'
+import { TemplateSelectorPopover } from '@/components/inbox/template-selector-popover'
+import { TemplateVariablesForm } from '@/components/inbox/template-variables-form'
 import { AudioRecorder } from '@/components/inbox/audio-recorder'
 import { useSendMessage, useWhatsAppConnected } from '@/hooks/use-messages'
 import { useWhatsAppStatus } from '@/hooks/use-whatsapp-status'
+import { useConversationWindow } from '@/hooks/use-conversation-window'
 import { useAuthStore } from '@/stores/auth.store'
 import { supabase } from '@/lib/supabase'
 import { safeStorageName } from '@/lib/storage'
+import type { WhatsAppTemplate } from '@/types/whatsapp-template'
 
 interface ChatInputProps {
   leadId: string
@@ -22,6 +26,8 @@ const ChatInput = ({ leadId, onTyping }: ChatInputProps) => {
   const [isRecording, setIsRecording] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [selectedTemplate, setSelectedTemplate] = useState<WhatsAppTemplate | null>(null)
+  const [varsFormOpen, setVarsFormOpen] = useState(false)
   const sendMessage = useSendMessage()
   const { data: whatsAppConnected } = useWhatsAppConnected()
   const { data: whatsappStatus } = useWhatsAppStatus()
@@ -29,6 +35,17 @@ const ChatInput = ({ leadId, onTyping }: ChatInputProps) => {
   const companyId = useAuthStore((s) => s.company?.id)
   const isEvolution = whatsappStatus?.provider === 'evolution'
   const hasInstance = !isEvolution || !!profile?.default_whatsapp_instance
+
+  // Template HSM: so no Cloud API. Fora da janela de 24h (recebida do contato),
+  // a Meta so entrega template aprovado -> desabilita texto livre e destaca o seletor.
+  const isCloudApi = whatsappStatus?.provider === 'cloud_api'
+  const { data: windowOpen } = useConversationWindow(leadId)
+  const windowClosed = isCloudApi && windowOpen === false
+
+  const openTemplate = (t: WhatsAppTemplate) => {
+    setSelectedTemplate(t)
+    setVarsFormOpen(true)
+  }
 
   const adjustHeight = useCallback(() => {
     const el = textareaRef.current
@@ -40,6 +57,8 @@ const ChatInput = ({ leadId, onTyping }: ChatInputProps) => {
   const handleSend = async () => {
     const text = content.trim()
     if (!text || sendMessage.isPending) return
+    // Fora da janela de 24h (Cloud API), texto livre nao e entregue: so template.
+    if (windowClosed) return
 
     setContent('')
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
@@ -117,12 +136,23 @@ const ChatInput = ({ leadId, onTyping }: ChatInputProps) => {
 
   return (
     <div className="border-t bg-background p-3">
+      {windowClosed && (
+        <div className="mb-2 flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs text-amber-800">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+          A janela de 24h fechou. So e possivel enviar um template aprovado.
+        </div>
+      )}
       <div className="relative flex items-end gap-2">
         {!isRecording && (
           <>
             <div className="relative">
               <ReplyTemplatesPopover onSelect={(t) => { setContent(t); textareaRef.current?.focus() }} />
             </div>
+            {isCloudApi && (
+              <div className="relative">
+                <TemplateSelectorPopover onPick={openTemplate} highlight={windowClosed} />
+              </div>
+            )}
 
             <Button
               type="button"
@@ -157,14 +187,15 @@ const ChatInput = ({ leadId, onTyping }: ChatInputProps) => {
                 onTyping?.()
               }}
               onKeyDown={handleKeyDown}
-              placeholder="Digite uma mensagem..."
+              disabled={windowClosed}
+              placeholder={windowClosed ? 'Janela fechada. Envie um template aprovado.' : 'Digite uma mensagem...'}
               rows={1}
-              className="flex-1 resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring input-clean"
+              className="flex-1 resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring input-clean disabled:cursor-not-allowed disabled:opacity-60"
             />
 
             <button
               onClick={handleSend}
-              disabled={!content.trim() || sendMessage.isPending}
+              disabled={!content.trim() || sendMessage.isPending || windowClosed}
               title={whatsAppConnected === false ? 'WhatsApp nao conectado - mensagem sera salva como manual' : undefined}
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-all duration-150 hover:bg-primary/90 disabled:cursor-not-allowed"
             >
@@ -177,6 +208,13 @@ const ChatInput = ({ leadId, onTyping }: ChatInputProps) => {
           </>
         )}
       </div>
+
+      <TemplateVariablesForm
+        open={varsFormOpen}
+        onOpenChange={setVarsFormOpen}
+        template={selectedTemplate}
+        leadId={leadId}
+      />
     </div>
   )
 }
