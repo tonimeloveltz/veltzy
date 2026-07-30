@@ -1,7 +1,8 @@
 import { supabase, veltzy } from '@/lib/supabase'
 import type { WhatsAppTemplate } from '@/types/whatsapp-template'
 
-const FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/cloud-api-templates`
+// -proxy: nome distinto da function cloud-api-templates do Hub (mesmo Central).
+const FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/cloud-api-templates-proxy`
 
 export interface SyncTemplatesResult {
   success: boolean
