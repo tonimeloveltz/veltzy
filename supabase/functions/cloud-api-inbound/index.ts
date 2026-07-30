@@ -484,12 +484,15 @@ async function processTemplateStatusUpdate(
         console.warn(`[cloud-api-inbound] template_status_update: waba ${wabaId} nao mapeado, ignorando`)
         return
       }
+      // v26.0 manda language com hifen (pt-BR); o banco grava com underscore
+      // (pt_BR, como o create/list). Normaliza pra o fallback casar a linha.
+      const languageNorm = typeof language === 'string' ? language.replace(/-/g, '_') : language
       query = supabaseVeltzy
         .from('whatsapp_templates')
         .update(patch)
         .eq('company_id', num.company_id)
         .eq('name', name)
-        .eq('language', language)
+        .eq('language', languageNorm)
     }
 
     const { data: rows, error } = await query.select('id')
