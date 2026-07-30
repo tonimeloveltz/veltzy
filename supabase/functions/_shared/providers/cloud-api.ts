@@ -35,13 +35,19 @@ export class CloudApiHubProvider implements WhatsAppProvider {
     }
 
     const isMedia = payload.type !== 'text' && payload.mediaUrl
+    // Template (HSM): manda os campos crus; o Hub monta o components Graph
+    // (type:'template', components:[{type:'body', parameters:[{type:'text',text}]}]).
+    const message = payload.template
+      ? { template: { name: payload.template.name, language: payload.template.language, parameters: payload.template.parameters } }
+      : isMedia
+        ? { media: { type: payload.type, url: payload.mediaUrl, caption: payload.content } }
+        : { text: payload.content }
+
     const body = {
       phone_number_id: phoneNumberId,
       company_id: payload.companyId ?? _config.company_id,
       to: payload.phone,
-      message: isMedia
-        ? { media: { type: payload.type, url: payload.mediaUrl, caption: payload.content } }
-        : { text: payload.content },
+      message,
     }
 
     const res = await fetch(`${this.hubUrl}/functions/v1/cloud-api-send-message`, {

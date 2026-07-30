@@ -19,6 +19,53 @@ interface SendPayload {
   repliedMessageId?: string
   instanceName?: string       // override explicito (admin/manager)
   senderType?: 'human' | 'ai' // aceito apenas com service role
+  // Template HSM (Cloud API). parameters = strings na ordem das {{n}} do BODY.
+  template?: { templateId?: string; name: string; language: string; parameters: string[] }
+}
+
+// Mensagens de bloqueio do gate de status (so APPROVED envia).
+const TEMPLATE_BLOCK_MSG: Record<string, string> = {
+  PENDING: 'Template ainda em analise pela Meta.',
+  IN_REVIEW: 'Template ainda em analise pela Meta.',
+  REJECTED: 'Template rejeitado pela Meta. Crie outro.',
+  PAUSED: 'Template pausado pela Meta (qualidade). Escolha outro ou aguarde a reativacao.',
+  DISABLED: 'Template desabilitado pela Meta (qualidade). Escolha outro.',
+}
+
+/**
+ * Gate do envio de template (bloco b): confirma que o template pertence a empresa,
+ * esta APPROVED, e que o numero de variaveis preenchidas bate com os {{n}} do BODY.
+ * Retorna string de erro amigavel, ou null se pode enviar.
+ */
+async function validateTemplateForSend(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  companyId: string,
+  tpl: NonNullable<SendPayload['template']>,
+): Promise<string | null> {
+  let q = supabase.from('whatsapp_templates').select('status, components')
+  if (tpl.templateId) {
+    q = q.eq('meta_template_id', tpl.templateId)
+  } else {
+    q = q.eq('company_id', companyId).eq('name', tpl.name).eq('language', tpl.language)
+  }
+  const { data: row } = await q.limit(1).maybeSingle()
+
+  if (!row) return 'Template nao encontrado. Sincronize os templates e tente novamente.'
+  if (row.status !== 'APPROVED') {
+    return TEMPLATE_BLOCK_MSG[row.status] ?? 'Este template nao esta aprovado para envio.'
+  }
+
+  // Variaveis: nº de parameters == nº de {{n}} unicos no componente BODY.
+  // deno-lint-ignore no-explicit-any
+  const body = Array.isArray(row.components) ? row.components.find((c: any) => c?.type === 'BODY') : null
+  const bodyText: string = body?.text ?? ''
+  const varCount = new Set([...bodyText.matchAll(/\{\{(\d+)\}\}/g)].map((m) => m[1])).size
+  if ((tpl.parameters?.length ?? 0) !== varCount) {
+    return `Preencha todas as ${varCount} variavel(is) do template antes de enviar.`
+  }
+
+  return null
 }
 
 Deno.serve(async (req) => {
@@ -154,6 +201,15 @@ Deno.serve(async (req) => {
         deliveryError = err instanceof Error ? err.message : String(err)
       }
     } else if (activeProvider === 'cloud_api') {
+      // Gate de template (bloco b): so envia APPROVED + variaveis completas.
+      if (payload.template) {
+        const templateError = await validateTemplateForSend(supabase, companyId, payload.template)
+        if (templateError) {
+          return new Response(JSON.stringify({ error: templateError }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+        }
+      }
+
       // Resolve o numero Cloud API: vinculo do lead -> default da empresa.
       const outbound = await resolveOutboundCloudApiNumber(supabase, {
         cloud_api_number_id: lead.cloud_api_number_id,
@@ -179,6 +235,9 @@ Deno.serve(async (req) => {
           fileName: payload.fileName,
           phoneNumberId: outbound.phoneNumberId,
           companyId,
+          template: payload.template
+            ? { name: payload.template.name, language: payload.template.language, parameters: payload.template.parameters }
+            : undefined,
         })
         externalId = result.externalId ?? null
       } catch (err) {
