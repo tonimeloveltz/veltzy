@@ -1,10 +1,12 @@
-import { RefreshCw, AlertCircle, FileText } from 'lucide-react'
+import { useState } from 'react'
+import { RefreshCw, AlertCircle, FileText, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useWhatsAppTemplates, useSyncTemplates } from '@/hooks/use-whatsapp-templates'
 import type { QualityRating, TemplateStatus } from '@/types/whatsapp-template'
+import { WhatsAppTemplateForm } from './whatsapp-template-form'
 
 const STATUS_META: Record<TemplateStatus, { label: string; className: string }> = {
   APPROVED: { label: 'Aprovado', className: 'bg-green-100 text-green-700' },
@@ -30,6 +32,7 @@ const CATEGORY_LABEL: Record<string, string> = {
 export const WhatsAppTemplatesManager = () => {
   const { data: templates, isLoading, isError, refetch } = useWhatsAppTemplates()
   const sync = useSyncTemplates()
+  const [formOpen, setFormOpen] = useState(false)
 
   const handleSync = () => {
     sync.mutate(undefined, {
@@ -74,9 +77,16 @@ export const WhatsAppTemplatesManager = () => {
 
   return (
     <div className="space-y-3">
+      <WhatsAppTemplateForm open={formOpen} onOpenChange={setFormOpen} />
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-medium">Templates</h3>
-        {syncButton}
+        <div className="flex gap-2">
+          <Button size="sm" onClick={() => setFormOpen(true)}>
+            <Plus className="h-3.5 w-3.5" />
+            Criar template
+          </Button>
+          {syncButton}
+        </div>
       </div>
 
       {!templates || templates.length === 0 ? (

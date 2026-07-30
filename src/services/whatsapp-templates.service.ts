@@ -1,5 +1,5 @@
 import { supabase, veltzy } from '@/lib/supabase'
-import type { WhatsAppTemplate } from '@/types/whatsapp-template'
+import type { CreateTemplateInput, WhatsAppTemplate } from '@/types/whatsapp-template'
 
 // -proxy: nome distinto da function cloud-api-templates do Hub (mesmo Central).
 const FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/cloud-api-templates-proxy`
@@ -47,4 +47,36 @@ export async function syncTemplatesFromMeta(): Promise<SyncTemplatesResult> {
   }
 
   return res.json() as Promise<SyncTemplatesResult>
+}
+
+export interface CreateTemplateResult {
+  success: boolean
+  meta_template_id: string | null
+  status: string
+}
+
+/**
+ * Cria e submete um template a Meta via edge. O proxy monta o components Graph,
+ * chama o Hub e grava a linha local em status normalizado (PENDING/IN_REVIEW).
+ * Erros da Meta vem no corpo (ex: categoria mis-tag) e sao repassados pra UI.
+ */
+export async function createTemplate(input: CreateTemplateInput): Promise<CreateTemplateResult> {
+  const res = await fetch(FUNCTION_URL, {
+    method: 'POST',
+    headers: await getAuthHeaders(),
+    body: JSON.stringify({ action: 'create', ...input }),
+  })
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    // A Meta costuma detalhar em error.error_user_msg / error.message; expõe o mais claro.
+    const meta = err?.error
+    const msg =
+      (typeof meta === 'object' && (meta.error_user_msg || meta.message)) ||
+      err.error ||
+      'Nao foi possivel criar o template.'
+    throw new Error(msg)
+  }
+
+  return res.json() as Promise<CreateTemplateResult>
 }
