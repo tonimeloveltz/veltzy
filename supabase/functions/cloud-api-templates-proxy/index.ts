@@ -40,6 +40,7 @@ function getVeltzyClient() {
 
 interface AuthResult {
   userId: string
+  profileId: string
   companyId: string
 }
 
@@ -60,7 +61,7 @@ async function authenticateAndAuthorize(
 
   const { data: profile } = await supabaseAdmin
     .from('profiles')
-    .select('company_id')
+    .select('id, company_id')
     .eq('user_id', user.id)
     .single()
 
@@ -89,7 +90,8 @@ async function authenticateAndAuthorize(
     }
   }
 
-  return { userId: user.id, companyId: profile.company_id as string }
+  // created_by referencia public.profiles(id), NAO auth.users(id): retorna o profileId.
+  return { userId: user.id, profileId: profile.id as string, companyId: profile.company_id as string }
 }
 
 // A tabela veltzy.whatsapp_templates tem CHECK em status/category/quality_rating.
@@ -186,7 +188,7 @@ Deno.serve(async (req: Request) => {
     if (authResult instanceof Response) {
       return new Response(authResult.body, { status: authResult.status, headers })
     }
-    const { companyId, userId } = authResult
+    const { companyId, profileId } = authResult
 
     const reqBody = await req.json()
     const action = reqBody.action
@@ -334,7 +336,7 @@ Deno.serve(async (req: Request) => {
           category,
           status: normStatus(created.status),
           components,
-          created_by: userId,
+          created_by: profileId,
         },
         { onConflict: 'company_id,waba_id,name,language' },
       )

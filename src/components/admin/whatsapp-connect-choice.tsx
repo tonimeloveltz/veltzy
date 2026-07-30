@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { BadgeCheck, QrCode, ArrowLeft, CheckCircle2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -20,10 +20,20 @@ const CATEGORY_ICON: Record<WhatsAppCategoryKey, React.ComponentType<{ className
   qr_code: QrCode,
 }
 
-export const WhatsAppConnectChoice = () => {
+interface WhatsAppConnectChoiceProps {
+  // Notifica o container quando o canal esta em modo "gerenciar" (uma opcao aberta),
+  // pra ele esconder os outros cards de canal e nao vazarem embaixo da gestao.
+  onManagingChange?: (managing: boolean) => void
+}
+
+export const WhatsAppConnectChoice = ({ onManagingChange }: WhatsAppConnectChoiceProps = {}) => {
   const { data: categories, isLoading } = useWhatsAppCategories()
   const { connected: officialConnected } = useCloudApiConnection()
   const [selected, setSelected] = useState<WhatsAppCategoryKey | null>(null)
+
+  useEffect(() => {
+    onManagingChange?.(selected !== null)
+  }, [selected, onManagingChange])
 
   if (isLoading || !categories) {
     return <Skeleton className="h-40 w-full rounded-lg" />
