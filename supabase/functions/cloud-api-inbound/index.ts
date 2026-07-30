@@ -5,9 +5,10 @@ import { verifyMetaSignature } from '../_shared/meta-signature.ts'
 import { resolveCloudApiNumber, ResolvedNumber } from '../_shared/cloud-api-resolve.ts'
 import { downloadAndPersistCloudApiMedia } from '../_shared/cloud-api-media.ts'
 
-// NOTA: processamento de statuses[] (delivery/read) e eventos de coexistencia
-// (account_offboarded/reconnected) sao Fase 3. Esta funcao trata apenas:
-// GET hub.challenge + verificacao HMAC + messages[].
+// NOTA: statuses[] (delivery/read) e eventos de coexistencia
+// (account_offboarded/reconnected) sao Fase 3. Esta funcao trata:
+// GET hub.challenge + verificacao HMAC + messages[] + smb_message_echoes +
+// history + smb_app_state_sync (log) + message_template_status_update (bloco d).
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -67,6 +68,15 @@ Deno.serve(async (req) => {
       for (const change of entry.changes ?? []) {
         const value = change.value
         if (!value) continue
+
+        // (d) Status de template (message_template_status_update): field ISOLADO,
+        //     resolve por waba_id (entry.id), best-effort. NAO usa phone_number_id
+        //     nem o guard de provider; o evento e da WABA, nao de um numero (por
+        //     isso e tratado ANTES do check de phone_number_id abaixo).
+        if (change.field === 'message_template_status_update') {
+          await processTemplateStatusUpdate(supabaseVeltzy, entry.id, value)
+          continue
+        }
 
         const phoneNumberId = value?.metadata?.phone_number_id
         if (!phoneNumberId) continue
@@ -400,5 +410,100 @@ async function processHistory(
         console.error('[cloud-api-inbound] processHistory message error:', err)
       }
     }
+  }
+}
+
+// Normaliza o event do status_update para o CHECK de whatsapp_templates.status.
+// Retorna null para event inesperado (nesse caso NAO atualiza, pra nao regredir
+// um APPROVED com fallback errado; o Sincronizar reconcilia depois).
+const TEMPLATE_STATUS_MAP: Record<string, string> = {
+  PENDING: 'IN_REVIEW',
+  PENDING_REVIEW: 'IN_REVIEW',
+  IN_REVIEW: 'IN_REVIEW',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
+  PAUSED: 'PAUSED',
+  DISABLED: 'DISABLED',
+}
+
+function normTemplateStatus(raw: unknown): string | null {
+  const key = typeof raw === 'string' ? raw.toUpperCase() : ''
+  return TEMPLATE_STATUS_MAP[key] ?? null
+}
+
+/**
+ * (Bloco d) Reflete message_template_status_update em veltzy.whatsapp_templates.
+ * Best-effort e ISOLADO do fluxo de mensagens (nao usa phone_number_id nem guard
+ * de provider). Chave do UPDATE: meta_template_id (globalmente unico na Meta).
+ * Fallback SO se o id nao vier: company_id (resolvido por waba_id) + name +
+ * language, nunca so name+language, pra nao tocar a linha de outra empresa.
+ * Qualidade NAO entra aqui (vem em message_template_quality_update, outro field).
+ *
+ * Parsing defensivo (webhook em v26.0): le message_template_id/name/language,
+ * event e reason; se o shape divergir, casa 0 linhas e loga (nao quebra nada).
+ */
+async function processTemplateStatusUpdate(
+  // deno-lint-ignore no-explicit-any
+  supabaseVeltzy: any,
+  wabaId: string | undefined,
+  // deno-lint-ignore no-explicit-any
+  value: any,
+): Promise<void> {
+  try {
+    const metaId = value?.message_template_id != null ? String(value.message_template_id) : null
+    const name = value?.message_template_name ?? null
+    const language = value?.message_template_language ?? null
+    const status = normTemplateStatus(value?.event)
+    const reason = value?.reason ?? value?.rejected_reason ?? null
+
+    if (!status) {
+      console.warn(`[cloud-api-inbound] template_status_update: event inesperado '${value?.event}', ignorando`)
+      return
+    }
+
+    // deno-lint-ignore no-explicit-any
+    const patch: Record<string, any> = { status, updated_at: new Date().toISOString() }
+    if (status === 'REJECTED') patch.rejected_reason = reason
+
+    let query
+    if (metaId) {
+      // meta_template_id e globalmente unico -> ja isola o tenant sozinho.
+      query = supabaseVeltzy.from('whatsapp_templates').update(patch).eq('meta_template_id', metaId)
+    } else {
+      if (!wabaId || !name || !language) {
+        console.warn('[cloud-api-inbound] template_status_update sem id nem (waba+name+language), ignorando')
+        return
+      }
+      const { data: num } = await supabaseVeltzy
+        .from('cloud_api_numbers')
+        .select('company_id')
+        .eq('waba_id', wabaId)
+        .limit(1)
+        .maybeSingle()
+      if (!num?.company_id) {
+        console.warn(`[cloud-api-inbound] template_status_update: waba ${wabaId} nao mapeado, ignorando`)
+        return
+      }
+      query = supabaseVeltzy
+        .from('whatsapp_templates')
+        .update(patch)
+        .eq('company_id', num.company_id)
+        .eq('name', name)
+        .eq('language', language)
+    }
+
+    const { data: rows, error } = await query.select('id')
+    if (error) {
+      console.error('[cloud-api-inbound] template_status_update update erro:', error.message)
+      return
+    }
+    const n = Array.isArray(rows) ? rows.length : 0
+    if (n === 0) {
+      console.warn(`[cloud-api-inbound] template_status_update: nenhum template casou (metaId=${metaId}, name=${name}), ignorando`)
+    } else {
+      console.log(`[cloud-api-inbound] template_status_update: ${n} linha(s) -> status=${status}`)
+    }
+  } catch (err) {
+    console.error('[cloud-api-inbound] processTemplateStatusUpdate error:', err)
   }
 }
