@@ -430,7 +430,8 @@ verify_jwt = false
 
 # Proxy de templates: mesma auth manual (getUser) do onboard-proxy; o front chama
 # so com Authorization Bearer (sem apikey), entao verify_jwt fica false como o irmao.
-[functions.cloud-api-templates]
+# Sufixo -proxy pra nao colidir com cloud-api-templates do Hub (mesmo Central).
+[functions.cloud-api-templates-proxy]
 verify_jwt = false
 
 [edge_runtime]
