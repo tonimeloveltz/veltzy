@@ -9,7 +9,7 @@ interface FbLoginOptions {
   config_id: string
   response_type: string
   override_default_response_type: boolean
-  extras: { sessionInfoVersion: number }
+  extras: { sessionInfoVersion: number; featureType?: string }
 }
 
 interface FacebookSdk {
