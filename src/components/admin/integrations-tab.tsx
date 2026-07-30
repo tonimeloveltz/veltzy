@@ -63,8 +63,6 @@ const HubManagedCard = ({ title, description, icon: Icon }: { title: string; des
   </Card>
 )
 
-const WhatsAppCard = () => <WhatsAppConnectChoice />
-
 // --- Webhook card ---
 
 const WebhookCard = ({
@@ -301,6 +299,10 @@ const WebhookIntegrations = () => {
 // --- Main tab ---
 
 const IntegrationsTab = () => {
+  // Quando o WhatsApp oficial esta em modo "gerenciar", esconde os outros canais
+  // pra eles nao vazarem embaixo da gestao (Numeros/Templates).
+  const [whatsappManaging, setWhatsappManaging] = useState(false)
+
   return (
     <Tabs defaultValue="channels">
       <TabsList>
@@ -311,9 +313,13 @@ const IntegrationsTab = () => {
       </TabsList>
 
       <TabsContent value="channels" className="mt-4 space-y-4">
-        <WhatsAppCard />
-        <HubManagedCard title="Instagram Business" description="DMs e comentarios do Instagram" icon={Globe} />
-        <HubManagedCard title="Email (Brevo)" description="Envio de emails transacionais e lembretes" icon={Mail} />
+        <WhatsAppConnectChoice onManagingChange={setWhatsappManaging} />
+        {!whatsappManaging && (
+          <>
+            <HubManagedCard title="Instagram Business" description="DMs e comentarios do Instagram" icon={Globe} />
+            <HubManagedCard title="Email (Brevo)" description="Envio de emails transacionais e lembretes" icon={Mail} />
+          </>
+        )}
       </TabsContent>
 
       <TabsContent value="calendar" className="mt-4">
