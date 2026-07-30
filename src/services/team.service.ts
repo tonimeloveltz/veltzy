@@ -41,20 +41,23 @@ export const inviteMember = async (companyId: string, email: string, role: AppRo
     .eq('email', email)
     .eq('status', 'pending')
 
+  // Nome da empresa e desnormalizado no convite: a pagina de aceite le sem
+  // sessao, e a policy publica da tabela nao alcanca o join com companies.
+  const { data: company } = await supabase
+    .from('companies')
+    .select('name')
+    .eq('id', companyId)
+    .single()
+
   const { data, error } = await supabase
     .from('invitations')
-    .insert({ company_id: companyId, email, role, invited_by: invitedBy })
+    .insert({ company_id: companyId, email, role, invited_by: invitedBy, company_name: company?.name ?? null })
     .select()
     .single()
   if (error) throw error
   await logAuditEvent('invite_sent', { email, role, invite_id: data.id }, companyId)
 
   // Enviar email de convite via Edge Function
-  const { data: company } = await supabase
-    .from('companies')
-    .select('name')
-    .eq('id', companyId)
-    .single()
   const { data: profile } = await supabase
     .from('profiles')
     .select('name')
