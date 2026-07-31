@@ -2,6 +2,16 @@
 
 > Fase 2 do SDD. Deriva de `PRD-templates.md`. Define O QUE será implementado, arquivo por arquivo, com critérios de aceite por bloco. Implementação pela codificadora do Veltzy (git flow feat→develop→main), PVO ao fim de cada bloco.
 
+## Status de entrega (2026-07-31)
+
+Fase 1 completa **no código** (a+b+c+d+e), com testes (Vitest front + deno test edge). Legenda dos `[x]` abaixo: **implementado e coberto** (PVO em produção ou teste unitário verde).
+
+- **(a) Listar** — ✅ EM PRODUÇÃO (PVO passou: sync, status, quality, RLS, estados).
+- **(c) Criar** — ✅ EM PRODUÇÃO (PVO passou: cria/submete, validações, PENDING local, erro da Meta).
+- **(d) Webhook status** — ✅ EM PRODUÇÃO (isolado, parsing v26.0 validado com payload real). O E2E final "status muda sozinho" fecha na **aprovação real de 1 template** pela Meta.
+- **(b) Enviar** — CÓDIGO PRONTO + testes (gate de status/variáveis/anti cross-tenant). Deploy + PVO E2E aguardam **go do Toni + 1 template APPROVED**.
+- **(e) Seletor Inbox + Consentimento** — CÓDIGO PRONTO + testes (janela 24h, gate MARKETING, opt-in). Merge/PVO junto com o (b).
+
 ## 0. Arquitetura em camadas
 
 ```
@@ -42,10 +52,10 @@ Regra de ouro (herdada da coexistência): **o token vive só no Hub**; o Veltzy 
 - `src/components/admin/whatsapp-connect-choice.tsx` — **MODIFICAR**: quando oficial conectado, sub-abas "Números" / "Templates" (renderiza o manager).
 
 ### Critérios de aceite
-- [ ] Lista os templates reais da WABA na tela Admin (sub-aba Templates).
-- [ ] Status refletido incl. **PAUSED/DISABLED**; `quality_rating` como badge.
-- [ ] RLS: empresa só vê os seus templates.
-- [ ] Loading (skeleton) / empty / error (retry).
+- [x] Lista os templates reais da WABA na tela Admin (sub-aba Templates).
+- [x] Status refletido incl. **PAUSED/DISABLED**; `quality_rating` como badge.
+- [x] RLS: empresa só vê os seus templates.
+- [x] Loading (skeleton) / empty / error (retry).
 
 ---
 
@@ -68,10 +78,10 @@ Regra de ouro (herdada da coexistência): **o token vive só no Hub**; o Veltzy 
 - Erros amigáveis (§7.2 do PRD) mapeados no catch da mutation (toast claro, não erro cru).
 
 ### Critérios de aceite
-- [ ] Envia template APPROVED com variáveis; `wamid` em `messages.external_id`.
-- [ ] Bloqueia PAUSED/DISABLED com mensagem clara.
-- [ ] Variável faltando bloqueada com mensagem clara.
-- [ ] Erro da Meta tratado (msg + fbtrace_id no log).
+- [x] Envia template APPROVED com variáveis; `wamid` em `messages.external_id`.
+- [x] Bloqueia PAUSED/DISABLED com mensagem clara.
+- [x] Variável faltando bloqueada com mensagem clara.
+- [x] Erro da Meta tratado (msg + fbtrace_id no log).
 
 ---
 
@@ -84,9 +94,9 @@ Regra de ouro (herdada da coexistência): **o token vive só no Hub**; o Veltzy 
 - Ao criar: grava linha local `PENDING` (o webhook do bloco d atualiza).
 
 ### Critérios de aceite
-- [ ] Cria e submete à Meta; linha local PENDING criada.
-- [ ] Validações client-side (nome, variáveis, exemplos).
-- [ ] Erro de validação da Meta exibido (ex.: categoria mis-tag auto-rejeitada).
+- [x] Cria e submete à Meta; linha local PENDING criada.
+- [x] Validações client-side (nome, variáveis, exemplos).
+- [x] Erro de validação da Meta exibido (ex.: categoria mis-tag auto-rejeitada).
 
 ---
 
@@ -99,9 +109,9 @@ Regra de ouro (herdada da coexistência): **o token vive só no Hub**; o Veltzy 
   - Best-effort, responde 200 (não derruba o webhook de mensagens).
 
 ### Critérios de aceite
-- [ ] Approved/Rejected/**Paused/Disabled** refletem em `whatsapp_templates.status` sem refresh manual.
-- [ ] `rejected_reason` e `quality_rating` gravados.
-- [ ] Evento de tenant desconhecido ignorado (log, 200).
+- [x] Approved/Rejected/**Paused/Disabled** refletem em `whatsapp_templates.status` sem refresh manual.
+- [x] `rejected_reason` e `quality_rating` gravados.
+- [x] Evento de tenant desconhecido ignorado (log, 200).
 
 ---
 
@@ -117,10 +127,10 @@ Regra de ouro (herdada da coexistência): **o token vive só no Hub**; o Veltzy 
 - Gate de MARKETING: antes de enviar, checa `useLeadConsent(leadId,'marketing_whatsapp')`; sem opt-in → bloqueia com CTA "Registrar opt-in".
 
 ### Critérios de aceite
-- [ ] Seletor mostra só APPROVED.
-- [ ] Janela fechada → texto livre desabilitado, seletor destacado; janela aberta → texto livre ok.
-- [ ] MARKETING sem opt-in bloqueado com mensagem/CTA claros.
-- [ ] Variáveis preenchidas + preview antes de enviar; envio pelo caminho do bloco (b).
+- [x] Seletor mostra só APPROVED.
+- [x] Janela fechada → texto livre desabilitado, seletor destacado; janela aberta → texto livre ok.
+- [x] MARKETING sem opt-in bloqueado com mensagem/CTA claros.
+- [x] Variáveis preenchidas + preview antes de enviar; envio pelo caminho do bloco (b).
 
 ---
 
@@ -132,10 +142,10 @@ Regra de ouro (herdada da coexistência): **o token vive só no Hub**; o Veltzy 
 - `src/components/inbox/lead-consent-dialog.tsx` — registrar opt-in (finalidade, termo_versao, texto_aceito, origem).
 
 ### Critérios de aceite
-- [ ] Registrar opt-in cria linha em `lead_consents` (revogado_em NULL).
-- [ ] Revogar preenche `revogado_em` sem apagar (histórico preservado).
-- [ ] Gate de MARKETING lê corretamente (com/sem consentimento válido).
-- [ ] RLS isola por empresa.
+- [x] Registrar opt-in cria linha em `lead_consents` (revogado_em NULL).
+- [x] Revogar preenche `revogado_em` sem apagar (histórico preservado).
+- [x] Gate de MARKETING lê corretamente (com/sem consentimento válido).
+- [x] RLS isola por empresa.
 
 ---
 

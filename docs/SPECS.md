@@ -1,5 +1,8 @@
 # SPECS - Veltzy Technical Foundation
 
+> **Specs de features** (detalhados, por feature):
+> - Mensagens Template / HSM (WhatsApp Cloud API): [`docs/features/whatsapp-templates/Spec.md`](features/whatsapp-templates/Spec.md) (PRD: [`PRD-templates.md`](features/whatsapp-templates/PRD-templates.md))
+
 ## 1. STACK TECNOLOGICA
 
 ### Frontend
