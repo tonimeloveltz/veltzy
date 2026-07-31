@@ -9,6 +9,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useSendMessage } from '@/hooks/use-messages'
 import { useLeadConsent } from '@/hooks/use-lead-consent'
+import { extractTemplateVars } from '@/lib/template-vars'
+import { computeTemplateGate } from '@/lib/template-gate'
 import { LeadConsentDialog } from './lead-consent-dialog'
 import type { TemplateComponent, WhatsAppTemplate } from '@/types/whatsapp-template'
 
@@ -26,12 +28,6 @@ function getBodyText(t: WhatsAppTemplate | null): string {
   return (body?.text as string) ?? ''
 }
 
-function extractVars(text: string): number[] {
-  const found = new Set<number>()
-  for (const m of text.matchAll(/\{\{(\d+)\}\}/g)) found.add(Number(m[1]))
-  return [...found].sort((a, b) => a - b)
-}
-
 export const TemplateVariablesForm = ({
   open,
   onOpenChange,
@@ -47,17 +43,18 @@ export const TemplateVariablesForm = ({
   const [consentOpen, setConsentOpen] = useState(false)
 
   const text = getBodyText(template)
-  const vars = useMemo(() => extractVars(text), [text])
+  const vars = useMemo(() => extractTemplateVars(text), [text])
   const preview = useMemo(
     () => text.replace(/\{\{(\d+)\}\}/g, (_, n) => values[Number(n)]?.trim() || `{{${n}}}`),
     [text, values],
   )
 
   const allFilled = vars.every((n) => (values[n] ?? '').trim().length > 0)
-  // MARKETING so libera com consent PRESENTE (bloqueia inclusive durante o loading,
-  // pra nao enviar as cegas). O CTA/banner aparece so quando ja SABEMOS que nao ha.
-  const marketingReady = !isMarketing || !!consent.data
-  const showConsentCta = !!isMarketing && !consent.data && !consent.isLoading
+  const { marketingReady, showConsentCta } = computeTemplateGate({
+    isMarketing: !!isMarketing,
+    hasConsent: !!consent.data,
+    consentLoading: consent.isLoading,
+  })
   const canSend = !!template && allFilled && marketingReady && !send.isPending
 
   const reset = () => setValues({})

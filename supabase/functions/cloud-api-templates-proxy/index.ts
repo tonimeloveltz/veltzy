@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { buildComponents, type CreateInput } from '../_shared/template-graph.ts'
 
 // Hub = mesmo projeto Supabase Central. O token da WABA vive so no Hub; o Veltzy
 // passa waba_id + company_id e o Hub chama a Graph (mesmo padrao do onboarding/envio).
@@ -131,42 +132,6 @@ interface RawTemplate {
   category?: string
   components?: unknown
   quality_score?: { score?: string }
-}
-
-// Payload estruturado do form (action 'create'). O proxy monta o components Graph.
-interface CreateInput {
-  name?: string
-  language?: string
-  category?: string
-  body?: { text: string; examples?: string[] }
-  header?: { format: string; text: string }
-  footer?: { text: string }
-  buttons?: unknown[]
-}
-
-// Monta o array components no formato Graph UMA vez (usado pro Hub E pro banco, 1:1).
-// Ordem canonica da Graph: HEADER, BODY, FOOTER, BUTTONS.
-function buildComponents(input: CreateInput): Record<string, unknown>[] {
-  const components: Record<string, unknown>[] = []
-
-  if (input.header?.text) {
-    components.push({ type: 'HEADER', format: input.header.format ?? 'TEXT', text: input.header.text })
-  }
-
-  const body: Record<string, unknown> = { type: 'BODY', text: input.body?.text ?? '' }
-  if (input.body?.examples?.length) {
-    body.example = { body_text: [input.body.examples] }
-  }
-  components.push(body)
-
-  if (input.footer?.text) {
-    components.push({ type: 'FOOTER', text: input.footer.text })
-  }
-  if (input.buttons?.length) {
-    components.push({ type: 'BUTTONS', buttons: input.buttons })
-  }
-
-  return components
 }
 
 Deno.serve(async (req: Request) => {

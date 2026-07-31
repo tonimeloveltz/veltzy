@@ -3,6 +3,7 @@ import { getWhatsAppConfig, getActiveProvider } from '../_shared/whatsapp-config
 import { createProvider } from '../_shared/whatsapp-factory.ts'
 import { resolveInstanceName } from '../_shared/resolve-instance.ts'
 import { resolveOutboundCloudApiNumber } from '../_shared/cloud-api-resolve.ts'
+import { validateTemplateRow } from '../_shared/template-send-guard.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -23,19 +24,10 @@ interface SendPayload {
   template?: { templateId?: string; name: string; language: string; parameters: string[] }
 }
 
-// Mensagens de bloqueio do gate de status (so APPROVED envia).
-const TEMPLATE_BLOCK_MSG: Record<string, string> = {
-  PENDING: 'Template ainda em analise pela Meta.',
-  IN_REVIEW: 'Template ainda em analise pela Meta.',
-  REJECTED: 'Template rejeitado pela Meta. Crie outro.',
-  PAUSED: 'Template pausado pela Meta (qualidade). Escolha outro ou aguarde a reativacao.',
-  DISABLED: 'Template desabilitado pela Meta (qualidade). Escolha outro.',
-}
-
 /**
- * Gate do envio de template (bloco b): confirma que o template pertence a empresa,
- * esta APPROVED, e que o numero de variaveis preenchidas bate com os {{n}} do BODY.
- * Retorna string de erro amigavel, ou null se pode enviar.
+ * Gate do envio de template (bloco b): busca o template da empresa (filtra sempre
+ * company_id, anti cross-tenant) e delega a validacao pura (status APPROVED +
+ * numero de variaveis) a validateTemplateRow. Erro amigavel ou null.
  */
 async function validateTemplateForSend(
   // deno-lint-ignore no-explicit-any
@@ -53,21 +45,7 @@ async function validateTemplateForSend(
   }
   const { data: row } = await q.limit(1).maybeSingle()
 
-  if (!row) return 'Template nao encontrado. Sincronize os templates e tente novamente.'
-  if (row.status !== 'APPROVED') {
-    return TEMPLATE_BLOCK_MSG[row.status] ?? 'Este template nao esta aprovado para envio.'
-  }
-
-  // Variaveis: nº de parameters == nº de {{n}} unicos no componente BODY.
-  // deno-lint-ignore no-explicit-any
-  const body = Array.isArray(row.components) ? row.components.find((c: any) => c?.type === 'BODY') : null
-  const bodyText: string = body?.text ?? ''
-  const varCount = new Set([...bodyText.matchAll(/\{\{(\d+)\}\}/g)].map((m) => m[1])).size
-  if ((tpl.parameters?.length ?? 0) !== varCount) {
-    return `Preencha todas as ${varCount} variavel(is) do template antes de enviar.`
-  }
-
-  return null
+  return validateTemplateRow(row, tpl.parameters?.length ?? 0)
 }
 
 Deno.serve(async (req) => {

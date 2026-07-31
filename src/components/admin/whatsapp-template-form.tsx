@@ -12,6 +12,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { useCreateTemplate } from '@/hooks/use-whatsapp-templates'
+import { extractTemplateVars } from '@/lib/template-vars'
 import type { TemplateButton, TemplateCategory } from '@/types/whatsapp-template'
 
 interface WhatsAppTemplateFormProps {
@@ -27,20 +28,6 @@ const CATEGORIES: { value: TemplateCategory; label: string }[] = [
 
 const NAME_RE = /^[a-z0-9_]+$/
 
-// Extrai os indices {{n}} do corpo, na ordem em que aparecem, sem repetir.
-function extractVars(text: string): number[] {
-  const found = new Set<number>()
-  const order: number[] = []
-  for (const m of text.matchAll(/\{\{(\d+)\}\}/g)) {
-    const n = Number(m[1])
-    if (!found.has(n)) {
-      found.add(n)
-      order.push(n)
-    }
-  }
-  return order
-}
-
 export const WhatsAppTemplateForm = ({ open, onOpenChange }: WhatsAppTemplateFormProps) => {
   const create = useCreateTemplate()
 
@@ -53,7 +40,7 @@ export const WhatsAppTemplateForm = ({ open, onOpenChange }: WhatsAppTemplateFor
   const [buttons, setButtons] = useState<TemplateButton[]>([])
 
   // Variaveis sequenciais a partir de 1 (sem buraco). {{1}},{{3}} sem {{2}} = invalido.
-  const vars = useMemo(() => extractVars(bodyText).sort((a, b) => a - b), [bodyText])
+  const vars = useMemo(() => extractTemplateVars(bodyText), [bodyText])
   const varsSequential = vars.every((n, i) => n === i + 1)
 
   const reset = () => {
