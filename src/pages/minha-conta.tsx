@@ -14,7 +14,7 @@ const MinhaContaPage = () => {
       <h1 className="text-2xl font-bold">Minha Conta</h1>
 
       <Tabs value={tab} onValueChange={(v) => setSearchParams({ tab: v })}>
-        <TabsList>
+        <TabsList className="flex-wrap h-auto gap-1">
           <TabsTrigger value="profile">Perfil</TabsTrigger>
           <TabsTrigger value="scripts">Scripts</TabsTrigger>
           <TabsTrigger value="notifications">Notificacoes</TabsTrigger>

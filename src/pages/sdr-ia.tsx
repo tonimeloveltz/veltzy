@@ -61,9 +61,9 @@ const SdrIaPage = () => {
         <TabsContent value="config" className="mt-6">
           <div className="space-y-4">
             {/* Pipeline selector */}
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <Select value={pipelineId || ''} onValueChange={setSelectedPipelineId}>
-                <SelectTrigger className="w-64"><SelectValue placeholder="Selecione um pipeline" /></SelectTrigger>
+                <SelectTrigger className="w-full sm:w-64"><SelectValue placeholder="Selecione um pipeline" /></SelectTrigger>
                 <SelectContent>
                   {pipelines?.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
                 </SelectContent>

@@ -117,7 +117,7 @@ const WebhookCard = ({
             <Label className="text-xs text-muted-foreground">Token</Label>
             <code className="block bg-muted px-2 py-1.5 rounded text-[11px] break-all font-mono">{integration.webhook_token}</code>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={copySnippet}>
               <Copy className="h-3 w-3" /> Copiar curl
             </Button>

@@ -281,7 +281,7 @@ const ThemeCustomizer = () => {
           </div>
         </div>
 
-        <div className="flex gap-3 pt-2">
+        <div className="flex flex-wrap gap-3 pt-2">
           <Button variant="outline" onClick={handleReset}>
             <RotateCcw className="mr-2 h-4 w-4" />
             Restaurar Padrao
