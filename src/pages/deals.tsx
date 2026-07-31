@@ -163,7 +163,7 @@ const DealsPage = () => {
   }, [deals, pipelineMap, stageMap])
 
   return (
-    <div className="min-h-full p-6">
+    <div className="min-h-full p-4 sm:p-6">
       <div className="space-y-6 animate-fade-in">
 
         {/* HEADER */}
@@ -265,7 +265,7 @@ const DealsPage = () => {
                 </div>
                 <Skeleton className="h-8 w-20 mt-3" />
                 <Skeleton className="h-px w-full my-3" />
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   {[1, 2, 3].map((j) => <Skeleton key={j} className="h-8 w-full" />)}
                 </div>
               </div>
@@ -290,7 +290,7 @@ const DealsPage = () => {
             </div>
             <p className="text-3xl font-bold text-foreground mt-2">{deals.length}</p>
             <div className="border-t border-border/30 my-3" />
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <div className="flex flex-col items-center gap-0.5">
                 <span className="text-sm font-medium text-yellow-500">{openDeals.length}</span>
                 <span className="text-xs text-muted-foreground">
@@ -334,7 +334,7 @@ const DealsPage = () => {
             </div>
             <p className="text-3xl font-bold text-primary mt-2">{fmt(totalValue)}</p>
             <div className="border-t border-border/30 my-3" />
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <div className="flex flex-col items-center gap-0.5">
                 <span className="text-sm font-medium text-yellow-500">{fmt(openValue)}</span>
                 <span className="text-xs text-muted-foreground">Aberto</span>

@@ -168,7 +168,7 @@ const NewDealModal = ({ open, onClose, defaultPipelineId, defaultStageId, locked
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Novo Negocio</DialogTitle>
           <DialogDescription>Crie uma oportunidade para um contato.</DialogDescription>
