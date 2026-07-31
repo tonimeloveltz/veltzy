@@ -45,7 +45,7 @@ const ResultStep = ({ result, onClose }: ResultStepProps) => {
     <div className="space-y-4">
       <p className="text-sm font-medium">Resultado da importacao</p>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <StatCard icon={CheckCircle2} label="Importados" value={result.inserted} color="text-emerald-600" />
         <StatCard icon={AlertTriangle} label="Pulados" value={result.skipped} color="text-amber-600" />
         <StatCard icon={XCircle} label="Erros" value={result.errors} color="text-destructive" />

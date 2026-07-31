@@ -44,7 +44,7 @@ const SdrIaPage = () => {
   }
 
   return (
-    <div className="container max-w-7xl space-y-6 py-6">
+    <div className="container max-w-7xl space-y-6 px-4 py-4 sm:px-8 sm:py-6">
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="dashboard">Dashboard</TabsTrigger>

@@ -156,7 +156,7 @@ const NewContactModal = ({ open, onClose, onCreated, contact }: NewContactModalP
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{isEdit ? 'Editar Contato' : 'Novo Contato'}</DialogTitle>
           <DialogDescription>

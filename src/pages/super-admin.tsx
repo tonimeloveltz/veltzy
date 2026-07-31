@@ -5,7 +5,7 @@ import { SupportTicketsDashboard } from '@/components/super-admin/support-ticket
 
 const SuperAdminPage = () => {
   return (
-    <div className="space-y-6 animate-fade-in p-6">
+    <div className="space-y-6 animate-fade-in p-4 sm:p-6">
       <div className="rounded-lg bg-yellow-500/10 border border-yellow-500/30 px-4 py-2">
         <p className="text-sm font-medium text-yellow-500">Painel Daxen Labs - Ambiente de producao</p>
       </div>

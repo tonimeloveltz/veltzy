@@ -60,7 +60,7 @@ const ContatosPage = () => {
   }, [contacts, search, sourceId, temperature])
 
   return (
-    <div className="min-h-full p-6">
+    <div className="min-h-full p-4 sm:p-6">
       <div className="space-y-6 animate-fade-in">
 
         {/* HEADER */}

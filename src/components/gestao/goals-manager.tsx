@@ -293,7 +293,7 @@ export const GoalsManager = () => {
 
       {/* Modal Nova Meta */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>{editingGoal ? 'Editar Meta' : 'Nova Meta'}</DialogTitle>
             <DialogDescription>Configure o titulo, periodo e metricas da meta.</DialogDescription>
@@ -324,7 +324,7 @@ export const GoalsManager = () => {
             </div>
 
             {cycleType === 'monthly' ? (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <Label>Mes</Label>
                   <Select value={selectedMonth} onValueChange={setSelectedMonth}>
@@ -360,7 +360,7 @@ export const GoalsManager = () => {
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <Label>Inicio</Label>
                   <Input

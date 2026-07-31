@@ -237,7 +237,7 @@ const TarefasPage = () => {
   ]
 
   return (
-    <div className="min-h-full p-6">
+    <div className="min-h-full p-4 sm:p-6">
       <div className="space-y-6 animate-fade-in">
         {/* Header */}
         <div className="flex flex-col sm:flex-row items-start justify-between gap-4">

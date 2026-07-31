@@ -125,8 +125,8 @@ const KpiCardSkeleton = ({ hasBreakdown = false }: { hasBreakdown?: boolean }) =
     {hasBreakdown ? (
       <>
         <div className="border-t border-border/30 my-3" />
-        <div className="grid grid-cols-3 gap-2">
-          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-8 w-full" />)}
+        <div className="flex flex-col gap-1.5">
+          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-4 w-full" />)}
         </div>
       </>
     ) : (
@@ -150,7 +150,7 @@ const DashboardPage = () => {
   const cardBase = 'bg-card border border-border/30 rounded-2xl p-5'
 
   return (
-    <div className="min-h-full p-6">
+    <div className="min-h-full p-4 sm:p-6">
       <div className="space-y-8 animate-fade-in">
 
         {/* HEADER */}
