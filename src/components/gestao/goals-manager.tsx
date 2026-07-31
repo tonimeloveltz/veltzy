@@ -411,7 +411,7 @@ export const GoalsManager = () => {
               </div>
 
               {metrics.map((m, i) => (
-                <div key={i} className="flex items-end gap-2 rounded-md border border-border p-3">
+                <div key={i} className="flex flex-col gap-2 rounded-md border border-border p-3 sm:flex-row sm:items-end">
                   <div className="flex-1 space-y-1">
                     <Label className="text-xs">Tipo</Label>
                     <Select
@@ -431,7 +431,7 @@ export const GoalsManager = () => {
                     </Select>
                   </div>
 
-                  <div className="w-24 space-y-1">
+                  <div className="w-full space-y-1 sm:w-24">
                     <Label className="text-xs">Alvo</Label>
                     <Input
                       type="number"
@@ -442,7 +442,7 @@ export const GoalsManager = () => {
                     />
                   </div>
 
-                  <div className="w-32 space-y-1">
+                  <div className="w-full space-y-1 sm:w-32">
                     <Label className="text-xs">Escopo</Label>
                     <Select
                       value={m.applies_to}
@@ -459,7 +459,7 @@ export const GoalsManager = () => {
                   </div>
 
                   {m.applies_to === 'individual' && (
-                    <div className="w-40 space-y-1">
+                    <div className="w-full space-y-1 sm:w-40">
                       <Label className="text-xs">Vendedor</Label>
                       <Select
                         value={m.profile_id ?? ''}
@@ -483,7 +483,7 @@ export const GoalsManager = () => {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-9 px-2"
+                      className="h-9 px-2 self-end sm:self-auto"
                       onClick={() => removeMetric(i)}
                     >
                       <Trash2 className="h-4 w-4 text-destructive" />
