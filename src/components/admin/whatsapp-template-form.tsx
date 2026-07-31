@@ -38,6 +38,7 @@ export const WhatsAppTemplateForm = ({ open, onOpenChange }: WhatsAppTemplateFor
   const [headerOn, setHeaderOn] = useState(false)
   const [headerText, setHeaderText] = useState('')
   const [buttons, setButtons] = useState<TemplateButton[]>([])
+  const [footerText, setFooterText] = useState('')
 
   // Variaveis sequenciais a partir de 1 (sem buraco). {{1}},{{3}} sem {{2}} = invalido.
   const vars = useMemo(() => extractTemplateVars(bodyText), [bodyText])
@@ -45,14 +46,16 @@ export const WhatsAppTemplateForm = ({ open, onOpenChange }: WhatsAppTemplateFor
 
   const reset = () => {
     setName(''); setCategory('UTILITY'); setBodyText(''); setExamples({})
-    setHeaderOn(false); setHeaderText(''); setButtons([])
+    setHeaderOn(false); setHeaderText(''); setButtons([]); setFooterText('')
   }
 
   const nameValid = NAME_RE.test(name) && name.length <= 512
   const examplesFilled = vars.every((n) => (examples[n] ?? '').trim().length > 0)
+  // FOOTER: texto curto (Meta limita a 60), SEM variaveis.
+  const footerValid = footerText.length <= 60 && !/\{\{\d+\}\}/.test(footerText)
   const canSubmit =
     name.length > 0 && nameValid && bodyText.trim().length > 0 &&
-    varsSequential && examplesFilled &&
+    varsSequential && examplesFilled && footerValid &&
     (!headerOn || headerText.trim().length > 0) &&
     buttons.every((b) => b.text.trim().length > 0 && (b.type !== 'URL' || (b.url ?? '').trim().length > 0)) &&
     !create.isPending
@@ -65,6 +68,7 @@ export const WhatsAppTemplateForm = ({ open, onOpenChange }: WhatsAppTemplateFor
         category,
         body: { text: bodyText, examples: vars.map((n) => examples[n]) },
         header: headerOn ? { format: 'TEXT', text: headerText } : undefined,
+        footer: footerText.trim() ? { text: footerText.trim() } : undefined,
         buttons: buttons.length ? buttons : undefined,
       },
       {
@@ -148,6 +152,19 @@ export const WhatsAppTemplateForm = ({ open, onOpenChange }: WhatsAppTemplateFor
           {headerOn && (
             <Input value={headerText} onChange={(e) => setHeaderText(e.target.value)} placeholder="Texto do cabeçalho" />
           )}
+
+          <div className="space-y-1.5">
+            <Label>Rodapé (opcional)</Label>
+            <Input
+              value={footerText}
+              onChange={(e) => setFooterText(e.target.value)}
+              placeholder="Texto curto, sem variáveis"
+              maxLength={60}
+            />
+            {!footerValid && (
+              <p className="text-xs text-red-600">O rodapé não aceita variáveis e tem no máximo 60 caracteres.</p>
+            )}
+          </div>
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
