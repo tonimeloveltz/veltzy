@@ -170,14 +170,14 @@ const DashboardPage = () => {
           </div>
 
           {/* SELETOR DE PERIODO + PIPELINE */}
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <PipelineFilter
               value={selectedPipelineId}
               onChange={setSelectedPipelineId}
               pipelines={pipelines ?? []}
             />
             <span className="text-sm text-muted-foreground">Exibir:</span>
-            <div className="flex gap-1.5">
+            <div className="flex flex-wrap gap-1.5">
               {periodOptions.map((p) => {
                 const active = selectedDays === p.days
                 return (

@@ -4,6 +4,7 @@ import {
 import { BarChart, Bar, Cell, XAxis, YAxis, ResponsiveContainer, Tooltip, LabelList } from 'recharts'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useMonthlyComparisonGrid } from '@/hooks/use-dashboard-metrics'
+import { useIsMobile } from '@/hooks/use-mobile'
 import type { MonthlyGridData } from '@/services/dashboard.service'
 
 const periodOptions = [
@@ -69,6 +70,7 @@ const CustomTooltip = ({
 
 const MiniChart = ({ title, icon: Icon, dataKey, data, formatter }: MiniChartProps) => {
   const lastIndex = data.length - 1
+  const isMobile = useIsMobile()
   return (
     <div className="bg-card border border-border/30 rounded-xl p-3">
       <div className="flex items-center gap-1.5 mb-2">
@@ -107,7 +109,9 @@ const MiniChart = ({ title, icon: Icon, dataKey, data, formatter }: MiniChartPro
                 />
               ))}
               <LabelList
-                content={(props) => <CustomLabel {...(props as { x?: number; y?: number; width?: number; index?: number })} data={data} dataKey={dataKey} />}
+                content={isMobile
+                  ? () => null
+                  : (props) => <CustomLabel {...(props as { x?: number; y?: number; width?: number; index?: number })} data={data} dataKey={dataKey} />}
               />
             </Bar>
           </BarChart>

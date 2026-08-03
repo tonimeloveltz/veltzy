@@ -54,7 +54,7 @@ const ResultStep = ({ result, onClose }: ResultStepProps) => {
       {problemRows.length > 0 && (
         <div className="space-y-2">
           <p className="text-xs font-medium text-muted-foreground">Detalhes</p>
-          <div className="max-h-[200px] overflow-y-auto rounded-lg border scrollbar-minimal">
+          <div className="max-h-[200px] overflow-x-auto overflow-y-auto rounded-lg border scrollbar-minimal">
             <table className="w-full text-xs">
               <thead>
                 <tr className="bg-muted/50 sticky top-0">

@@ -23,7 +23,7 @@ const LeadsBySourceChart = ({ days, pipelineId }: { days?: number; pipelineId?: 
   return (
     <div className="glass-card rounded-xl p-5">
       <h3 className="text-sm font-semibold mb-4">Leads por Origem</h3>
-      <div className="flex items-center gap-6">
+      <div className="flex flex-col items-center gap-4 sm:flex-row sm:gap-6">
         <div className="h-[170px] w-[170px] shrink-0">
           <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
             <PieChart>
@@ -51,7 +51,7 @@ const LeadsBySourceChart = ({ days, pipelineId }: { days?: number; pipelineId?: 
             </PieChart>
           </ResponsiveContainer>
         </div>
-        <div className="space-y-3 flex-1">
+        <div className="w-full space-y-3 sm:w-auto sm:flex-1">
           {data?.map((s, idx) => (
             <div key={s.source_id} className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
