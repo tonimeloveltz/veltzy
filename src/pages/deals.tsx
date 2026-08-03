@@ -189,7 +189,7 @@ const DealsPage = () => {
               onChange={setSelectedPipelineId}
               pipelines={pipelines ?? []}
             />
-            <div className="flex gap-1.5">
+            <div className="flex flex-wrap gap-1.5">
               {periodOptions.map((p) => {
                 const active = selectedDays === p.days
                 return (
