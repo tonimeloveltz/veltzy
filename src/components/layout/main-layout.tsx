@@ -11,7 +11,7 @@ const MainLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-dvh overflow-hidden">
       <AppSidebar open={sidebarOpen} onOpenChange={setSidebarOpen} />
       {/* min-w-0 aqui e no <main>: impede conteudo largo (kanban, tabelas) de
           esticar o flex item e gerar scroll horizontal no body. */}
