@@ -13,6 +13,7 @@ import { useAccessiblePipelines } from '@/hooks/use-pipeline-access'
 import { useRoles } from '@/hooks/use-roles'
 import { PipelineFilter } from '@/components/shared/pipeline-filter'
 import { IdentityCell } from '@/components/shared/identity-cell'
+import { Breakdown } from '@/components/shared/breakdown'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -280,7 +281,7 @@ const DealsPage = () => {
             </Button>
           </div>
         ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
           <div className={cardBase}>
             <div className="flex justify-between">
               <span className="text-sm text-muted-foreground">Total de Negocios</span>
@@ -289,30 +290,11 @@ const DealsPage = () => {
               </div>
             </div>
             <p className="text-3xl font-bold text-foreground mt-2">{deals.length}</p>
-            <div className="border-t border-border/30 my-3" />
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <div className="flex flex-col items-center gap-0.5">
-                <span className="text-sm font-medium text-yellow-500">{openDeals.length}</span>
-                <span className="text-xs text-muted-foreground">
-                  <span className="inline-block w-1.5 h-1.5 rounded-full mr-1 align-middle bg-yellow-500" />
-                  Aberto
-                </span>
-              </div>
-              <div className="flex flex-col items-center gap-0.5">
-                <span className="text-sm font-medium text-emerald-500">{closedDeals.length}</span>
-                <span className="text-xs text-muted-foreground">
-                  <span className="inline-block w-1.5 h-1.5 rounded-full mr-1 align-middle bg-emerald-500" />
-                  Fechado
-                </span>
-              </div>
-              <div className="flex flex-col items-center gap-0.5">
-                <span className="text-sm font-medium text-red-500">{lostDeals.length}</span>
-                <span className="text-xs text-muted-foreground">
-                  <span className="inline-block w-1.5 h-1.5 rounded-full mr-1 align-middle bg-red-500" />
-                  Perdido
-                </span>
-              </div>
-            </div>
+            <Breakdown items={[
+              { value: String(openDeals.length), color: 'text-yellow-500', dotColor: 'bg-yellow-500', label: 'Aberto' },
+              { value: String(closedDeals.length), color: 'text-emerald-500', dotColor: 'bg-emerald-500', label: 'Fechado' },
+              { value: String(lostDeals.length), color: 'text-red-500', dotColor: 'bg-red-500', label: 'Perdido' },
+            ]} />
           </div>
 
           <div className={cardBase}>
@@ -333,21 +315,11 @@ const DealsPage = () => {
               </div>
             </div>
             <p className="text-3xl font-bold text-primary mt-2">{fmt(totalValue)}</p>
-            <div className="border-t border-border/30 my-3" />
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <div className="flex flex-col items-center gap-0.5">
-                <span className="text-sm font-medium text-yellow-500">{fmt(openValue)}</span>
-                <span className="text-xs text-muted-foreground">Aberto</span>
-              </div>
-              <div className="flex flex-col items-center gap-0.5">
-                <span className="text-sm font-medium text-emerald-500">{fmt(closedValue)}</span>
-                <span className="text-xs text-muted-foreground">Fechado</span>
-              </div>
-              <div className="flex flex-col items-center gap-0.5">
-                <span className="text-sm font-medium text-red-500">{fmt(lostValue)}</span>
-                <span className="text-xs text-muted-foreground">Perdido</span>
-              </div>
-            </div>
+            <Breakdown items={[
+              { value: fmt(openValue), color: 'text-yellow-500', dotColor: 'bg-yellow-500', label: 'Aberto' },
+              { value: fmt(closedValue), color: 'text-emerald-500', dotColor: 'bg-emerald-500', label: 'Fechado' },
+              { value: fmt(lostValue), color: 'text-red-500', dotColor: 'bg-red-500', label: 'Perdido' },
+            ]} />
           </div>
         </div>
         )}
