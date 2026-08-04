@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { Search, Loader2, AlertTriangle } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import {
@@ -14,7 +15,9 @@ import { useRoles } from '@/hooks/use-roles'
 
 const ConversationList = () => {
   const { data: conversations, isLoading } = useConversationList()
-  const { selectedLeadId, setSelectedLeadId, filters, setFilters } = useInboxStore()
+  const { filters, setFilters } = useInboxStore()
+  const { leadId: selectedLeadId } = useParams<{ leadId: string }>()
+  const navigate = useNavigate()
   const { data: whatsappStatus } = useWhatsAppStatus()
   const { data: instances } = useEvolutionInstances()
   const { data: failedCount } = useFailedMessages()
@@ -113,7 +116,7 @@ const ConversationList = () => {
             key={lead.id}
             lead={lead}
             isSelected={lead.id === selectedLeadId}
-            onClick={() => setSelectedLeadId(lead.id)}
+            onClick={() => navigate(`/inbox/${lead.id}`, { state: { fromList: true } })}
           />
         ))}
       </div>
