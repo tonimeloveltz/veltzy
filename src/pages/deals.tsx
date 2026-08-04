@@ -458,7 +458,7 @@ const DealsPage = () => {
                       {/* Chat */}
                       <td className={tdClass}>
                         <button
-                          onClick={(e) => { e.stopPropagation(); navigate(`/inbox?lead=${deal.lead_id}`) }}
+                          onClick={(e) => { e.stopPropagation(); navigate(`/inbox/${deal.lead_id}`) }}
                           className="inline-flex items-center text-muted-foreground hover:text-primary transition-smooth cursor-pointer"
                         >
                           <MessageSquare className="h-4 w-4" />

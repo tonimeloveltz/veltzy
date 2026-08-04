@@ -35,7 +35,7 @@ const StageColumn = ({ stage, deals, onAddLead, onEditDeal, onTransferDeal, onMo
     <div
       ref={setNodeRef}
       className={cn(
-        'flex w-[300px] min-w-[280px] max-w-[320px] flex-shrink-0 flex-col h-full rounded-xl transition-shadow',
+        'flex w-[300px] min-w-[280px] max-w-[320px] flex-shrink-0 flex-col h-full min-h-0 rounded-xl transition-shadow',
         isOverColumn && 'ring-2 ring-inset ring-primary/40'
       )}
     >
@@ -72,7 +72,7 @@ const StageColumn = ({ stage, deals, onAddLead, onEditDeal, onTransferDeal, onMo
           className={cn(
             // O tint vai aqui, e nao no wrapper: .kanban-column tem bg-muted/30 e
             // cobriria um fundo pintado no elemento de tras.
-            'kanban-column flex-1 space-y-2 rounded-xl p-2 overflow-y-auto scrollbar-minimal transition-colors',
+            'kanban-column flex-1 min-h-0 space-y-2 rounded-xl p-2 overflow-y-auto scrollbar-minimal transition-colors',
             isOverColumn && 'bg-primary/5'
           )}
         >

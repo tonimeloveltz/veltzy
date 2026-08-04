@@ -238,7 +238,7 @@ const DealCard = ({ deal, onEditDeal, onTransfer, onMovePipeline, onCreateDeal, 
             <button
               onClick={(e) => {
                 e.stopPropagation()
-                navigate(`/inbox?lead=${deal.lead_id}`)
+                navigate(`/inbox/${deal.lead_id}`)
               }}
               className="rounded p-0.5 text-muted-foreground hover:text-primary transition-smooth cursor-pointer"
             >

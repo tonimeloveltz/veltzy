@@ -230,7 +230,7 @@ const ContatosPage = () => {
                       {/* Chat */}
                       <td className="py-3 text-left">
                         <button
-                          onClick={(e) => { e.stopPropagation(); navigate(`/inbox?lead=${c.id}`) }}
+                          onClick={(e) => { e.stopPropagation(); navigate(`/inbox/${c.id}`) }}
                           className="inline-flex items-center text-muted-foreground hover:text-primary transition-smooth cursor-pointer"
                           title="Abrir conversa"
                         >

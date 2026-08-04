@@ -184,26 +184,17 @@ A Fase 2 estabeleceu `p-4 sm:p-6` como padding de pagina. O board usa `p-6`/`px-
 
 Em 360px isso devolve 16px ao track (312 para 328). **Nao e so consistencia:** com 328px e `gap-4`, a segunda coluna passa a comecar em 316px e **12px dela ficam visiveis**, que e a affordance de que o board rola. Hoje nao aparece nada.
 
-### 4.4 `src/components/pipeline/pipeline-header.tsx` - o toolbar
+### 4.4 REMOVIDO - o toolbar do `pipeline-header.tsx`
 
-O toolbar (`:85`) e `flex flex-wrap items-center gap-2` com larguras fixas: busca `w-48` (192px), selects `w-36` (144px) e `w-44` (176px), tres botoes de icone `h-9 w-9` e o botao "Novo". Somados com os `gap-2`, sao cerca de **806px de conteudo fixo** contra os 328px uteis de 360px: o `flex-wrap` salva do estouro, mas quebra em cerca de **4 linhas**, custando ~176px de altura numa tela onde o board ja disputa altura com o D2.
-
-```
-:107  busca      DE: 'h-9 w-48 pl-8'        PARA: 'h-9 w-full pl-8 sm:w-48'
-:115  select 1   DE: 'h-9 w-36'             PARA: 'h-9 flex-1 sm:flex-none sm:w-36'
-:130  select 2   DE: 'h-9 w-44'             PARA: 'h-9 flex-1 sm:flex-none sm:w-44'
-```
-
-Abaixo de `sm`: linha 1 a busca inteira, linha 2 os dois selects dividindo a largura, linha 3 os botoes. **Tres linhas em vez de quatro**, sem largura fixa apertando. De `sm` para cima tudo volta ao de hoje.
-
-**Alvo de toque dos botoes de icone.** `h-9 w-9` e 36px e viola o criterio 13 do PRD (44x44 minimo no mobile). Mesmo padrao que a Fase 5A aplicou no `chat-header`:
-
-```
-:147, :153, :161  DE: 'h-9 w-9'   PARA: 'h-11 w-11 sm:h-9 sm:w-9'
-```
-
-Desktop identico, mobile em conformidade.
-
+> **Removido do escopo por decisao da usuaria em 2026-08-04**, depois de o item ter sido implementado e testado. O arquivo foi revertido ao estado de `develop` e **nao deve ser reaplicado**.
+>
+> **O motivo nao foi registrado.** A decisao chegou como escolha, sem justificativa capturada. Isso esta escrito aqui de proposito: uma passada futura **nao deve assumir que o desenho estava tecnicamente errado**, porque nao se sabe. Pode ter sido densidade, altura, tamanho de alvo, ou simples preferencia. Quem retomar precisa perguntar antes de refazer.
+>
+> **O que saiu junto:** os tres ajustes de largura (busca e dois selects), o aumento dos quatro botoes de icone para 44px no mobile, a correcao **E1** (o `flex-1 min-w-0` no wrapper da busca, sem o qual o `w-full` do input era inerte) e a correcao **E2** (o quarto botao, o do filtro de fogo, que escapara do levantamento por ter a classe dentro de um `cn()`).
+>
+> **E1 e E2 continuam sendo analises corretas** e estao preservadas na pendencia 10 para nao se perderem: se o toolbar for retomado, elas valem de novo e nao precisam ser redescobertas.
+>
+> **Consequencia aceita:** no mobile o toolbar segue em cerca de 4 linhas, com larguras fixas apertando, e os botoes de icone seguem em 36px, abaixo dos 44px do criterio 13 do PRD.
 ### 4.5 Os 4 call sites de `/inbox?lead=` - pendencia 1 da Fase 5
 
 A Spec da Fase 5A registrou na secao 9: "os 4 call sites continuam na forma antiga, servidos por redirect. Destino: branch do `/pipeline`, que pode migrar os quatro de uma vez". **O `deal-card.tsx` so entra em escopo agora, entao este e o momento.**
@@ -226,7 +217,33 @@ Em todos, trocar `` `/inbox?lead=${X}` `` por `` `/inbox/${X}` ``.
       PARA:  <TabsList className="grid w-full grid-cols-3 h-auto">
 ```
 
-Com `h-auto` os rotulos podem ocupar duas linhas em vez de estourar cerca de 9px em 390px. **Confirmar na verificacao manual** (item 16): se o estouro nao se reproduzir, reverter e fechar a pendencia como inerte, do mesmo jeito que a Fase 3 tratou o item 10.
+Com `h-auto` os rotulos podem ocupar duas linhas em vez de estourar cerca de 9px em 390px. **Confirmar na verificacao manual** (item 14): se o estouro nao se reproduzir, reverter e fechar a pendencia como inerte, do mesmo jeito que a Fase 3 tratou o item 10.
+
+---
+
+### 4.7 O `min-h-0` na cadeia de altura - correcao E3
+
+**Descoberto depois da primeira passada manual**, em 2026-08-04. Com o `h-dvh` aplicado, a usuaria reportou que em aparelho **muito baixo** (iPhone SE no device mode do Chrome) a tela **continua cortando embaixo**, e o sintoma preciso e: os cards ficam cortados **e rolar a lista nao revela o resto**.
+
+**Esse detalhe e o diagnostico.** Se houvesse scroller e ele estivesse apenas curto, rolar chegaria ao fim. Como rolar nao revela nada, **nao ha scroller**: a area de cards nao esta encolhendo, fica com a altura de todos os cards somados, transborda a coluna, e o `overflow-y-hidden` do track corta o excesso. O `overflow-y-auto` dela nunca chega a engatar porque nunca ha overflow a resolver.
+
+**Por que so aparece em viewport baixo.** O defeito e permanente, mas invisivel enquanto os cards cabem na altura disponivel. So quando o conteudo excede a altura e que se descobre que nada rola. Nao e regressao do `h-dvh`: e um defeito que o `h-dvh` desmascarou ao finalmente dar ao layout a altura certa.
+
+**A assimetria que confirma.** `min-h-0` **nao aparece uma unica vez** nos 6 arquivos da cadeia de altura. Enquanto isso o `min-w-0` horizontal esta aplicado de proposito no `main-layout.tsx:18` e `:20`, com comentario explicando que existe para impedir o kanban de esticar o flex item. **O eixo horizontal foi tratado e o vertical nunca foi.**
+
+Item flex tem `min-height: auto`, que e um piso igual a altura do conteudo. Sem `min-h-0` em cada degrau, o piso de um nivel impede o encolhimento do nivel de baixo, e o `overflow` mais interno nunca ativa.
+
+```
+pipeline-board.tsx:287  track      + min-h-0
+pipeline-board.tsx:292  coluna "Sem dono"     + min-h-0
+pipeline-board.tsx:312  cards da "Sem dono"   + min-h-0
+stage-column.tsx:38     coluna     + min-h-0
+stage-column.tsx:75     cards      + min-h-0
+```
+
+**Nos cinco, e nao so no scroller.** A cadeia inteira precisa poder encolher: basta um degrau com piso de conteudo para o de baixo nunca receber altura menor que o conteudo dele.
+
+**Honestidade sobre o metodo:** esta correcao foi deduzida do sintoma relatado somado a um modo de falha conhecido de flexbox aninhado, **nao de medicao em navegador** — nao tenho navegador nesta sessao. E a hipotese de maior probabilidade e o custo de aplicar e nulo, mas quem decide e o item 21, escrito para ser falsificavel.
 
 ---
 
@@ -244,20 +261,20 @@ Com `h-auto` os rotulos podem ocupar duas linhas em vez de estourar cerca de 9px
 
 ## 6. Arquivos afetados
 
-**8 arquivos, nenhum novo.** Quatro deles sao de uma linha so (os call sites de 4.5) e um e de uma palavra (o `h-dvh` de 4.2).
+**8 arquivos, nenhum novo.** Quatro deles sao de uma linha so (os call sites de 4.5) e um e de uma palavra (o `h-dvh` de 4.2). O `pipeline-header.tsx` **saiu** com a remocao de 4.4.
 
 | # | Arquivo | Item | Tipo |
 |---|---|---|---|
-| 1 | `src/components/pipeline/pipeline-board.tsx` | 4.1, 4.3 | sensores e padding |
+| 1 | `src/components/pipeline/pipeline-board.tsx` | 4.1, 4.3, 4.7 | sensores, padding e `min-h-0` |
 | 2 | `src/components/layout/main-layout.tsx` | 4.2 | **1 palavra, excecao ao shell** |
-| 3 | `src/components/pipeline/pipeline-header.tsx` | 4.4 | toolbar |
+| 3 | `src/components/pipeline/stage-column.tsx` | 4.7 | **entrou na correcao E3** |
 | 4 | `src/components/pipeline/deal-card.tsx` | 4.5 | 1 linha |
 | 5 | `src/components/shared/notification-center.tsx` | 4.5 | 1 linha |
 | 6 | `src/pages/contatos.tsx` | 4.5 | 1 linha |
 | 7 | `src/pages/deals.tsx` | 4.5 | 1 linha |
 | 8 | `src/components/pipeline/edit-lead-modal.tsx` | 4.6 | 1 linha |
 
-**Ordem sugerida:** 2 (o `h-dvh`, que destrava a altura para testar o resto), 1 (sensores e padding), 3, depois os de 1 linha.
+**Ordem sugerida:** 2 (o `h-dvh`, que destrava a altura para testar o resto), depois 1 e 3 juntos (sensores, padding e a cadeia de `min-h-0`, que so faz sentido aplicada inteira), e por fim os cinco de 1 linha.
 
 **Nenhuma linha de logica de negocio, mutation ou query e tocada.** `use-pipeline-*`, `use-deals`, os services e as Edge Functions **nao aparecem nesta lista e nao devem ser abertos para edicao**.
 
@@ -325,7 +342,8 @@ A Fase 5A esta commitada mas **nao passou pela verificacao manual nem virou PR**
 | 2 | Nao ha `KeyboardSensor`: o board nao e operavel por teclado | `pipeline-board.tsx:83` | passada de acessibilidade |
 | 3 | `MouseSensor` + `TouchSensor` nao cobrem caneta/stylus, que o `PointerSensor` cobria | `pipeline-board.tsx:83` | so se surgir alvo de stylus |
 | 4 | Long-press e gesto invisivel, sem affordance | `deal-card.tsx` | depende do item 13 da verificacao |
-| 5 | Botoes `h-9` do toolbar que **nao** sao de icone seguem abaixo de 44px | `pipeline-header.tsx:176` | avaliar junto do item 15 |
+| 5 | **O toolbar inteiro segue sem tratamento mobile:** cerca de 4 linhas, larguras fixas apertando e botoes de icone em 36px, abaixo dos 44px do criterio 13 | `pipeline-header.tsx` | ver 4.4 REMOVIDO |
+| 10 | **E1 e E2, preservadas para nao se perderem.** E1: a largura da busca tem que ir no wrapper `<div className="relative">` de `:101` (`flex-1 min-w-0 sm:flex-none`), porque o flex item e ele e nao o `<Input>`; `w-full` no input e inerte. E2: sao **quatro** botoes de icone e nao tres, porque o do filtro de fogo (`:89`) tem a classe dentro de um `cn()` e escapa de grep por string literal | `pipeline-header.tsx:89`, `:101` | se o toolbar for retomado |
 | 6 | Rotulo de variacao do `MiniChart` sobrepoe entre 1024 e ~1400px | `monthly-comparison-grid.tsx:109` | herdada da Fase 4 |
 | 7 | `MonthlyComparisonChart` e codigo morto | `monthly-comparison-chart.tsx` | limpeza |
 | 8 | `alert-dialog.tsx` tem o mesmo problema de `max-h` que o `dialog.tsx` teve | `src/components/ui/alert-dialog.tsx` | avaliar |
@@ -344,7 +362,7 @@ A Fase 5A esta commitada mas **nao passou pela verificacao manual nem virou PR**
 | 3 | `npm run lint` | baseline no **merge-base**, nunca com `git stash`. Reportar "X no baseline, Y na branch, Z novos", e **tambem quais arquivos tocados aparecem na saida e com quais achados**, nao so o total |
 | 4 | `git status` | nada em `supabase/`, `src/styles/`, nos hooks e services do pipeline, nem nos modais fora de 4.6. **`main-layout.tsx` deve aparecer, e e a unica excecao** |
 | 5 | `git ls-files docs/SPEC-responsividade-fase5b-pipeline.md` | tem que retornar o caminho |
-| 6 | `git diff --stat develop` | no maximo 9 arquivos, exatamente os da secao 6 mais esta Spec |
+| 6 | `git diff --stat develop` | no maximo **9** arquivos: os 8 da secao 6 mais esta Spec. **O `pipeline-header.tsx` NAO pode aparecer** (ver 4.4 REMOVIDO) |
 
 ### 10.2 Manual, em aparelho real - **e a parte que decide a fase**
 
@@ -357,20 +375,21 @@ A Fase 5A esta commitada mas **nao passou pela verificacao manual nem virou PR**
 | 11 | Mover o dedo antes dos 250ms **rola** e nao arrasta | Decisao 1 |
 | 12 | **ARRASTAR ENTRE COLUNAS.** Segurar um card, levar ao limite da tela, e o board tem que rolar sozinho ate a coluna de destino. **E a queixa original e o unico item que pode reprovar a fase inteira** | 7.1 |
 | 13 | Alguem que nao conhece o gesto descobre que da para arrastar? Observar sem instruir | 7.2 |
-| 14 | O toolbar ocupa 3 linhas e nao 4, sem largura apertada | 4.4 |
-| 15 | Os botoes de icone do toolbar tem area de toque confortavel | criterio 13 |
-| 16 | O `TabsList` do `edit-lead-modal` nao estoura. **Se nunca estourava, reverter 4.6 e fechar a pendencia como inerte** | 4.6 |
-| 17 | Os 4 links migrados caem direto em `/inbox/<id>`, **sem passar pelo redirect** (a URL nao pisca) | 4.5 |
-| 18 | Uma URL antiga `/inbox?lead=<id>` digitada na barra **continua funcionando** | 4.5 |
+| 14 | O `TabsList` do `edit-lead-modal` nao estoura. **Se nunca estourava, reverter 4.6 e fechar a pendencia como inerte** | 4.6 |
+| 15 | Os 4 links migrados caem direto em `/inbox/<id>`, **sem passar pelo redirect** (a URL nao pisca) | 4.5 |
+| 16 | Uma URL antiga `/inbox?lead=<id>` digitada na barra **continua funcionando** | 4.5 |
 
 ### 10.3 Nao regressao em desktop
 
 | # | Verificacao | Viewport |
 |---|---|---|
-| 19 | **Arrastar com mouse funciona identico ao de hoje**, sem delay perceptivel. E o `distance: 5` do `MouseSensor` | 1440px |
-| 20 | O toolbar volta ao layout de uma linha, com as larguras fixas de hoje | 1440px |
-| 21 | Tres colunas visiveis, larguras inalteradas | 1440px |
-| 22 | **O `h-dvh` nao mudou nada no desktop**, onde a altura da viewport e estavel. Conferir tambem `/dashboard`, `/deals` e `/inbox`, que compartilham o shell | 1440px |
-| 23 | Nos tres temas (light, dark, sand), nenhuma diferenca de cor ou superficie | 1440px |
+| 17 | **Arrastar com mouse funciona identico ao de hoje**, sem delay perceptivel. E o `distance: 5` do `MouseSensor` | 1440px |
+| 18 | Tres colunas visiveis, larguras inalteradas | 1440px |
+| 19 | **O `h-dvh` nao mudou nada no desktop**, onde a altura da viewport e estavel. Conferir tambem `/dashboard`, `/deals` e `/inbox`, que compartilham o shell | 1440px |
+| 20 | Nos tres temas (light, dark, sand), nenhuma diferenca de cor ou superficie | 1440px |
 
-O item 22 e o que protege a excecao da secao 8.2: se o `h-dvh` alterar qualquer tela no desktop, a excecao ao shell nao se justifica.
+| 21 | **O teste da correcao E3, e ele e falsificavel.** Em viewport baixo (iPhone SE no device mode), abrir uma coluna com cards suficientes para exceder a altura. A lista tem que **rolar ate o ultimo card**, e o botao "Adicionar" tem que ficar visivel abaixo dela. Se rolar nao revelar o resto, o `min-h-0` nao resolveu e a hipotese de 4.7 estava errada | E3 |
+
+O item 19 e o que protege a excecao da secao 8.2: se o `h-dvh` alterar qualquer tela no desktop, a excecao ao shell nao se justifica.
+
+O item 21 e o unico teste da correcao E3, que foi **deduzida e nao medida** (ver a nota de metodo em 4.7).
