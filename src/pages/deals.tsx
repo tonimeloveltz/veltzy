@@ -52,7 +52,9 @@ const dealValueColor: Record<DealStatus, string> = {
   pending_assignment: 'text-foreground',
 }
 
-const thClass = 'pb-3 text-xs font-medium text-muted-foreground'
+const thClass = 'pb-3 px-2 first:pl-0 last:pr-0 text-xs font-medium text-muted-foreground'
+
+const tdClass = 'py-3 px-2 first:pl-0 last:pr-0 text-left'
 
 const DealsPage = () => {
   const navigate = useNavigate()
@@ -383,7 +385,7 @@ const DealsPage = () => {
                         deal.status === 'archived' && 'opacity-60'
                       )}
                     >
-                      <td className="py-3 text-left" onClick={(e) => e.stopPropagation()}>
+                      <td className={tdClass} onClick={(e) => e.stopPropagation()}>
                         <Checkbox
                           checked={isSelected}
                           onCheckedChange={() => toggleSelect(deal.id)}
@@ -391,7 +393,7 @@ const DealsPage = () => {
                       </td>
 
                       {/* Negocio (identidade rica) */}
-                      <td className="py-3 text-left">
+                      <td className={tdClass}>
                         <IdentityCell
                           title={identityTitle}
                           subtitle={identitySubtitle}
@@ -400,12 +402,12 @@ const DealsPage = () => {
                       </td>
 
                       {/* Valor */}
-                      <td className={cn('py-3 text-left font-semibold', dealValueColor[deal.status])}>
+                      <td className={cn(tdClass, 'font-semibold', dealValueColor[deal.status])}>
                         {deal.value ? fmt(deal.value) : '-'}
                       </td>
 
                       {/* Pipeline · etapa */}
-                      <td className="py-3 text-left">
+                      <td className={tdClass}>
                         <div className="flex flex-col gap-0.5 min-w-0">
                           {pipeline ? (
                             <span className="inline-flex items-center gap-1.5 text-xs min-w-0">
@@ -425,14 +427,14 @@ const DealsPage = () => {
                       </td>
 
                       {/* Status */}
-                      <td className="py-3 text-left">
+                      <td className={tdClass}>
                         <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', status.className)}>
                           {status.label}
                         </span>
                       </td>
 
                       {/* Temperatura (compacta) */}
-                      <td className="py-3 text-left">
+                      <td className={tdClass}>
                         {temp && (
                           <span className="inline-flex items-center gap-1 text-[10px]" title={temp.label}>
                             <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', temp.dotColor)} />
@@ -442,19 +444,19 @@ const DealsPage = () => {
                       </td>
 
                       {/* Responsavel */}
-                      <td className="py-3 text-left text-xs">
+                      <td className={cn(tdClass, 'text-xs')}>
                         {assignedName ?? <span className="text-muted-foreground/40">Sem responsavel</span>}
                       </td>
 
                       {/* Data (criado, ou fechado quando aplicavel) */}
-                      <td className="py-3 text-left text-xs text-muted-foreground whitespace-nowrap">
+                      <td className={cn(tdClass, 'text-xs text-muted-foreground whitespace-nowrap')}>
                         {(deal.status === 'won' || deal.status === 'lost') && deal.closed_at
                           ? `fech. ${new Date(deal.closed_at).toLocaleDateString('pt-BR')}`
                           : new Date(deal.created_at).toLocaleDateString('pt-BR')}
                       </td>
 
                       {/* Chat */}
-                      <td className="py-3 text-left">
+                      <td className={tdClass}>
                         <button
                           onClick={(e) => { e.stopPropagation(); navigate(`/inbox?lead=${deal.lead_id}`) }}
                           className="inline-flex items-center text-muted-foreground hover:text-primary transition-smooth cursor-pointer"
