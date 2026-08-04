@@ -1,10 +1,11 @@
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
-import { Kanban, Phone, PanelRight } from 'lucide-react'
+import { ChevronLeft, Kanban, Phone, PanelRight } from 'lucide-react'
 import { useAccessiblePipelines } from '@/hooks/use-pipeline-access'
 import { useWhatsAppStatus } from '@/hooks/use-whatsapp-status'
+import { useIsPanelInline } from '@/hooks/use-panel-inline'
 import { useInboxStore } from '@/stores/inbox.store'
 import { leadDisplayName } from '@/lib/phone'
 import type { LeadWithLastMessage } from '@/types/database'
@@ -15,9 +16,12 @@ interface ChatHeaderProps {
 
 const ChatHeader = ({ lead }: ChatHeaderProps) => {
   const navigate = useNavigate()
+  const location = useLocation()
   const { data: pipelines } = useAccessiblePipelines()
   const { data: whatsappStatus } = useWhatsAppStatus()
   const { contactPanelOpen, toggleContactPanel } = useInboxStore()
+  const panelIsInline = useIsPanelInline()
+  const panelOpen = contactPanelOpen ?? panelIsInline
   const showInstanceBadge = whatsappStatus?.provider === 'evolution' || whatsappStatus?.provider === 'cloud_api'
   const avatarSrc = lead.avatar_url || undefined
 
@@ -26,7 +30,19 @@ const ChatHeader = ({ lead }: ChatHeaderProps) => {
     : null
 
   return (
-    <div className="flex items-center gap-3 border-b px-4 py-3">
+    <div className="flex items-center gap-2 border-b px-3 py-3 lg:gap-3 lg:px-4">
+      <button
+        onClick={() =>
+          location.state?.fromList
+            ? navigate(-1)
+            : navigate('/inbox', { replace: true })
+        }
+        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-foreground transition-smooth hover:bg-accent lg:hidden"
+        aria-label="Voltar para conversas"
+      >
+        <ChevronLeft className="h-5 w-5" />
+      </button>
+
       <Avatar className="h-9 w-9">
         <AvatarImage src={avatarSrc} alt={lead.name ?? ''} />
         <AvatarFallback className="text-xs bg-secondary">
@@ -62,10 +78,10 @@ const ChatHeader = ({ lead }: ChatHeaderProps) => {
           variant="ghost"
           size="icon"
           className="h-8 w-8"
-          onClick={toggleContactPanel}
+          onClick={() => toggleContactPanel(panelOpen)}
           title="Painel de contato"
         >
-          <PanelRight className={cn('h-4 w-4', contactPanelOpen && 'text-primary')} />
+          <PanelRight className={cn('h-4 w-4', panelOpen && 'text-primary')} />
         </Button>
 
         <Button
