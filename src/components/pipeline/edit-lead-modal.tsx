@@ -213,9 +213,9 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
 
         <Tabs defaultValue="info" className="w-full">
           <TabsList className="grid w-full grid-cols-3 h-auto">
-            <TabsTrigger value="info">Informações</TabsTrigger>
-            <TabsTrigger value="tasks">Tarefas</TabsTrigger>
-            <TabsTrigger value="history">Histórico</TabsTrigger>
+            <TabsTrigger value="info" className="px-2 text-xs sm:px-3 sm:text-sm">Informações</TabsTrigger>
+            <TabsTrigger value="tasks" className="px-2 text-xs sm:px-3 sm:text-sm">Tarefas</TabsTrigger>
+            <TabsTrigger value="history" className="px-2 text-xs sm:px-3 sm:text-sm">Histórico</TabsTrigger>
           </TabsList>
 
           <TabsContent value="info" className="mt-4">

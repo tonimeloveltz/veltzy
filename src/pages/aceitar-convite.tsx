@@ -392,7 +392,7 @@ const AceitarConvitePage = () => {
 
   if (state === 'loading') {
     return (
-      <div className="flex h-screen items-center justify-center">
+      <div className="flex h-dvh items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     )
@@ -400,7 +400,7 @@ const AceitarConvitePage = () => {
 
   if (state === 'invalid' || state === 'expired') {
     return (
-      <div className="flex h-screen items-center justify-center p-4">
+      <div className="flex h-dvh items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <XCircle className="mx-auto h-12 w-12 text-destructive" />
@@ -425,7 +425,7 @@ const AceitarConvitePage = () => {
 
   if (state === 'accepted') {
     return (
-      <div className="flex h-screen items-center justify-center p-4">
+      <div className="flex h-dvh items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <CheckCircle2 className="mx-auto h-12 w-12 text-green-500" />
@@ -449,7 +449,7 @@ const AceitarConvitePage = () => {
 
   if (state === 'valid' || state === 'accepting') {
     return (
-      <div className="flex h-screen items-center justify-center p-4">
+      <div className="flex h-dvh items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <CardTitle>Aceitar convite</CardTitle>
@@ -457,7 +457,7 @@ const AceitarConvitePage = () => {
               Você foi convidado para {companyName} como <strong>{roleLabels[invite?.role ?? ''] ?? invite?.role}</strong>
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex justify-center gap-3">
+          <CardContent className="flex flex-wrap justify-center gap-3">
             <Button variant="outline" onClick={() => navigate('/auth')}>
               Cancelar
             </Button>
@@ -497,7 +497,7 @@ const AceitarConvitePage = () => {
 
   if (state === 'needs_login') {
     return (
-      <div className="ambient-bg flex min-h-screen items-center justify-center p-4">
+      <div className="ambient-bg flex min-h-dvh items-center justify-center p-4">
         <div className="w-full max-w-md animate-fade-in">
           {inviteHeader}
           <Card className="glass-card">
@@ -542,7 +542,7 @@ const AceitarConvitePage = () => {
 
   // needs_register
   return (
-    <div className="ambient-bg flex min-h-screen items-center justify-center p-4">
+    <div className="ambient-bg flex min-h-dvh items-center justify-center p-4">
       <div className="w-full max-w-md animate-fade-in">
         {inviteHeader}
         <Card className="glass-card">
