@@ -8,6 +8,7 @@ const actionLabels: Record<string, string> = {
   stage_changed: 'Mudou fase',
   assigned: 'Atribuiu',
   queue_distributed: 'Distribuiu da fila',
+  status_changed: 'Mudou status'
 }
 
 const ActivityLogsDashboard = () => {
