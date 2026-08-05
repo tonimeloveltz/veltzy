@@ -49,7 +49,7 @@ const UpdatePasswordPage = () => {
   }
 
   return (
-    <div className="ambient-bg flex min-h-screen items-center justify-center p-4">
+    <div className="ambient-bg flex min-h-dvh items-center justify-center p-4">
       <div className="w-full max-w-md animate-fade-in">
         <Card className="glass-card">
           <CardHeader>

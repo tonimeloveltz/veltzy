@@ -7,7 +7,7 @@ const AcessoNegadoPage = () => {
   const navigate = useNavigate()
 
   return (
-    <div className="flex h-screen items-center justify-center p-4">
+    <div className="flex h-dvh items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <ShieldX className="mx-auto h-12 w-12 text-destructive" />

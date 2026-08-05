@@ -33,7 +33,7 @@ const AuthPage = () => {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen items-center justify-center">
+      <div className="flex h-dvh items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     )
@@ -59,7 +59,7 @@ const AuthPage = () => {
   }
 
   return (
-    <div className="ambient-bg flex min-h-screen items-center justify-center p-4">
+    <div className="ambient-bg flex min-h-dvh items-center justify-center p-4">
       <div className="w-full max-w-md animate-fade-in">
         <div className="mb-8 text-center">
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground font-bold text-xl">

@@ -20,7 +20,7 @@ const ProtectedRoute = ({
 
   if (isLoading) {
     return (
-      <div className="flex h-screen items-center justify-center">
+      <div className="flex h-dvh items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     )
@@ -36,7 +36,7 @@ const ProtectedRoute = ({
     const inviteAccepted = sessionStorage.getItem('invite_accepted')
     if (acceptingInvite || inviteAccepted) {
       return (
-        <div className="flex h-screen items-center justify-center">
+        <div className="flex h-dvh items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       )

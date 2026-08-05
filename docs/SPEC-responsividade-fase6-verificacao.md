@@ -361,6 +361,71 @@ Os dez criterios que grep nenhum alcanca. Viewports alvo: **360, 390, 414** e **
 
 ---
 
+### 9.4 Roteiro executavel dos tres itens de maior risco
+
+Os itens 12, 14 e 21 sao os unicos que podem reprovar alguma coisa. Os demais da 9.2 sao passada de olho no device mode. Este roteiro existe porque "verifiquei e esta ok" sem criterio de reprovacao escrito antes nao e verificacao, e essa licao ja custou um audit a esta frente.
+
+#### Preparacao (uma vez)
+
+```bash
+npm run dev -- --host
+```
+
+O Vite imprime duas URLs. A **Network** (algo como `http://192.168.x.x:5173`) e a que o celular abre, no mesmo Wi-Fi. Login por email e senha funciona normalmente de outro host; so fluxo OAuth por redirect quebraria, e nao e o caso.
+
+**Para o A/B, abra em outra aba do MESMO celular a versao publicada** (a `develop` no Vercel, sem as mudancas desta fase). Sem esse par, "passou" nao tem com o que ser comparado.
+
+#### Item 12 - o `dvh`, e ele so existe em aparelho real
+
+**Por que DevTools nao serve:** no device mode do Chrome nao existe barra de endereco que retrai, entao `100dvh` e `100vh` valem exatamente o mesmo e o teste passa sempre, inclusive num codigo quebrado. **Emulador aqui produz falso verde.**
+
+**12a - a rolagem fantasma some.** Tela: `/auth`, deslogada, teclado fechado.
+
+| | |
+|---|---|
+| **O que fazer** | Arrastar o dedo para cima na pagina, sem tocar em campo nenhum |
+| **PASSA** | A pagina **nao se move**. Nada rola, a barra de endereco nao retrai |
+| **REPROVA** | A pagina desliza uns 100 a 120px e volta, ou a barra de endereco retrai |
+| **Pre-condicao** | O conteudo tem que caber na tela: logo, cartao de login e os dois links de rodape visiveis sem rolar. **Se nao couber no seu aparelho, este sub-teste nao se aplica** e vale so o 12b |
+| **A/B** | Na aba da versao publicada o mesmo gesto **tem que** rolar. Se rolar nos dois, a correcao nao pegou. Se nao rolar em nenhum, seu aparelho tem chrome curto demais e o teste e inconclusivo, nao aprovado |
+
+**12b - nada fica atras do chrome.** Tela: `/termos`, que e longa de proposito.
+
+| | |
+|---|---|
+| **O que fazer** | Rolar ate o fim, esperar a barra de endereco retrair, ler o rodape; depois rolar de volta ate o topo |
+| **PASSA** | O rodape (`Ultima atualizacao` e o `© Veltzy`) aparece **inteiro**, acima do chrome, sem ficar metade escondido. No caminho de volta, o cabecalho com o logo e o link `Inicio` reaparece inteiro e clicavel |
+| **REPROVA** | Qualquer linha do rodape cortada ao meio pelo chrome, ou o `Inicio` do topo inalcancavel |
+| **Por que essa tela** | E o unico `min-h-dvh` desta fase com conteudo longo o bastante para o chrome retrair de verdade |
+
+#### Item 14 - as abas do `edit-lead-modal`
+
+Fecha o item 14 da Spec da 5B, que ficou aberto. Tela: `/pipeline`, logada, **360px** (aparelho real ou device mode; aqui emulador serve, porque e largura e nao altura).
+
+| | |
+|---|---|
+| **Como abrir** | **Toque rapido** num card do kanban. Toque rapido abre o modal; **segurar ~250ms inicia arraste**, que e o comportamento que a 5B entregou. Se o card comecar a seguir o dedo, solte e toque mais rapido |
+| **O que olhar** | A fita de tres abas no topo do modal: `Informacoes`, `Tarefas`, `Historico` |
+| **PASSA** | As tres legiveis e inteiras, cada uma dentro da sua faixa, sem texto passando por cima da vizinha e sem letra cortada na borda |
+| **REPROVA** | `Informacoes` invadindo `Tarefas`, ou qualquer aba com o texto cortado |
+| **A/B** | Na versao publicada, `Informacoes` pede 104,3px numa faixa de 90,67px (secao 4.2). **Se as duas versoes parecerem iguais, a medicao da 4.2 estava errada e eu preciso saber** - reporte em vez de aprovar |
+| **Nao confundir** | O modal tambem abre pela `/deals`, tocando numa linha da tabela. Serve igual e evita a ambiguidade do gesto do kanban. Use essa se o toque no card estiver dificil |
+
+#### Item 21 - nao regressao no desktop
+
+Mesmo modal, **1440px**, no navegador do computador.
+
+| | |
+|---|---|
+| **O que fazer** | Abrir `/pipeline`, clicar num card, olhar as mesmas tres abas |
+| **PASSA** | As abas com o **mesmo tamanho de letra e o mesmo espacamento de hoje**, indistinguiveis da versao publicada aberta ao lado |
+| **REPROVA** | Letra visivelmente menor ou abas mais apertadas que na versao publicada |
+| **O que esta sendo testado** | O `sm:px-3 sm:text-sm` da 4.2 devolvendo o valor original acima de 640px. Se reprovar, o prefixo `sm:` nao esta funcionando e o mobile ganhou as custas do desktop |
+
+**Se qualquer um dos quatro reprovar, o certo e reportar e nao ajustar na hora.** Cada reprovacao invalida uma medicao especifica desta Spec (12 invalida a 4.1, 14 invalida a 4.2, 21 invalida o uso do prefixo `sm:`), e a correcao depende de saber qual.
+
+---
+
 ## 10. O que esta fase nao prova
 
 Registrado aqui de proposito, seguindo o padrao de `docs/audits/responsividade-fase3-item10-2026-08-03.md`.
