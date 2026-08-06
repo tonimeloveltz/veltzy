@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Calendar, Globe, Mail, Plus, Copy, RefreshCw, Trash2, Loader2 } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -59,6 +60,40 @@ const HubManagedCard = ({ title, description, icon: Icon }: { title: string; des
     </CardHeader>
     <CardContent>
       <p className="text-sm text-muted-foreground">Integracao configurada pelo suporte. Entre em contato para alterar.</p>
+    </CardContent>
+  </Card>
+)
+
+// --- Google Calendar (conexao por vendedor) ---
+
+// A agenda e do vendedor, nao da empresa: o evento nasce na agenda de quem
+// atende. Nao ha nada para o admin configurar aqui, so para onde apontar.
+const GoogleCalendarCompanyCard = () => (
+  <Card>
+    <CardHeader>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+          </div>
+          <div>
+            <CardTitle className="text-base">Google Agenda</CardTitle>
+            <CardDescription>Reunioes agendadas no inbox viram eventos com convite por email</CardDescription>
+          </div>
+        </div>
+        <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-[10px] font-medium text-muted-foreground">
+          Por vendedor
+        </span>
+      </div>
+    </CardHeader>
+    <CardContent className="space-y-3">
+      <p className="text-sm text-muted-foreground">
+        Cada vendedor conecta a propria conta Google. O evento nasce na agenda de quem esta
+        atendendo, e o convite vai para o email do cliente.
+      </p>
+      <Button variant="outline" asChild>
+        <Link to="/minha-conta?tab=integracoes">Conectar minha agenda</Link>
+      </Button>
     </CardContent>
   </Card>
 )
@@ -323,7 +358,7 @@ const IntegrationsTab = () => {
       </TabsContent>
 
       <TabsContent value="calendar" className="mt-4">
-        <HubManagedCard title="Google Calendar" description="Sincronizacao de reunioes com Google Calendar" icon={Calendar} />
+        <GoogleCalendarCompanyCard />
       </TabsContent>
 
       <TabsContent value="webhooks" className="mt-4"><WebhookIntegrations /></TabsContent>

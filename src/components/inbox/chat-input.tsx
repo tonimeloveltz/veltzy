@@ -1,9 +1,12 @@
 import { useState, useRef, useCallback } from 'react'
-import { SendHorizonal, Paperclip, Loader2, AlertTriangle } from 'lucide-react'
+import {
+  SendHorizonal, Paperclip, Loader2, AlertTriangle, CalendarPlus, Plus, FileText,
+} from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { ReplyTemplatesPopover } from '@/components/inbox/reply-templates-popover'
+import { ScheduleMeetingDialog } from '@/components/inbox/schedule-meeting-dialog'
 import { AudioRecorder } from '@/components/inbox/audio-recorder'
 import { useSendMessage, useWhatsAppConnected } from '@/hooks/use-messages'
 import { useWhatsAppStatus } from '@/hooks/use-whatsapp-status'
@@ -16,10 +19,16 @@ interface ChatInputProps {
   onTyping?: () => void
 }
 
+const composeMenuItemClass =
+  'flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground transition-smooth'
+
 const ChatInput = ({ leadId, onTyping }: ChatInputProps) => {
   const [content, setContent] = useState('')
   const [uploading, setUploading] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
+  const [templatesOpen, setTemplatesOpen] = useState(false)
+  const [composeMenuOpen, setComposeMenuOpen] = useState(false)
+  const [scheduleOpen, setScheduleOpen] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const sendMessage = useSendMessage()
@@ -120,17 +129,75 @@ const ChatInput = ({ leadId, onTyping }: ChatInputProps) => {
       <div className="relative flex items-end gap-2">
         {!isRecording && (
           <>
-            <div className="relative">
-              <ReplyTemplatesPopover onSelect={(t) => { setContent(t); textareaRef.current?.focus() }} />
+            {/* O painel de templates e absoluto e ancora na barra: nao ocupa
+                largura nem gap, e serve tanto ao gatilho de desktop quanto ao
+                item "Templates" do menu agrupado de mobile. */}
+            <ReplyTemplatesPopover
+              open={templatesOpen}
+              onOpenChange={setTemplatesOpen}
+              triggerClassName="hidden sm:inline-flex"
+              onSelect={(t) => { setContent(t); textareaRef.current?.focus() }}
+            />
+
+            {/* Abaixo de 640px a barra nao comporta quatro icones: templates,
+                anexo e agendar colapsam atras deste gatilho. Audio, textarea e
+                enviar continuam sempre visiveis. */}
+            <div className="relative sm:hidden">
+              {composeMenuOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-10"
+                    onClick={() => setComposeMenuOpen(false)}
+                  />
+                  <div className="absolute bottom-full left-0 z-20 mb-2 w-48 rounded-lg border bg-popover p-1 shadow-lg animate-fade-in">
+                    <button
+                      type="button"
+                      onClick={() => { setComposeMenuOpen(false); setTemplatesOpen(true) }}
+                      className={composeMenuItemClass}
+                    >
+                      <FileText className="h-4 w-4 shrink-0" />
+                      Templates
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setComposeMenuOpen(false); fileInputRef.current?.click() }}
+                      className={composeMenuItemClass}
+                    >
+                      <Paperclip className="h-4 w-4 shrink-0" />
+                      Anexo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setComposeMenuOpen(false); setScheduleOpen(true) }}
+                      className={composeMenuItemClass}
+                    >
+                      <CalendarPlus className="h-4 w-4 shrink-0" />
+                      Agendar reuniao
+                    </button>
+                  </div>
+                </>
+              )}
+
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                onClick={() => setComposeMenuOpen((o) => !o)}
+                title="Mais acoes"
+              >
+                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+              </Button>
             </div>
 
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+              className="hidden h-8 w-8 text-muted-foreground hover:text-foreground sm:inline-flex"
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
+              title="Anexar arquivo"
             >
               {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
             </Button>
@@ -141,6 +208,17 @@ const ChatInput = ({ leadId, onTyping }: ChatInputProps) => {
               accept="image/*,audio/*,video/*,.pdf,.doc,.docx,.xls,.xlsx"
               onChange={handleFileUpload}
             />
+
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="hidden h-8 w-8 text-muted-foreground hover:text-foreground sm:inline-flex"
+              onClick={() => setScheduleOpen(true)}
+              title="Agendar reuniao"
+            >
+              <CalendarPlus className="h-4 w-4" />
+            </Button>
           </>
         )}
 
@@ -177,6 +255,12 @@ const ChatInput = ({ leadId, onTyping }: ChatInputProps) => {
           </>
         )}
       </div>
+
+      {/* Montado sob demanda: o dialogo busca o lead e a conexao Google so
+          quando o vendedor abre de fato. */}
+      {scheduleOpen && (
+        <ScheduleMeetingDialog leadId={leadId} onClose={() => setScheduleOpen(false)} />
+      )}
     </div>
   )
 }

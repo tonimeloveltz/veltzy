@@ -4,6 +4,7 @@ import { ProfileSettings } from '@/components/settings/profile-settings'
 import { ScriptsManager } from '@/components/settings/scripts-manager'
 import { NotificationPreferencesPanel } from '@/components/settings/notification-preferences'
 import { PersonalReports } from '@/components/settings/personal-reports'
+import { GoogleCalendarCard } from '@/components/settings/google-calendar-card'
 
 const MinhaContaPage = () => {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -19,6 +20,7 @@ const MinhaContaPage = () => {
           <TabsTrigger value="scripts">Scripts</TabsTrigger>
           <TabsTrigger value="notifications">Notificacoes</TabsTrigger>
           <TabsTrigger value="reports">Meus Relatorios</TabsTrigger>
+          <TabsTrigger value="integracoes">Integracoes</TabsTrigger>
         </TabsList>
         <TabsContent value="profile" className="mt-4">
           <ProfileSettings />
@@ -31,6 +33,9 @@ const MinhaContaPage = () => {
         </TabsContent>
         <TabsContent value="reports" className="mt-4">
           <PersonalReports />
+        </TabsContent>
+        <TabsContent value="integracoes" className="mt-4">
+          <GoogleCalendarCard />
         </TabsContent>
       </Tabs>
     </div>

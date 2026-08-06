@@ -2,16 +2,34 @@ import { useState } from 'react'
 import { Search, FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { cn } from '@/lib/utils'
 import { useReplyTemplates } from '@/hooks/use-reply-templates'
 
 interface ReplyTemplatesPopoverProps {
   onSelect: (content: string) => void
+  /**
+   * Aberto/fechado e controlado pela barra de composicao: abaixo de 640px o
+   * gatilho proprio some e quem abre este painel e o menu agrupado (Plus).
+   */
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  /** Permite esconder o gatilho onde ele vive dentro do menu agrupado. */
+  triggerClassName?: string
 }
 
-const ReplyTemplatesPopover = ({ onSelect }: ReplyTemplatesPopoverProps) => {
+const ReplyTemplatesPopover = ({
+  onSelect,
+  open,
+  onOpenChange,
+  triggerClassName,
+}: ReplyTemplatesPopoverProps) => {
   const { data: templates } = useReplyTemplates()
-  const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
+
+  const setOpen = (value: boolean) => {
+    onOpenChange(value)
+    if (!value) setSearch('')
+  }
 
   const filtered = templates?.filter(
     (t) =>
@@ -25,7 +43,7 @@ const ReplyTemplatesPopover = ({ onSelect }: ReplyTemplatesPopoverProps) => {
         type="button"
         variant="ghost"
         size="icon"
-        className="h-8 w-8 text-muted-foreground hover:text-foreground"
+        className={cn('h-8 w-8 text-muted-foreground hover:text-foreground', triggerClassName)}
         onClick={() => setOpen(true)}
         title="Templates"
       >
@@ -56,7 +74,6 @@ const ReplyTemplatesPopover = ({ onSelect }: ReplyTemplatesPopoverProps) => {
             onClick={() => {
               onSelect(t.content)
               setOpen(false)
-              setSearch('')
             }}
             className="w-full rounded-md px-2 py-1.5 text-left hover:bg-accent hover:text-accent-foreground transition-smooth"
           >
@@ -66,7 +83,7 @@ const ReplyTemplatesPopover = ({ onSelect }: ReplyTemplatesPopoverProps) => {
         ))}
       </div>
       <button
-        onClick={() => { setOpen(false); setSearch('') }}
+        onClick={() => setOpen(false)}
         className="mt-1 w-full text-center text-[10px] text-muted-foreground hover:text-foreground"
       >
         Fechar
