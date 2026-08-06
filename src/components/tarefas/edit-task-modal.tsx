@@ -120,7 +120,7 @@ const EditTaskModal = ({ task, open, onClose }: EditTaskModalProps) => {
               control={control}
               name="type"
               render={({ field }) => (
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {typeOptions.map((opt) => (
                     <button
                       key={opt.value}

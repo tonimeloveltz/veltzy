@@ -12,6 +12,7 @@ import { useDashboardKpis } from '@/hooks/use-dashboard-metrics'
 import { useDashboardRealtime } from '@/hooks/use-dashboard-realtime'
 import { useAccessiblePipelines } from '@/hooks/use-pipeline-access'
 import { PipelineFilter } from '@/components/shared/pipeline-filter'
+import { Breakdown } from '@/components/shared/breakdown'
 import { calculatePeriodChange } from '@/lib/dashboard-utils'
 import { LeadsBySourceChart } from '@/components/dashboard/leads-by-source-chart'
 import { TeamHighlightCard } from '@/components/dashboard/team-highlight-card'
@@ -70,30 +71,6 @@ const DecorativeLine = () => (
   </div>
 )
 
-interface BreakdownItem {
-  value: string
-  color: string
-  dotColor: string
-  label: string
-}
-
-const Breakdown = ({ items }: { items: BreakdownItem[] }) => (
-  <>
-    <div className="border-t border-border/30 my-3" />
-    <div className="flex flex-col gap-1.5">
-      {items.map((item) => (
-        <div key={item.label} className="flex items-center justify-between">
-          <span className="text-xs text-muted-foreground flex items-center gap-1">
-            <span className={cn('inline-block w-1.5 h-1.5 rounded-full shrink-0', item.dotColor)} />
-            {item.label}
-          </span>
-          <span className={cn('text-xs font-medium', item.color)}>{item.value}</span>
-        </div>
-      ))}
-    </div>
-  </>
-)
-
 const VariationBadge = ({ current, previous }: { current: number; previous: number }) => {
   const { percentage, isPositive, isNeutral } = calculatePeriodChange(current, previous)
   if (isNeutral) {
@@ -125,8 +102,8 @@ const KpiCardSkeleton = ({ hasBreakdown = false }: { hasBreakdown?: boolean }) =
     {hasBreakdown ? (
       <>
         <div className="border-t border-border/30 my-3" />
-        <div className="grid grid-cols-3 gap-2">
-          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-8 w-full" />)}
+        <div className="flex flex-col gap-1.5">
+          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-4 w-full" />)}
         </div>
       </>
     ) : (
@@ -150,7 +127,7 @@ const DashboardPage = () => {
   const cardBase = 'bg-card border border-border/30 rounded-2xl p-5'
 
   return (
-    <div className="min-h-full p-6">
+    <div className="min-h-full p-4 sm:p-6">
       <div className="space-y-8 animate-fade-in">
 
         {/* HEADER */}
@@ -170,14 +147,14 @@ const DashboardPage = () => {
           </div>
 
           {/* SELETOR DE PERIODO + PIPELINE */}
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <PipelineFilter
               value={selectedPipelineId}
               onChange={setSelectedPipelineId}
               pipelines={pipelines ?? []}
             />
             <span className="text-sm text-muted-foreground">Exibir:</span>
-            <div className="flex gap-1.5">
+            <div className="flex flex-wrap gap-1.5">
               {periodOptions.map((p) => {
                 const active = selectedDays === p.days
                 return (

@@ -59,7 +59,7 @@ const DroppableColumn = ({ status, label, color, tasks, onEdit, onCreateClick }:
         <span className="text-sm font-medium">{label} ({tasks.length})</span>
       </div>
 
-      <div className="flex-1 p-2 space-y-2 overflow-y-auto scrollbar-minimal max-h-[calc(100vh-280px)]">
+      <div className="flex-1 p-2 space-y-2 overflow-y-auto scrollbar-minimal lg:max-h-[calc(100vh-280px)]">
         <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
           {tasks.map((task) => (
             <TaskCard key={task.id} task={task} onEdit={onEdit} />
@@ -237,7 +237,7 @@ const TarefasPage = () => {
   ]
 
   return (
-    <div className="min-h-full p-6">
+    <div className="min-h-full p-4 sm:p-6">
       <div className="space-y-6 animate-fade-in">
         {/* Header */}
         <div className="flex flex-col sm:flex-row items-start justify-between gap-4">

@@ -203,7 +203,7 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
   return (
     <>
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{lead.name || lead.phone}</DialogTitle>
           <DialogDescription>
@@ -212,10 +212,10 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
         </DialogHeader>
 
         <Tabs defaultValue="info" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="info">Informações</TabsTrigger>
-            <TabsTrigger value="tasks">Tarefas</TabsTrigger>
-            <TabsTrigger value="history">Histórico</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-3 h-auto">
+            <TabsTrigger value="info" className="px-2 text-xs sm:px-3 sm:text-sm">Informações</TabsTrigger>
+            <TabsTrigger value="tasks" className="px-2 text-xs sm:px-3 sm:text-sm">Tarefas</TabsTrigger>
+            <TabsTrigger value="history" className="px-2 text-xs sm:px-3 sm:text-sm">Histórico</TabsTrigger>
           </TabsList>
 
           <TabsContent value="info" className="mt-4">
@@ -586,6 +586,7 @@ const actionConfig: Record<string, { icon: typeof UserPlus; label: string }> = {
   stage_changed: { icon: ArrowRight, label: 'Movido para' },
   assigned: { icon: User, label: 'Atribuído a' },
   message_sent: { icon: MessageSquare, label: 'Mensagem enviada' },
+  status_changed: { icon: ArrowRight, label: 'Status alterado para' },
 }
 
 const formatActivityLabel = (log: ActivityLog, stages?: { id: string; name: string }[]) => {
@@ -599,6 +600,9 @@ const formatActivityLabel = (log: ActivityLog, stages?: { id: string; name: stri
   }
   if (log.action === 'assigned' && meta.to) {
     return `${config.label} ${(meta.to_name as string) ?? 'outro vendedor'}`
+  }
+  if(log.action === 'status_changed' && meta.to_status) {
+    return `${config.label} ${(meta.to_status as string) ?? 'outro status'}`
   }
   return config.label
 }

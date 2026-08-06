@@ -9,19 +9,16 @@ interface InboxFilters {
 }
 
 interface InboxState {
-  selectedLeadId: string | null
   filters: InboxFilters
   unreadCount: number
-  contactPanelOpen: boolean
-  setSelectedLeadId: (id: string | null) => void
+  contactPanelOpen: boolean | null
   setFilters: (f: Partial<InboxFilters>) => void
   setUnreadCount: (n: number) => void
-  toggleContactPanel: () => void
-  setContactPanelOpen: (open: boolean) => void
+  toggleContactPanel: (currentEffective: boolean) => void
+  setContactPanelOpen: (open: boolean | null) => void
 }
 
 export const useInboxStore = create<InboxState>((set) => ({
-  selectedLeadId: null,
   filters: {
     search: '',
     status: 'all',
@@ -29,10 +26,9 @@ export const useInboxStore = create<InboxState>((set) => ({
     sourceId: null,
   },
   unreadCount: 0,
-  contactPanelOpen: typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(min-width: 1280px)').matches,
-  setSelectedLeadId: (id) => set({ selectedLeadId: id }),
+  contactPanelOpen: null,
   setFilters: (f) => set((s) => ({ filters: { ...s.filters, ...f } })),
   setUnreadCount: (n) => set({ unreadCount: n }),
-  toggleContactPanel: () => set((s) => ({ contactPanelOpen: !s.contactPanelOpen })),
+  toggleContactPanel: (currentEffective) => set({ contactPanelOpen: !currentEffective }),
   setContactPanelOpen: (open) => set({ contactPanelOpen: open }),
 }))

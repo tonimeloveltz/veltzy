@@ -13,7 +13,7 @@ const ReportsTab = () => {
         <CardDescription>Exporte todos os leads da empresa</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <Button variant="outline" onClick={() => doExport('csv', null, 'relatorio-leads')} disabled={isExporting}>
             {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileSpreadsheet className="mr-2 h-4 w-4" />}
             Exportar CSV

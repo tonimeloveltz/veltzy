@@ -45,7 +45,7 @@ const ResultStep = ({ result, onClose }: ResultStepProps) => {
     <div className="space-y-4">
       <p className="text-sm font-medium">Resultado da importacao</p>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <StatCard icon={CheckCircle2} label="Importados" value={result.inserted} color="text-emerald-600" />
         <StatCard icon={AlertTriangle} label="Pulados" value={result.skipped} color="text-amber-600" />
         <StatCard icon={XCircle} label="Erros" value={result.errors} color="text-destructive" />
@@ -54,7 +54,7 @@ const ResultStep = ({ result, onClose }: ResultStepProps) => {
       {problemRows.length > 0 && (
         <div className="space-y-2">
           <p className="text-xs font-medium text-muted-foreground">Detalhes</p>
-          <div className="max-h-[200px] overflow-y-auto rounded-lg border scrollbar-minimal">
+          <div className="max-h-[200px] overflow-x-auto overflow-y-auto rounded-lg border scrollbar-minimal">
             <table className="w-full text-xs">
               <thead>
                 <tr className="bg-muted/50 sticky top-0">

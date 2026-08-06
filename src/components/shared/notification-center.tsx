@@ -77,7 +77,7 @@ const NotificationItem = ({ notification, onRead }: { notification: Notification
     if (isConflict) return // handled by inline action
     if (!notification.is_read) onRead()
     if (notification.action_data?.leadId) {
-      navigate(`/inbox?lead=${notification.action_data.leadId}`)
+      navigate(`/inbox/${notification.action_data.leadId}`)
     }
   }
 
