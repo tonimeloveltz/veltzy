@@ -1,25 +1,35 @@
 import { useState, useRef, useCallback } from 'react'
-import { SendHorizonal, Paperclip, Loader2, AlertTriangle } from 'lucide-react'
+import {
+  SendHorizonal, Paperclip, Loader2, AlertTriangle, Plus, FileText, Package,
+} from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { ReplyTemplatesPopover } from '@/components/inbox/reply-templates-popover'
+import { ProductsPopover } from '@/components/inbox/products-popover'
 import { AudioRecorder } from '@/components/inbox/audio-recorder'
 import { useSendMessage, useWhatsAppConnected } from '@/hooks/use-messages'
 import { useWhatsAppStatus } from '@/hooks/use-whatsapp-status'
 import { useAuthStore } from '@/stores/auth.store'
 import { supabase } from '@/lib/supabase'
 import { safeStorageName } from '@/lib/storage'
+import type { Product } from '@/types/database'
 
 interface ChatInputProps {
   leadId: string
   onTyping?: () => void
 }
 
+const composeMenuItemClass =
+  'flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground transition-smooth'
+
 const ChatInput = ({ leadId, onTyping }: ChatInputProps) => {
   const [content, setContent] = useState('')
   const [uploading, setUploading] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
+  const [templatesOpen, setTemplatesOpen] = useState(false)
+  const [productsOpen, setProductsOpen] = useState(false)
+  const [composeMenuOpen, setComposeMenuOpen] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const sendMessage = useSendMessage()
@@ -36,6 +46,59 @@ const ChatInput = ({ leadId, onTyping }: ChatInputProps) => {
     el.style.height = 'auto'
     el.style.height = `${Math.min(el.scrollHeight, 120)}px`
   }, [])
+
+  // Os dois paineis sao absolutos e ancoram na mesma barra: abertos juntos, um
+  // cobre o outro. Abrir um fecha o outro.
+  const openTemplates = (open: boolean) => {
+    setTemplatesOpen(open)
+    if (open) setProductsOpen(false)
+  }
+
+  const openProducts = (open: boolean) => {
+    setProductsOpen(open)
+    if (open) setTemplatesOpen(false)
+  }
+
+  /**
+   * Foco no fim mais reajuste de altura, DEPOIS do commit do React: e ali que o
+   * scrollHeight ja reflete o texto inserido. Sem isso, texto de varias linhas
+   * nasce cortado na altura de uma linha e so se corrige quando o vendedor
+   * digita alguma coisa.
+   */
+  const focusTextareaEnd = useCallback(() => {
+    requestAnimationFrame(() => {
+      const el = textareaRef.current
+      if (!el) return
+      el.focus()
+      el.setSelectionRange(el.value.length, el.value.length)
+      adjustHeight()
+    })
+  }, [adjustHeight])
+
+  /** O script E a mensagem inteira, entao substitui o que estiver escrito. */
+  const handleTemplateSelect = (template: string) => {
+    setContent(template)
+    focusTextareaEnd()
+  }
+
+  /**
+   * Do produto vai APENAS o link para a mensagem. Nome, categoria e descricao
+   * existem para o vendedor achar o produto certo no popover, nao para o
+   * cliente ler.
+   *
+   * E ACRESCENTA, enquanto o script SUBSTITUI: o script E a mensagem inteira,
+   * o link e complemento do que o vendedor ja esta escrevendo.
+   */
+  const handleProductSelect = (product: Product) => {
+    const link = product.link?.trim()
+    if (!link) {
+      toast.error('Este produto nao tem link cadastrado')
+      return
+    }
+
+    setContent((prev) => (prev.trim() ? `${prev}\n\n${link}` : link))
+    focusTextareaEnd()
+  }
 
   const handleSend = async () => {
     const text = content.trim()
@@ -120,17 +183,85 @@ const ChatInput = ({ leadId, onTyping }: ChatInputProps) => {
       <div className="relative flex items-end gap-2">
         {!isRecording && (
           <>
-            <div className="relative">
-              <ReplyTemplatesPopover onSelect={(t) => { setContent(t); textareaRef.current?.focus() }} />
+            {/* O painel de templates e absoluto e ancora na barra: nao ocupa
+                largura nem gap, e serve tanto ao gatilho de desktop quanto ao
+                item "Templates" do menu agrupado de mobile. */}
+            {/* Templates e produtos primeiro, juntos: os dois inserem texto na
+                mensagem. Anexo e agendar fazem outra coisa e vem depois. A
+                mesma ordem vale no menu agrupado de mobile. */}
+            <ReplyTemplatesPopover
+              open={templatesOpen}
+              onOpenChange={openTemplates}
+              triggerClassName="hidden sm:inline-flex"
+              onSelect={handleTemplateSelect}
+            />
+
+            <ProductsPopover
+              open={productsOpen}
+              onOpenChange={openProducts}
+              triggerClassName="hidden sm:inline-flex"
+              onSelect={handleProductSelect}
+            />
+
+            {/* Abaixo de 640px a barra nao comporta quatro icones: templates,
+                anexo e agendar colapsam atras deste gatilho. Audio, textarea e
+                enviar continuam sempre visiveis. */}
+            <div className="relative sm:hidden">
+              {composeMenuOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-10"
+                    onClick={() => setComposeMenuOpen(false)}
+                  />
+                  <div className="absolute bottom-full left-0 z-20 mb-2 w-48 rounded-lg border bg-popover p-1 shadow-lg animate-fade-in">
+                    <button
+                      type="button"
+                      onClick={() => { setComposeMenuOpen(false); openTemplates(true) }}
+                      className={composeMenuItemClass}
+                    >
+                      <FileText className="h-4 w-4 shrink-0" />
+                      Templates
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setComposeMenuOpen(false); openProducts(true) }}
+                      className={composeMenuItemClass}
+                    >
+                      <Package className="h-4 w-4 shrink-0" />
+                      Produtos
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setComposeMenuOpen(false); fileInputRef.current?.click() }}
+                      className={composeMenuItemClass}
+                    >
+                      <Paperclip className="h-4 w-4 shrink-0" />
+                      Anexo
+                    </button>
+                  </div>
+                </>
+              )}
+
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                onClick={() => setComposeMenuOpen((o) => !o)}
+                title="Mais acoes"
+              >
+                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+              </Button>
             </div>
 
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+              className="hidden h-8 w-8 text-muted-foreground hover:text-foreground sm:inline-flex"
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
+              title="Anexar arquivo"
             >
               {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
             </Button>
