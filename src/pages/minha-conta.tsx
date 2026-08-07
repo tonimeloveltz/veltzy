@@ -3,7 +3,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ProfileSettings } from '@/components/settings/profile-settings'
 import { ScriptsManager } from '@/components/settings/scripts-manager'
 import { NotificationPreferencesPanel } from '@/components/settings/notification-preferences'
-import { PersonalReports } from '@/components/settings/personal-reports'
 
 const MinhaContaPage = () => {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -18,7 +17,6 @@ const MinhaContaPage = () => {
           <TabsTrigger value="profile">Perfil</TabsTrigger>
           <TabsTrigger value="scripts">Scripts</TabsTrigger>
           <TabsTrigger value="notifications">Notificacoes</TabsTrigger>
-          <TabsTrigger value="reports">Meus Relatorios</TabsTrigger>
         </TabsList>
         <TabsContent value="profile" className="mt-4">
           <ProfileSettings />
@@ -28,9 +26,6 @@ const MinhaContaPage = () => {
         </TabsContent>
         <TabsContent value="notifications" className="mt-4">
           <NotificationPreferencesPanel />
-        </TabsContent>
-        <TabsContent value="reports" className="mt-4">
-          <PersonalReports />
         </TabsContent>
       </Tabs>
     </div>

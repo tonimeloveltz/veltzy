@@ -4,7 +4,6 @@ import { veltzy } from '@/lib/supabase'
 
 interface BusinessRules {
   fallback_role: string
-  auto_reply_enabled: boolean
   fallback_lead_owner: string | null
   round_robin_enabled: boolean
   handover_enabled: boolean
@@ -25,7 +24,6 @@ interface BusinessRules {
 
 const defaults: BusinessRules = {
   fallback_role: 'admin',
-  auto_reply_enabled: false,
   fallback_lead_owner: null,
   round_robin_enabled: true,
   handover_enabled: true,
