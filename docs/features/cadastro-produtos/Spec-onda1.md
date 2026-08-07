@@ -217,7 +217,16 @@ Na `origin/develop` a aba "Logs comerciais" **não existe mais** (foi removida e
 
 **`src/components/inbox/products-popover.tsx`** (novo), cópia estrutural de `reply-templates-popover.tsx`, incluindo a decisão de layout que aquele arquivo carrega:
 
-> O componente retorna **ou** o botão **ou** o painel absoluto, **sem elemento em volta**. É isso que faz o `hidden` do gatilho virar `display:none` e sair do fluxo flex sem consumir gap. Envolver num `<div>` "para organizar" quebra a conta de largura da barra sem quebrar nada visivelmente. Está explicado na seção 3.4 da Spec do Google Calendar.
+> O componente retorna **os dois**, gatilho e painel absoluto, dentro de um **Fragment** (`<>`), **nunca um `<div>`**. O Fragment não gera nó no DOM, então o gatilho continua sendo filho direto da barra e o `hidden` dele vira `display:none` e sai do fluxo flex sem consumir gap. Um `<div>` "para organizar" viraria flex item de largura zero, comeria 8px de gap e derrubaria a conta da barra de 208px para 200px a 360px, **sem quebrar nada visivelmente**. Está explicado na seção 3.4 da Spec do Google Calendar.
+
+**Corrigido em 07/08/2026, defeito achado pela Leticia em uso real no `develop.veltzy.com`.** A estrutura original retornava **ou** o gatilho **ou** o painel, herdada do `reply-templates-popover.tsx`. Consequência: ao abrir, o ícone sumia e tudo à direita dele saltava 40px para a esquerda (32 do ícone mais 8 do gap), e saltava de volta ao fechar. Os dois arquivos foram corrigidos juntos, porque o defeito era do molde e não da cópia.
+
+Duas consequências que vieram junto com a correção:
+
+- **O gatilho alterna.** Como ele não desaparece mais, clicar de novo fecha o painel (`setOpen(!open)`). Antes ele só abria, porque sumia em seguida.
+- **O gatilho indica que está aberto**, com `bg-accent text-foreground` no `cn`. Sem isso ele fica visível mas não dá para saber qual dos painéis é o dele.
+
+A exclusão mútua no `chat-input.tsx` **não muda**: continua em `openTemplates`/`openProducts`.
 
 Props: `open`, `onOpenChange`, `triggerClassName`, `onSelect`. Ícone `Package`. Busca por nome e descrição. Cada item mostra nome e descrição truncada.
 
