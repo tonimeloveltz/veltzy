@@ -52,7 +52,7 @@ const AdminPage = () => {
           <TabsTrigger value="regras">Regras</TabsTrigger>
           <TabsTrigger value="empresa">Empresa</TabsTrigger>
           <TabsTrigger value="aparencia">Aparência</TabsTrigger>
-          <TabsTrigger value="logs-avancados">Logs avançados</TabsTrigger>
+          <TabsTrigger value="logs-avancados">Logs</TabsTrigger>
         </TabsList>
         <TabsContent value="integracoes" className="mt-4"><IntegrationsTab /></TabsContent>
         <TabsContent value="pipeline" className="mt-4"><PipelineTab /></TabsContent>
