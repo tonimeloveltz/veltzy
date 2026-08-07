@@ -39,7 +39,7 @@ const EmpresaTab = () => {
 
 const AdminPage = () => {
   const [searchParams, setSearchParams] = useSearchParams()
-  const tab = searchParams.get('tab') ?? 'regras'
+  const tab = searchParams.get('tab') ?? 'integracoes'
 
   return (
     <div className="space-y-6 animate-fade-in p-4 sm:p-6">
