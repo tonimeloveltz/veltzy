@@ -76,6 +76,11 @@ const SidebarContent = ({ onNavigate }: SidebarContentProps) => {
     return lastSeen > twoMinutesAgo
   }) ?? []
 
+  // Os 6 primeiros itens (sem `visible`) sao a base de vendedor: aparecem para
+  // TODAS as roles, incluindo `seller` e `representative` (ver matriz em useRoles).
+  // O `representative` nao tem tratamento especial aqui de proposito: ve a base e e
+  // barrado dos itens gated por canAccessGestao/canAccessAdmin (false para ele), em
+  // vez de cair num fallback implicito. Nao recebe auto-distribuicao (regra no hook).
   const navItems: NavItem[] = [
     { label: 'Dashboard', href: '/', icon: LayoutDashboard },
     { label: 'Pipeline', href: '/pipeline', icon: Kanban },
