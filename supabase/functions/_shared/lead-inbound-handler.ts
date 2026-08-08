@@ -252,12 +252,19 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
   }
 
   // 6. Transcricao de audio (async, nao bloqueia)
-  // Nota: transcricao usa fileUrl original (ainda valida neste momento)
+  // Roteada pela edge ai-transcribe do Hub, que detem a chave, decide acesso
+  // (check_ai_access) e loga o custo por empresa. Nota: usa fileUrl original
+  // (ainda valida neste momento).
   if ((params.messageType === 'audio') && params.fileUrl && savedMessage?.id) {
-    const openaiKey = Deno.env.get('OPENAI_API_KEY')
-    if (openaiKey) {
-      transcribeAudio(supabase, params.fileUrl, savedMessage.id, openaiKey)
-    }
+    transcribeAudio(
+      supabase,
+      params.supabaseUrl,
+      params.supabaseKey,
+      params.companyId,
+      lead.id,
+      params.fileUrl,
+      savedMessage.id,
+    )
   }
 
   // 7. Disparar SDR e automacoes (async, best-effort)
@@ -603,11 +610,40 @@ function extensionFromMime(mime: string): string {
   return map[base] ?? base.split('/')[1]?.replace(/[^a-z0-9]/g, '') ?? 'bin'
 }
 
+export interface TranscribeGatewayResult {
+  ok?: boolean
+  data?: { text?: string; duration_seconds?: number; cost_usd?: number; model?: string }
+  error?: { code?: string; message?: string }
+}
+
+/**
+ * Decide, a partir da resposta da edge ai-transcribe, se atualiza a mensagem com
+ * o texto ou pula silenciosamente. Funcao pura (testavel sem a edge).
+ * - 403 (empresa sem acesso de IA) -> pula.
+ * - ok:false / corpo ausente -> pula.
+ * - ok:true com texto nao-vazio -> aplica.
+ */
+export function decideTranscriptionUpdate(
+  status: number,
+  body: TranscribeGatewayResult | null,
+): { apply: true; text: string } | { apply: false; reason: string } {
+  if (status === 403) return { apply: false, reason: 'no_access_403' }
+  if (!body || body.ok === false) return { apply: false, reason: 'gateway_not_ok' }
+  const text = body.data?.text
+  if (body.ok === true && typeof text === 'string' && text.trim().length > 0) {
+    return { apply: true, text }
+  }
+  return { apply: false, reason: 'empty_text' }
+}
+
 async function transcribeAudio(
   supabase: SupabaseClient,
+  supabaseUrl: string,
+  supabaseKey: string,
+  companyId: string,
+  leadId: string | null,
   audioUrl: string,
   messageId: string,
-  openaiKey: string,
 ): Promise<void> {
   try {
     const audioResponse = await fetch(audioUrl)
@@ -615,18 +651,27 @@ async function transcribeAudio(
 
     const formData = new FormData()
     formData.append('file', new Blob([audioBuffer], { type: 'audio/ogg' }), 'audio.ogg')
-    formData.append('model', 'whisper-1')
+    formData.append('company_id', companyId)
+    formData.append('product', 'veltzy')
+    formData.append('feature', 'audio_transcription')
     formData.append('language', 'pt')
+    // lead_id (opcional): rastreabilidade da linha em ai_usage no gateway.
+    if (leadId) formData.append('lead_id', leadId)
 
-    const whisperResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    // Edge->edge no padrao interno do Veltzy (Bearer service key). NAO setar
+    // Content-Type: o fetch define o boundary do multipart automaticamente.
+    const res = await fetch(`${supabaseUrl}/functions/v1/ai-transcribe`, {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${openaiKey}` },
+      headers: { 'Authorization': `Bearer ${supabaseKey}` },
       body: formData,
     })
 
-    const result = await whisperResponse.json()
-    if (result.text) {
-      await supabase.from('messages').update({ content: result.text }).eq('id', messageId)
+    const body = await res.json().catch(() => null) as TranscribeGatewayResult | null
+    const decision = decideTranscriptionUpdate(res.status, body)
+    if (decision.apply) {
+      await supabase.from('messages').update({ content: decision.text }).eq('id', messageId)
+    } else {
+      console.log(`Transcription skipped for message ${messageId}: ${decision.reason}`)
     }
   } catch (err) {
     console.error('Transcription failed:', err)
