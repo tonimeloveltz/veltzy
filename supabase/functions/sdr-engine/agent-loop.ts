@@ -4,7 +4,7 @@
  */
 
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { HubClient, HubError } from './hub-client.ts'
+import { HubClient, HubError } from '../_shared/hub-client.ts'
 import { ToolRegistry, ToolContext } from './tool-registry.ts'
 import { BudgetEnforcer, BudgetExceededError } from './budget-enforcer.ts'
 import { MemoryManager } from './memory-manager.ts'
