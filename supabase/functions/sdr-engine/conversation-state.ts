@@ -4,7 +4,7 @@
  */
 
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { HubUsage } from './hub-client.ts'
+import { HubUsage } from '../_shared/hub-client.ts'
 
 const ABANDON_THRESHOLD_DAYS = 7
 

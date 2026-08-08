@@ -4,7 +4,7 @@
  */
 
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { HubClient, OpenAIToolDef } from './hub-client.ts'
+import { HubClient, OpenAIToolDef } from '../_shared/hub-client.ts'
 
 // --- Types ---
 
