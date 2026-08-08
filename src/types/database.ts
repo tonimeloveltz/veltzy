@@ -396,6 +396,9 @@ export interface SendMessagePayload {
   mimeType?: string
   repliedMessageId?: string
   instanceName?: string
+  // Template HSM (Cloud API). parameters = strings na ordem das {{n}} do BODY.
+  // O disparo real vem do seletor do Inbox (bloco e); o caminho de envio e o (b).
+  template?: { templateId?: string; name: string; language: string; parameters: string[] }
 }
 
 export interface WhatsAppConfig {

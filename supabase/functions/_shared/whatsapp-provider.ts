@@ -24,6 +24,10 @@ export interface SendMessagePayload {
   instanceName?: string   // Evolution: instancia do Hub
   phoneNumberId?: string  // Cloud API: numero Meta resolvido
   companyId?: string      // Evolution/Cloud API: tenant (m2m com o Hub)
+  // Cloud API template (HSM): quando presente, envia type:'template' em vez de
+  // text/media. parameters = array de strings na ordem das {{n}} do BODY; o Hub
+  // monta o components Graph. So o provider cloud_api usa; os outros ignoram.
+  template?: { name: string; language: string; parameters: string[] }
 }
 
 export interface SendMessageResult {
