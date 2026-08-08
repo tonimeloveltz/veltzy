@@ -261,6 +261,7 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
       params.supabaseUrl,
       params.supabaseKey,
       params.companyId,
+      lead.id,
       params.fileUrl,
       savedMessage.id,
     )
@@ -640,6 +641,7 @@ async function transcribeAudio(
   supabaseUrl: string,
   supabaseKey: string,
   companyId: string,
+  leadId: string | null,
   audioUrl: string,
   messageId: string,
 ): Promise<void> {
@@ -653,6 +655,8 @@ async function transcribeAudio(
     formData.append('product', 'veltzy')
     formData.append('feature', 'audio_transcription')
     formData.append('language', 'pt')
+    // lead_id (opcional): rastreabilidade da linha em ai_usage no gateway.
+    if (leadId) formData.append('lead_id', leadId)
 
     // Edge->edge no padrao interno do Veltzy (Bearer service key). NAO setar
     // Content-Type: o fetch define o boundary do multipart automaticamente.
