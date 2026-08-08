@@ -1,138 +1,9 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const TIMEOUT_MS = 30_000
-const PRODUCT = 'veltzy'
-const FEATURE = 'ai-copilot'
+import { HubClient, HubError } from '../_shared/hub-client.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
-
-const MODEL_PRICES: Record<string, { input: number; output: number }> = {
-  'gpt-4.1-nano': { input: 0.10 / 1_000_000, output: 0.40 / 1_000_000 },
-  'gpt-4.1-mini': { input: 0.40 / 1_000_000, output: 1.60 / 1_000_000 },
-  'gpt-4.1':      { input: 2.00 / 1_000_000, output: 8.00 / 1_000_000 },
-  'claude-sonnet-4-6':         { input: 3.00 / 1_000_000, output: 15.00 / 1_000_000 },
-  'claude-haiku-4-5-20251001': { input: 1.00 / 1_000_000, output: 5.00 / 1_000_000 },
-  'gemini-2.5-flash':  { input: 0.30 / 1_000_000, output: 2.50 / 1_000_000 },
-  'gemini-flash-lite': { input: 0.10 / 1_000_000, output: 0.40 / 1_000_000 },
-}
-
-interface CallAIResult {
-  text: string
-  tokensInput: number
-  tokensOutput: number
-}
-
-async function callProvider(
-  provider: string,
-  model: string,
-  messages: Array<{ role: string; content: string }>,
-  temperature = 0.7,
-): Promise<CallAIResult> {
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS)
-
-  try {
-    if (provider === 'openai') {
-      const res = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
-        },
-        body: JSON.stringify({
-          model,
-          messages,
-          temperature,
-          max_tokens: 500,
-          response_format: { type: 'json_object' },
-        }),
-        signal: controller.signal,
-      })
-      const data = await res.json()
-      return {
-        text: data.choices?.[0]?.message?.content ?? '{}',
-        tokensInput: data.usage?.prompt_tokens ?? 0,
-        tokensOutput: data.usage?.completion_tokens ?? 0,
-      }
-    }
-
-    if (provider === 'anthropic') {
-      const systemMsg = messages.find((m) => m.role === 'system')?.content ?? ''
-      const userMsgs = messages.filter((m) => m.role !== 'system')
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': Deno.env.get('ANTHROPIC_API_KEY')!,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({ model, max_tokens: 500, system: systemMsg, messages: userMsgs }),
-        signal: controller.signal,
-      })
-      const data = await res.json()
-      return {
-        text: data.content?.[0]?.text ?? '{}',
-        tokensInput: data.usage?.input_tokens ?? 0,
-        tokensOutput: data.usage?.output_tokens ?? 0,
-      }
-    }
-
-    throw new Error(`Provider nao suportado: ${provider}`)
-  } finally {
-    clearTimeout(timeoutId)
-  }
-}
-
-async function getModelConfig(
-  supabase: ReturnType<typeof createClient>,
-  feature: string,
-): Promise<{ provider: string; model: string }> {
-  const { data } = await supabase
-    .from('ai_model_config')
-    .select('provider, model')
-    .eq('product', PRODUCT)
-    .eq('feature', feature)
-    .eq('is_active', true)
-    .single()
-  if (!data) throw new Error(`Model config not found: ${PRODUCT}/${feature}`)
-  return data
-}
-
-async function logUsage(
-  supabase: ReturnType<typeof createClient>,
-  companyId: string,
-  feature: string,
-  provider: string,
-  model: string,
-  tokensInput: number,
-  tokensOutput: number,
-  metadata: Record<string, unknown>,
-) {
-  const prices = MODEL_PRICES[model] ?? { input: 0, output: 0 }
-  const custoUsd = tokensInput * prices.input + tokensOutput * prices.output
-
-  await supabase.from('ai_usage').insert({
-    company_id: companyId,
-    product: PRODUCT,
-    provider,
-    model,
-    tokens_input: tokensInput,
-    tokens_output: tokensOutput,
-    tokens_cached: 0,
-    custo_estimado_usd: custoUsd,
-    feature,
-    metadata,
-  })
-
-  await supabase.rpc('increment_ai_spend', {
-    p_company_id: companyId,
-    p_custo: custoUsd,
-  })
-
-  return custoUsd
 }
 
 interface NotificationInput {
@@ -285,26 +156,41 @@ Responda APENAS em JSON valido com esta estrutura exata:
 }
 Seja especifico: cite nomes, valores e prazos reais. Maximo 3 alertas e 3 acoes. Responda em portugues brasileiro com acentuacao correta (ex: situacao -> situação, acao -> ação, atencao -> atenção).`
 
-      // Consultar modelo configurado em ai_model_config
-      const supabasePublicForConfig = createClient(url, key)
-      const { provider, model } = await getModelConfig(supabasePublicForConfig, FEATURE)
+      // Toda IA passa pelo gateway do Hub (ai-complete): resolve o modelo pelo
+      // catalogo, roda check_ai_access e loga o custo. NAO resolver modelo, nem
+      // logar ai_usage, nem incrementar spend aqui — seria double-count de orcamento.
+      let hubResp
+      try {
+        const hub = new HubClient()
+        hubResp = await hub.complete({
+          company_id,
+          product: 'veltzy',
+          feature: 'ai_copilot',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: dataContext },
+          ],
+          temperature: 0.7,
+          max_tokens: 500,
+        })
+      } catch (err) {
+        // Gate do gateway: empresa sem IA habilitada (is_ai_enabled=false) ou
+        // limite estourado. Propaga 403 + { ok:false, error } para o front degradar.
+        if (err instanceof HubError && (err.code === 'TENANT_DISABLED' || err.code === 'LIMIT_EXCEEDED')) {
+          return new Response(
+            JSON.stringify({ ok: false, error: { code: err.code, message: err.message } }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          )
+        }
+        throw err
+      }
 
-      const aiResult = await callProvider(provider, model, [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: dataContext },
-      ], 0.7)
-
-      // Registrar uso
-      await logUsage(supabasePublicForConfig, company_id, FEATURE, provider, model, aiResult.tokensInput, aiResult.tokensOutput, {
-        user_profile_id,
-        role,
-      })
-
+      const content = hubResp.data?.content ?? '{}'
       let parsed
       try {
-        parsed = JSON.parse(aiResult.text)
+        parsed = JSON.parse(content)
       } catch {
-        parsed = { situacao: aiResult.text, alertas: [], acoes: [] }
+        parsed = { situacao: content, alertas: [], acoes: [] }
       }
 
       return new Response(JSON.stringify(parsed), {
