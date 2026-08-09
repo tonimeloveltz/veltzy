@@ -423,6 +423,18 @@ export interface ReplyTemplate {
   updated_at: string
 }
 
+export interface Product {
+  id: string
+  company_id: string
+  name: string
+  description: string | null
+  link: string | null
+  category: string
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
 export interface LeadWithLastMessage extends Omit<Lead, 'stage_id' | 'status' | 'deal_value'> {
   profiles?: Partial<Profile> | null
   lead_sources?: LeadSourceRecord | null

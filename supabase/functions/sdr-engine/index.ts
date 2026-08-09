@@ -4,7 +4,7 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { HubClient } from './hub-client.ts'
+import { HubClient } from '../_shared/hub-client.ts'
 import { ToolRegistry } from './tool-registry.ts'
 import { BudgetEnforcer } from './budget-enforcer.ts'
 import { MemoryManager } from './memory-manager.ts'
