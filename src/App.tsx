@@ -35,7 +35,11 @@ const queryClient = new QueryClient({
     queries: {
       staleTime: 5 * 60 * 1000,
       gcTime: 10 * 60 * 1000,
-      refetchOnWindowFocus: true,
+      // Desligado: voltar para a aba nao deve refazer query nenhuma. As duas
+      // superficies que precisam de dado vivo (mensagens do inbox e deals do
+      // kanban) tem realtime do Supabase, e as demais revalidam ao navegar,
+      // porque refetchOnMount segue ligado.
+      refetchOnWindowFocus: false,
       retry: 1,
     },
   },
