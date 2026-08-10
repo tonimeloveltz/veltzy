@@ -95,7 +95,7 @@ const StageColumn = ({ stage, deals, onAddLead, onEditDeal, onTransferDeal, onMo
         onClick={() => onAddLead(stage.id)}
       >
         <Plus className="mr-1 h-4 w-4" />
-        Novo Lead
+        Novo Negócio
       </Button>
     </div>
   )
