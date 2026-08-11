@@ -1,11 +1,12 @@
 import { useState, useRef, useCallback } from 'react'
 import {
-  SendHorizonal, Paperclip, Loader2, AlertTriangle, Plus, FileText, Package,
+  SendHorizonal, Paperclip, Loader2, AlertTriangle, Plus, FileText, Package, CalendarPlus
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { ReplyTemplatesPopover } from '@/components/inbox/reply-templates-popover'
+import { ScheduleMeetingDialog } from '@/components/inbox/schedule-meeting-dialog'
 import { ProductsPopover } from '@/components/inbox/products-popover'
 import { AudioRecorder } from '@/components/inbox/audio-recorder'
 import { useSendMessage, useWhatsAppConnected } from '@/hooks/use-messages'
@@ -23,6 +24,7 @@ interface ChatInputProps {
 const composeMenuItemClass =
   'flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground transition-smooth'
 
+
 const ChatInput = ({ leadId, onTyping }: ChatInputProps) => {
   const [content, setContent] = useState('')
   const [uploading, setUploading] = useState(false)
@@ -30,6 +32,7 @@ const ChatInput = ({ leadId, onTyping }: ChatInputProps) => {
   const [templatesOpen, setTemplatesOpen] = useState(false)
   const [productsOpen, setProductsOpen] = useState(false)
   const [composeMenuOpen, setComposeMenuOpen] = useState(false)
+  const [scheduleOpen, setScheduleOpen] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const sendMessage = useSendMessage()
@@ -272,6 +275,17 @@ const ChatInput = ({ leadId, onTyping }: ChatInputProps) => {
               accept="image/*,audio/*,video/*,.pdf,.doc,.docx,.xls,.xlsx"
               onChange={handleFileUpload}
             />
+
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="hidden h-8 w-8 text-muted-foreground hover:text-foreground sm:inline-flex"
+              onClick={() => setScheduleOpen(true)}
+              title="Agendar reuniao"
+            >
+              <CalendarPlus className="h-4 w-4" />
+            </Button>
           </>
         )}
 
@@ -308,6 +322,12 @@ const ChatInput = ({ leadId, onTyping }: ChatInputProps) => {
           </>
         )}
       </div>
+
+      {/* Montado sob demanda: o dialogo busca o lead e a conexao Google so
+          quando o vendedor abre de fato. */}
+      {scheduleOpen && (
+        <ScheduleMeetingDialog leadId={leadId} onClose={() => setScheduleOpen(false)} />
+      )}
     </div>
   )
 }

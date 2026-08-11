@@ -17,12 +17,6 @@ interface ReplyTemplatesPopoverProps {
   triggerClassName?: string
 }
 
-/**
- * ATENCAO ao mexer: retorna gatilho e painel juntos dentro de um Fragment, pelo
- * mesmo motivo do products-popover. Um <div> em volta viraria flex item de
- * largura zero, comeria 8px de gap e derrubaria a conta da barra sem sintoma
- * visivel. Ver secao 5 da Spec de cadastro de produtos.
- */
 const ReplyTemplatesPopover = ({
   onSelect,
   open,

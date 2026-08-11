@@ -44,7 +44,12 @@ export const useTask = (taskId: string | null) => {
   })
 }
 
-const invalidateAllTasks = (queryClient: ReturnType<typeof useQueryClient>) => {
+/**
+ * Exportada porque telas que criam tarefa sem usar `useCreateTask` (o dialogo
+ * de agendamento do inbox, que precisa do proprio toast) ainda assim precisam
+ * invalidar exatamente o mesmo conjunto.
+ */
+export const invalidateAllTasks = (queryClient: ReturnType<typeof useQueryClient>) => {
   queryClient.refetchQueries({ queryKey: ['tasks'] })
   queryClient.invalidateQueries({ queryKey: ['task-count'] })
 }

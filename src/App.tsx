@@ -23,6 +23,7 @@ const TarefasPage = lazy(() => import('@/pages/tarefas'))
 const DealsPage = lazy(() => import('@/pages/deals'))
 const ContatosPage = lazy(() => import('@/pages/contatos'))
 const MinhaContaPage = lazy(() => import('@/pages/minha-conta'))
+const OAuthGoogleCallbackPage = lazy(() => import('@/pages/oauth-google-callback'))
 const AceitarConvitePage = lazy(() => import('@/pages/aceitar-convite'))
 const AcessoNegadoPage = lazy(() => import('@/pages/acesso-negado'))
 const SdrIaPage = lazy(() => import('@/pages/sdr-ia'))
@@ -101,6 +102,9 @@ const App = () => {
                 <Route path="/sellers" element={<Navigate to="/gestao?tab=vendedores" replace />} />
                 <Route path="/settings" element={<Navigate to="/minha-conta" replace />} />
                 <Route path="/minha-conta" element={<MinhaContaPage />} />
+                {/* Volta do consentimento do Google. Dentro da area autenticada
+                    de proposito: a troca do codigo precisa do JWT do vendedor. */}
+                <Route path="/oauth/google/callback" element={<OAuthGoogleCallbackPage />} />
                 <Route path="/sdr-ia" element={<ProtectedRoute requireRole={['admin', 'manager', 'super_admin']} requireFeature="sdr_agent_v2"><SdrIaPage /></ProtectedRoute>} />
                 <Route path="/admin" element={<ProtectedRoute requireRole={['admin', 'super_admin']}><AdminPage /></ProtectedRoute>} />
                 {/* Alias legado mantido de proposito (ver bloco de aliases acima): protege links antigos para /company. */}

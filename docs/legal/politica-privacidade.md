@@ -1,6 +1,6 @@
 # Política de Privacidade — Veltzy
 
-**Última atualização: 25 de junho de 2026**
+**Última atualização: 6 de agosto de 2026**
 
 A sua privacidade é prioridade para o Veltzy. Esta Política de Privacidade descreve como coletamos, usamos, compartilhamos, armazenamos e protegemos dados pessoais quando você utiliza a plataforma Veltzy, em conformidade com a Lei Geral de Proteção de Dados (Lei nº 13.709/2018 — "LGPD") e com as políticas das plataformas que integramos, incluindo a Plataforma WhatsApp Business da Meta.
 
@@ -103,6 +103,7 @@ Não vendemos dados pessoais. Compartilhamos dados apenas com prestadores que vi
 - **Brevo** — envio de e-mails transacionais e operacionais.
 - **OpenAI** — recursos de inteligência artificial, quando habilitados.
 - **Hostinger** — infraestrutura de servidores complementar.
+- **Google** — criação de eventos e envio de convites de reunião no Google Agenda, quando a integração é habilitada pelo usuário.
 
 Também podemos compartilhar dados para cumprir obrigação legal, ordem judicial ou requisição de autoridade competente, e em caso de reorganização societária, sempre preservando a confidencialidade.
 

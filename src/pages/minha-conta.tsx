@@ -2,6 +2,7 @@ import { useSearchParams } from 'react-router-dom'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ProfileSettings } from '@/components/settings/profile-settings'
 import { NotificationPreferencesPanel } from '@/components/settings/notification-preferences'
+import { GoogleCalendarCard } from '@/components/settings/google-calendar-card'
 
 const MinhaContaPage = () => {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -15,12 +16,16 @@ const MinhaContaPage = () => {
         <TabsList className="flex-wrap h-auto gap-1">
           <TabsTrigger value="profile">Perfil</TabsTrigger>
           <TabsTrigger value="notifications">Notificacoes</TabsTrigger>
+          <TabsTrigger value="integracoes">Integracoes</TabsTrigger>
         </TabsList>
         <TabsContent value="profile" className="mt-4">
           <ProfileSettings />
         </TabsContent>
         <TabsContent value="notifications" className="mt-4">
           <NotificationPreferencesPanel />
+        </TabsContent>
+        <TabsContent value="integracoes" className="mt-4">
+          <GoogleCalendarCard />
         </TabsContent>
       </Tabs>
     </div>
