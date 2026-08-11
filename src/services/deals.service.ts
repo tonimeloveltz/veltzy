@@ -77,7 +77,7 @@ export const getDealsForKanban = async (companyId: string, pipelineId: string): 
     .eq('company_id', companyId)
     .eq('pipeline_id', pipelineId)
     .in('status', ['open', 'pending_assignment', 'won', 'lost'])
-    .order('created_at', { ascending: false })
+    .order('updated_at', { ascending: false })
   if (error) throw error
   return data
 }

@@ -1,5 +1,4 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
-import { cn } from '@/lib/utils'
 import {
   DndContext,
   DragOverlay,
@@ -283,10 +282,7 @@ const PipelineBoard = () => {
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className={cn(
-          'flex-1 min-h-0 flex gap-4 overflow-x-auto overflow-y-hidden px-4 sm:px-6 pb-4 transition-opacity duration-200',
-          isRefetching && 'opacity-50 pointer-events-none'
-        )}>
+        <div className="flex-1 min-h-0 flex gap-4 overflow-x-auto overflow-y-hidden px-4 sm:px-6 pb-4">
           {/* Coluna especial: Sem dono (pending_assignment) */}
           {pendingDeals.length > 0 && (
             <div className="flex w-[300px] min-w-[280px] max-w-[320px] flex-shrink-0 flex-col h-full min-h-0">

@@ -1,15 +1,17 @@
 import { useState } from 'react'
-import { Search, FileText } from 'lucide-react'
+import { Search, Package } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import { useReplyTemplates } from '@/hooks/use-reply-templates'
+import { useProducts } from '@/hooks/use-products'
+import type { Product } from '@/types/database'
 
-interface ReplyTemplatesPopoverProps {
-  onSelect: (content: string) => void
+interface ProductsPopoverProps {
+  onSelect: (product: Product) => void
   /**
    * Aberto/fechado e controlado pela barra de composicao: abaixo de 640px o
    * gatilho proprio some e quem abre este painel e o menu agrupado (Plus).
+   * A barra tambem garante que este painel e o de templates nunca abram juntos.
    */
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -17,13 +19,25 @@ interface ReplyTemplatesPopoverProps {
   triggerClassName?: string
 }
 
-const ReplyTemplatesPopover = ({
+/**
+ * ATENCAO ao mexer: este componente retorna OS DOIS, gatilho e painel absoluto,
+ * dentro de um Fragment. Nunca um <div>. O Fragment nao gera no no DOM, entao o
+ * gatilho continua sendo filho direto da barra e o `hidden` dele vira
+ * display:none e sai do fluxo flex sem consumir gap. Envolver num <div> "para
+ * organizar" cria um flex item de largura zero que come 8px de gap e derruba a
+ * conta de largura da barra sem quebrar nada visivelmente.
+ *
+ * Antes o componente retornava OU o gatilho OU o painel. Isso fazia o icone
+ * sumir ao abrir e a barra saltar 40px (32 do icone mais 8 do gap).
+ * Ver secao 5 da Spec de cadastro de produtos.
+ */
+const ProductsPopover = ({
   onSelect,
   open,
   onOpenChange,
   triggerClassName,
-}: ReplyTemplatesPopoverProps) => {
-  const { data: templates } = useReplyTemplates()
+}: ProductsPopoverProps) => {
+  const { data: products } = useProducts()
   const [search, setSearch] = useState('')
 
   const setOpen = (value: boolean) => {
@@ -31,11 +45,11 @@ const ReplyTemplatesPopover = ({
     if (!value) setSearch('')
   }
 
-  const filtered = templates?.filter(
-    (t) =>
-      t.title.toLowerCase().includes(search.toLowerCase()) ||
-      t.content.toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = products?.filter((p) => {
+    if (!search) return true
+    const q = search.toLowerCase()
+    return p.name.toLowerCase().includes(q) || (p.description?.toLowerCase().includes(q) ?? false)
+  })
 
   return (
     <>
@@ -49,9 +63,9 @@ const ReplyTemplatesPopover = ({
           triggerClassName
         )}
         onClick={() => setOpen(!open)}
-        title="Templates"
+        title="Produtos"
       >
-        <FileText className="h-4 w-4" />
+        <Package className="h-4 w-4" />
       </Button>
 
       {open && (
@@ -59,7 +73,7 @@ const ReplyTemplatesPopover = ({
           <div className="relative mb-2">
             <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Buscar template..."
+              placeholder="Buscar produto..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="h-8 pl-7 text-xs"
@@ -68,19 +82,21 @@ const ReplyTemplatesPopover = ({
           </div>
           <div className="max-h-48 overflow-y-auto scrollbar-minimal space-y-1">
             {filtered?.length === 0 && (
-              <p className="px-2 py-3 text-center text-xs text-muted-foreground">Nenhum template encontrado</p>
+              <p className="px-2 py-3 text-center text-xs text-muted-foreground">Nenhum produto encontrado</p>
             )}
-            {filtered?.map((t) => (
+            {filtered?.map((p) => (
               <button
-                key={t.id}
+                key={p.id}
                 onClick={() => {
-                  onSelect(t.content)
+                  onSelect(p)
                   setOpen(false)
                 }}
                 className="w-full rounded-md px-2 py-1.5 text-left hover:bg-accent hover:text-accent-foreground transition-smooth"
               >
-                <p className="text-xs font-medium truncate">{t.title}</p>
-                <p className="text-[10px] text-muted-foreground truncate">{t.content}</p>
+                <p className="text-xs font-medium truncate">{p.name}</p>
+                {p.description && (
+                  <p className="text-[10px] text-muted-foreground truncate">{p.description}</p>
+                )}
               </button>
             ))}
           </div>
@@ -96,4 +112,4 @@ const ReplyTemplatesPopover = ({
   )
 }
 
-export { ReplyTemplatesPopover }
+export { ProductsPopover }

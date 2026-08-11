@@ -5,7 +5,7 @@
  */
 
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { ToolCall } from './hub-client.ts'
+import { ToolCall } from '../_shared/hub-client.ts'
 
 const MAX_HISTORY_MESSAGES = 20
 

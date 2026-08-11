@@ -175,7 +175,7 @@ const PipelineHeader = ({ onAddLead, onManageStages, fireOnly, onToggleFireOnly,
 
         <Button size="sm" className="h-9" onClick={onAddLead}>
           <Plus className="mr-1 h-4 w-4" />
-          Novo Lead
+          Novo Negócio
         </Button>
       </div>
 
