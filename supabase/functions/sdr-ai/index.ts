@@ -263,7 +263,7 @@ Retorne apenas o JSON, sem texto adicional.`
     // 4. Buscar dados do lead e prompt customizado
     const { data: lead } = await supabaseVeltzy
       .from('leads')
-      .select('name, phone, email, temperature, ai_score, tags, deal_value, pipeline_id')
+      .select('name, phone, email, temperature, ai_score, tags, pipeline_id')
       .eq('id', leadId)
       .single()
 

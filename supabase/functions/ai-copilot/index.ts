@@ -67,25 +67,29 @@ Deno.serve(async (req) => {
       }
       const { data: staleLeads } = await staleQuery.limit(10)
 
-      // Deals em aberto (valor total + top por valor)
+      // Deals em aberto (valor total + top por valor). Le de `deals`: o valor e
+      // o status do negocio moram ali, nao mais espelhados em `leads`.
       let dealsQuery = supabase
-        .from('leads')
-        .select('id, name, phone, deal_value, updated_at')
+        .from('deals')
+        .select('id, value, updated_at, leads:lead_id(name, phone)')
         .eq('company_id', company_id)
-        .not('deal_value', 'is', null)
-        .eq('conversation_status', 'open')
-        .order('deal_value', { ascending: false })
+        .eq('status', 'open')
+        // `deals.value` e numeric DEFAULT 0: negocio sem valor vem 0, nao null.
+        // `.gt(0)` e o que replica o filtro antigo sobre `leads.deal_value`.
+        .gt('value', 0)
+        .order('value', { ascending: false })
       if (isSeller && user_profile_id) {
         dealsQuery = dealsQuery.eq('assigned_to', user_profile_id)
       }
-      const { data: openDeals } = await dealsQuery.limit(5)
+      const { data: openDeals, error: dealsError } = await dealsQuery.limit(5)
+      if (dealsError) console.error('[ai-copilot] deals em aberto:', dealsError.message)
 
-      const totalOpenValue = (openDeals ?? []).reduce((sum, d) => sum + (d.deal_value ?? 0), 0)
+      const totalOpenValue = (openDeals ?? []).reduce((sum, d) => sum + (d.value ?? 0), 0)
 
       // Top deals com dias sem atualizacao
       const topDealsInfo = (openDeals ?? []).slice(0, 3).map(d => {
         const daysAgo = Math.floor((now.getTime() - new Date(d.updated_at).getTime()) / (24 * 60 * 60 * 1000))
-        return `- ${d.name || d.phone} (ID: ${d.id}): R$ ${d.deal_value?.toFixed(2)} - ${daysAgo} dias sem atualizacao`
+        return `- ${d.leads?.name || d.leads?.phone} (ID: ${d.id}): R$ ${d.value?.toFixed(2)} - ${daysAgo} dias sem atualizacao`
       }).join('\n')
 
       // Leads hot/fire sem resposta hoje

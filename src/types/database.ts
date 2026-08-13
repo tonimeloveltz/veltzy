@@ -1,5 +1,4 @@
 export type AppRole = 'super_admin' | 'admin' | 'manager' | 'seller' | 'representative'
-export type LeadStatus = 'new' | 'qualifying' | 'open' | 'deal' | 'lost' | 'archived'
 export type LeadTemperature = 'cold' | 'warm' | 'hot' | 'fire'
 export type SenderType = 'ai' | 'human' | 'lead' | 'internal'
 export type ConversationStatus = 'unread' | 'read' | 'replied' | 'waiting_client' | 'waiting_internal' | 'resolved'
@@ -227,7 +226,6 @@ export interface Lead {
   linkedin_id: string | null
   source_id: string | null
   stage_id: string
-  status: LeadStatus
   temperature: LeadTemperature
   ai_score: number
   assigned_to: string | null
@@ -235,7 +233,6 @@ export interface Lead {
   is_queued: boolean
   conversation_status: ConversationStatus
   tags: string[]
-  deal_value: number | null
   observations: string | null
   avatar_url: string | null
   ad_context: AdContext | null
@@ -268,7 +265,6 @@ export interface CreateLeadInput {
   stage_id: string
   pipeline_id: string
   temperature?: LeadTemperature
-  deal_value?: number
   observations?: string
   assigned_to?: string
   tags?: string[]
@@ -435,7 +431,7 @@ export interface Product {
   updated_at: string
 }
 
-export interface LeadWithLastMessage extends Omit<Lead, 'stage_id' | 'status' | 'deal_value'> {
+export interface LeadWithLastMessage extends Omit<Lead, 'stage_id'> {
   profiles?: Partial<Profile> | null
   lead_sources?: LeadSourceRecord | null
   last_message?: Pick<Message, 'content' | 'sender_type' | 'created_at' | 'message_type'> | null
