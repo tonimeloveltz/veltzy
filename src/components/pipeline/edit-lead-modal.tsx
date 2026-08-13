@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Loader2, Trash2, UserPlus, ArrowRight, User, MessageSquare, Plus, CheckSquare, Phone, Video, MessageCircle as FollowUpIcon, Check, UserRoundPen } from 'lucide-react'
+import { Loader2, Trash2, Plus, CheckSquare, Phone, Video, MessageCircle as FollowUpIcon, Check, UserRoundPen } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
@@ -22,11 +22,11 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { LeadTagsInput } from '@/components/pipeline/lead-tags-input'
+import { DealTimeline } from '@/components/pipeline/deal-timeline'
 import { useUpdateLead, useDeleteLead } from '@/hooks/use-leads'
 import { useDealsByLead, useUpdateDeal, useAssignDeal, useDeleteDeal } from '@/hooks/use-deals'
 import { usePipelineStages } from '@/hooks/use-pipeline-stages'
 import { useLeadSources } from '@/hooks/use-lead-sources'
-import { useLeadActivityLogs } from '@/hooks/use-activity-logs'
 import { useTeamMembers } from '@/hooks/use-team'
 import { useRoles } from '@/hooks/use-roles'
 import { triggerCelebration } from '@/lib/celebration'
@@ -34,7 +34,7 @@ import { isValidPhoneBR, PHONE_ERROR_MSG } from '@/lib/phone'
 import { useLeadTasks, useCompleteTask } from '@/hooks/use-tasks'
 import { CreateTaskModal } from '@/components/tarefas/create-task-modal'
 import { leadTemperatureConfig } from '@/lib/lead-config'
-import type { LeadWithDetails, ActivityLog, TaskType, UpdateLeadInput } from '@/types/database'
+import type { LeadWithDetails, TaskType, UpdateLeadInput } from '@/types/database'
 
 const schema = z.object({
   // Contato
@@ -534,7 +534,7 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
           </TabsContent>
 
           <TabsContent value="history" className="mt-4">
-            <LeadTimeline leadId={lead.id} stages={stages} />
+            <DealTimeline dealId={activeDeal?.id} leadId={lead.id} stages={stages} />
           </TabsContent>
         </Tabs>
       </DialogContent>
@@ -578,91 +578,6 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
       </AlertDialogContent>
     </AlertDialog>
     </>
-  )
-}
-
-const actionConfig: Record<string, { icon: typeof UserPlus; label: string }> = {
-  created: { icon: UserPlus, label: 'Lead criado' },
-  stage_changed: { icon: ArrowRight, label: 'Movido para' },
-  assigned: { icon: User, label: 'Atribuído a' },
-  message_sent: { icon: MessageSquare, label: 'Mensagem enviada' },
-  status_changed: { icon: ArrowRight, label: 'Status alterado para' },
-}
-
-const formatActivityLabel = (log: ActivityLog, stages?: { id: string; name: string }[]) => {
-  const meta = log.metadata ?? {}
-  const config = actionConfig[log.action]
-  if (!config) return log.action
-
-  if (log.action === 'stage_changed' && meta.to_stage) {
-    const stageName = stages?.find((s) => s.id === meta.to_stage)?.name ?? 'outra fase'
-    return `${config.label} ${stageName}`
-  }
-  if (log.action === 'assigned' && meta.to) {
-    return `${config.label} ${(meta.to_name as string) ?? 'outro vendedor'}`
-  }
-  if(log.action === 'status_changed' && meta.to_status) {
-    return `${config.label} ${(meta.to_status as string) ?? 'outro status'}`
-  }
-  return config.label
-}
-
-const LeadTimeline = ({
-  leadId,
-  stages,
-}: {
-  leadId: string
-  stages?: { id: string; name: string }[]
-}) => {
-  const { data: logs, isLoading } = useLeadActivityLogs(leadId)
-
-  if (isLoading) {
-    return (
-      <div className="flex h-32 items-center justify-center">
-        <Loader2 className="h-5 w-5 animate-spin text-primary" />
-      </div>
-    )
-  }
-
-  if (!logs || logs.length === 0) {
-    return (
-      <div className="flex h-32 items-center justify-center rounded-lg border border-dashed">
-        <p className="text-sm text-muted-foreground">Nenhuma atividade registrada ainda</p>
-      </div>
-    )
-  }
-
-  return (
-    <div className="max-h-[40vh] overflow-y-auto space-y-0">
-      {logs.map((log, idx) => {
-        const config = actionConfig[log.action] ?? actionConfig.created
-        const Icon = config.icon
-        const isLast = idx === logs.length - 1
-
-        return (
-          <div key={log.id} className="flex gap-3">
-            <div className="flex flex-col items-center">
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                <Icon className="h-3.5 w-3.5 text-primary" />
-              </div>
-              {!isLast && <div className="w-px flex-1 bg-border/50" />}
-            </div>
-            <div className="pb-4 pt-0.5">
-              <p className="text-sm font-medium">{formatActivityLabel(log, stages)}</p>
-              <p className="text-xs text-muted-foreground">
-                {new Date(log.created_at).toLocaleString('pt-BR', {
-                  day: '2-digit',
-                  month: '2-digit',
-                  year: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </p>
-            </div>
-          </div>
-        )
-      })}
-    </div>
   )
 }
 
