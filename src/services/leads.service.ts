@@ -237,18 +237,6 @@ export const bulkUpdateAssignedTo = async (companyId: string, leadIds: string[],
   }
 }
 
-export const bulkArchive = async (companyId: string, leadIds: string[]): Promise<void> => {
-  const batches = chunk(leadIds, BATCH_SIZE)
-  for (const batch of batches) {
-    const { error } = await veltzy()
-      .from('leads')
-      .update({ status: 'archived' as const })
-      .in('id', batch)
-      .eq('company_id', companyId)
-    if (error) throw error
-  }
-}
-
 export const bulkDelete = async (companyId: string, leadIds: string[], userId: string): Promise<void> => {
   const batches = chunk(leadIds, BATCH_SIZE)
   for (const batch of batches) {

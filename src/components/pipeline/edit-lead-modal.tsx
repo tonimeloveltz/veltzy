@@ -104,7 +104,7 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
         instagram_handle: lead.instagram_handle ?? '',
         linkedin_url: lead.linkedin_url ?? '',
         deal_name: activeDeal?.name ?? '',
-        deal_value: activeDeal?.value ?? lead.deal_value ?? 0,
+        deal_value: activeDeal?.value ?? 0,
         deal_observations: activeDeal?.observations ?? '',
         stage_id: activeDeal?.stage_id ?? lead.stage_id,
       })
