@@ -414,6 +414,7 @@ Seja especifico: cite nomes, valores e prazos reais. Maximo 3 alertas e 3 acoes.
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     )
   } catch (err) {
+    console.error('[ai-copilot]', err)
     return new Response(
       JSON.stringify({ error: (err as Error).message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
