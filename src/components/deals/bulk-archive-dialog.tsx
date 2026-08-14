@@ -4,7 +4,7 @@ import {
   AlertDialog, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { useBulkArchive, useBulkArchiveDeals } from '@/hooks/use-bulk-leads'
+import { useBulkArchiveDeals } from '@/hooks/use-bulk-leads'
 
 interface BulkArchiveDialogProps {
   open: boolean
@@ -20,20 +20,14 @@ export const BulkArchiveDialog = ({ open, onClose, leadIds, onSuccess, mode = 'l
     onClose()
   }
 
-  // Em 'deals' os ids recebidos sao ids de deal: mandar para o service de leads
-  // atualizaria zero linhas e ainda assim responderia 200.
-  const bulkArchiveLeads = useBulkArchive(done)
-  const bulkArchiveDeals = useBulkArchiveDeals(done)
-  const bulkArchive = mode === 'deals' ? bulkArchiveDeals : bulkArchiveLeads
+  // Os ids recebidos sao sempre ids de deal: arquivar escreve em `deals`.
+  const bulkArchive = useBulkArchiveDeals(done)
 
   const handleArchive = async () => {
-    if (mode === 'deals') {
-      await bulkArchiveDeals.mutateAsync({ dealIds: leadIds })
-    } else {
-      await bulkArchiveLeads.mutateAsync({ leadIds })
-    }
+    await bulkArchive.mutateAsync({ dealIds: leadIds })
   }
 
+  // `mode` escolhe apenas o rotulo, nao o destino da escrita.
   const label = mode === 'deals' ? 'negócio' : 'lead'
 
   return (

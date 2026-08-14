@@ -59,11 +59,28 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Lead not found' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
+    // `evaluateCondition` le `lead[condition.field]` por NOME, entao uma regra
+    // salva com condicao em `stage_id` pararia de casar em silencio agora que a
+    // etapa saiu do contato. Enriquecer com a etapa do negocio ABERTO mais
+    // recente preserva as regras ja salvas (mesma consulta que `change_stage`
+    // faz abaixo). Sem negocio aberto: null, e a condicao nao casa, que e o
+    // correto - o contato nao esta em etapa nenhuma.
+    const { data: activeDeal } = await supabase
+      .from('deals')
+      .select('stage_id')
+      .eq('lead_id', leadId)
+      .eq('status', 'open')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    const leadForRules = { ...lead, stage_id: activeDeal?.stage_id ?? null }
+
     let executed = 0
 
     for (const rule of rules) {
       const conditions = (rule.conditions as Condition[]) ?? []
-      const allPass = conditions.every((c) => evaluateCondition(c, lead))
+      const allPass = conditions.every((c) => evaluateCondition(c, leadForRules))
 
       if (!allPass) {
         await supabase.from('automation_logs').insert({
@@ -77,7 +94,7 @@ Deno.serve(async (req) => {
       }
 
       const actionData = rule.action_data as Record<string, unknown>
-      const oldValue = { stage_id: lead.stage_id, temperature: lead.temperature, tags: lead.tags, assigned_to: lead.assigned_to }
+      const oldValue = { stage_id: leadForRules.stage_id, temperature: lead.temperature, tags: lead.tags, assigned_to: lead.assigned_to }
 
       try {
         switch (rule.action_type) {

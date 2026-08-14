@@ -53,14 +53,15 @@ export const updateStage = async (
 }
 
 export const deleteStage = async (companyId: string, stageId: string): Promise<void> => {
+  // A etapa e do negocio: contar `deals`, nao `leads`.
   const { count } = await veltzy()
-    .from('leads')
+    .from('deals')
     .select('id', { count: 'exact', head: true })
     .eq('stage_id', stageId)
     .eq('company_id', companyId)
 
   if (count && count > 0) {
-    throw new Error(`Mova os ${count} leads deste stage antes de deletá-lo`)
+    throw new Error(`Mova os ${count} negócios deste stage antes de deletá-lo`)
   }
 
   const { error } = await veltzy()

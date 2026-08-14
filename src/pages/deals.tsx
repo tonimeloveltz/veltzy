@@ -157,7 +157,7 @@ const DealsPage = () => {
       assigned_to: d.assigned_to,
       profiles: d.profiles,
       status: d.status,
-      deal: { value: d.value, status: d.status },
+      deal: { value: d.value, status: d.status, stage_name: stageMap.get(d.stage_id ?? '')?.name ?? null },
       pipelines: d.pipeline_id ? pipelineMap.get(d.pipeline_id) ?? null : null,
       pipeline_stages: d.stage_id ? stageMap.get(d.stage_id) ?? null : null,
       created_at: d.created_at,

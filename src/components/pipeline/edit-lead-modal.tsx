@@ -72,7 +72,7 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
   const deleteLead = useDeleteLead()
   const deleteDeal = useDeleteDeal()
   const assignDeal = useAssignDeal()
-  const { data: deals } = useDealsByLead(lead?.id)
+  const { data: deals, isError: dealsError } = useDealsByLead(lead?.id)
   const activeDeal = dealId ? deals?.find((d) => d.id === dealId) : deals?.[0]
   const { data: stages } = usePipelineStages(activeDeal?.pipeline_id ?? lead?.pipeline_id)
   const { data: sources } = useLeadSources()
@@ -82,12 +82,35 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
   const [pendingAssignTo, setPendingAssignTo] = useState<string | null>(null)
   const [deleteDealOpen, setDeleteDealOpen] = useState(false)
 
+  // `defaultValues` nao e opcional aqui: o DialogContent do Radix so monta
+  // quando `open` vira true, e com a guarda `dealsReady` abaixo isso acontece
+  // ANTES do primeiro reset. Sem default, `tags` chega `undefined` no
+  // LeadTagsInput, que faz `.map()` direto e derruba o modal.
+  //
+  // `stage_id: ''` esta aqui pelo mesmo motivo, por outro sintoma: sem ele o
+  // Select vai de `undefined` para uuid, ou seja uncontrolled -> controlled, e
+  // essa transicao deixa o campo sem texto ate o usuario interagir. Com `''` a
+  // transicao e controlled -> controlled.
   const { register, handleSubmit, control, reset, formState: { errors, dirtyFields } } = useForm<FormValues>({
     resolver: zodResolver(schema),
+    defaultValues: { tags: [], stage_id: '' },
   })
 
+  // So resetar quando os negocios ja chegaram. Sem isso ha dois resets: o
+  // primeiro com `deals` ainda undefined grava `stage_id: ''`, e o Select do
+  // Radix nasce sem value; quando o negocio chega, o trigger nao reavalia o
+  // texto e a Fase fica vazia ate abrir o dropdown. Na segunda abertura o cache
+  // esta quente (staleTime 30s em useDealsByLead) e o value ja nasce certo, que
+  // e por que o bug so aparecia na primeira vez.
+  //
+  // `dealsError` entra na guarda para a falha da query degradar em vez de
+  // travar: sem ele, rede caindo ou RLS negando deixa `deals` undefined para
+  // sempre e o form nunca reseta, abrindo em branco. Com ele, o contato aparece
+  // e so a parte de negocio fica vazia.
+  const dealsReady = deals !== undefined || dealsError
+
   useEffect(() => {
-    if (lead) {
+    if (lead && dealsReady) {
       setPendingAssignTo(null)
       setTransferOpen(false)
       setDeleteDealOpen(false)
@@ -104,17 +127,17 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
         instagram_handle: lead.instagram_handle ?? '',
         linkedin_url: lead.linkedin_url ?? '',
         deal_name: activeDeal?.name ?? '',
-        deal_value: activeDeal?.value ?? lead.deal_value ?? 0,
+        deal_value: activeDeal?.value ?? 0,
         deal_observations: activeDeal?.observations ?? '',
-        stage_id: activeDeal?.stage_id ?? lead.stage_id,
+        stage_id: activeDeal?.stage_id ?? '',
       })
     }
-  }, [lead, activeDeal, reset])
+  }, [lead, activeDeal, dealsReady, reset])
 
   const onSubmit = async (values: FormValues) => {
     if (!lead) return
 
-    const oldStageId = activeDeal?.stage_id ?? lead.stage_id
+    const oldStageId = activeDeal?.stage_id
     const newStageId = values.stage_id
 
     // Atualizar contato (so dados de pessoa). stage_id/deal_value vao para o
@@ -499,7 +522,7 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
                   control={control}
                   name="tags"
                   render={({ field }) => (
-                    <LeadTagsInput value={field.value} onChange={field.onChange} />
+                    <LeadTagsInput value={field.value ?? []} onChange={field.onChange} />
                   )}
                 />
               </div>
