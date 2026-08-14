@@ -225,7 +225,6 @@ export interface Lead {
   instagram_id: string | null
   linkedin_id: string | null
   source_id: string | null
-  stage_id: string
   temperature: LeadTemperature
   ai_score: number
   assigned_to: string | null
@@ -262,7 +261,6 @@ export interface CreateLeadInput {
   email?: string
   company_name?: string
   source_id?: string
-  stage_id: string
   pipeline_id: string
   temperature?: LeadTemperature
   observations?: string
@@ -431,7 +429,7 @@ export interface Product {
   updated_at: string
 }
 
-export interface LeadWithLastMessage extends Omit<Lead, 'stage_id'> {
+export interface LeadWithLastMessage extends Lead {
   profiles?: Partial<Profile> | null
   lead_sources?: LeadSourceRecord | null
   last_message?: Pick<Message, 'content' | 'sender_type' | 'created_at' | 'message_type'> | null
