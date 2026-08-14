@@ -105,13 +105,15 @@ O ganho de remover, para registro: o cadastro de contato deixa de exigir pipelin
 
 **Onda 1. `status` e `deal_value`.** Nenhuma leitura com efeito, pelos dados de 2.1. Remoção do arquivamento de contato, que é código morto (D6); remoção dos campos do insert de `import-leads.service.ts:306-322`, cujo insert de negócio na linha 227 já grava tudo; remoção do fallback de `edit-lead-modal.tsx:107`; repontar `ai-copilot/index.ts:71-89` e `sdr-ai/index.ts:266`. Só código, sem migration. Detalhada em `Spec-onda1.md`, que descobriu de quebra um defeito silencioso de produção no copiloto (Spec 1.2.1).
 
-**Onda 2. `stage_id`.** Corrige os 23 divergentes. Reescrita do `LEAD_WITH_DETAILS_SELECT` (`leads.service.ts:68-73`), que hoje resolve `pipeline_stages` pela FK da coluna; guards de `deleteStage` (`pipeline.service.ts:57-59`) e `deletePipeline` (`pipelines.service.ts:104-107`) passam a contar negócios; `bulkMoveToPipeline` (`leads.service.ts:276`) passa a mover o negócio; condição e `oldValue` de `run-automations/index.ts:65-80`.
+**Onda 2. `stage_id`.** Corrige os 23 divergentes. Reescrita do `LEAD_WITH_DETAILS_SELECT` (`leads.service.ts:68-73`), que hoje resolve `pipeline_stages` pela FK da coluna; guard do `deleteStage` (`pipeline.service.ts:55-63`) passa a contar negócios; condição e `oldValue` de `run-automations/index.ts:65-80`; a etapa do export passa a vir do negócio. Detalhada em `Spec-onda2.md`.
+
+~~`bulkMoveToPipeline` passa a mover o negócio.~~ Corrigido em 13/08/2026, ao escrever a Spec: a versão de contatos é **código inalcançável**, pelo mesmo padrão do `bulkArchive` da Onda 1. O modal usa `useBulkMoveDealsPipeline`, e `useBulkMovePipeline` não tem consumidor. Ela é removida, não migrada, e com isso some a decisão de produto sobre os 103 contatos sem negócio. O guard do `deletePipeline` também sai desta onda: ele conta por `pipeline_id`, então é Onda 4.
 
 **Onda 3. Drop no Hub.** Colunas `stage_id`, `status`, `deal_value`; triggers `on_lead_stage_changed` e `trg_mirror_deal_to_lead`; funções `sync_lead_status_from_stage()` e `mirror_deal_to_lead()`; enum `veltzy.lead_status`; índice `idx_veltzy_leads_company_stage`.
 
 **Onda 4, sem data.** `pipeline_id`, condicionada à D5.
 
-A Onda 2 tem efeito colateral que interessa a outra frente: `bulkMoveToPipeline` escrever `leads.stage_id` direto é exatamente o motivo pelo qual a migration da Onda 1 do histórico registra que os ramos de `log_lead_activity` não podem ser removidos. Feita a Onda 2, a Onda 1.5 do histórico destrava.
+A Onda 2 tem efeito colateral que interessa a outra frente, e ele é maior do que este PRD supunha. A Spec da Onda 1 do `historico-por-negocio` registra que os ramos de `log_lead_activity` não podem ser removidos porque `bulkMoveToPipeline` escreveria `leads.stage_id` direto e sem log. **Essa premissa já não vale**: a função é inalcançável hoje (ver acima). Depois da Onda 2, nada no código escreve `leads.stage_id`, e o único UPDATE que resta na coluna é o eco do próprio espelho, o que permite à Onda 1.5 remover os ramos em vez de distingui-los por `pg_trigger_depth()`. A decisão é da outra frente; aqui fica só o registro de que a justificativa mudou. Ver `Spec-onda2.md:2`.
 
 ## 6. Achado colateral, fora desta frente
 
@@ -132,7 +134,8 @@ Ponto de atenção para a Spec: o drop da Onda 3 é irreversível e leva junto o
 | Risco | Impacto | Mitigação |
 |---|---|---|
 | Drop rodado antes de o código parar de ler as colunas | Alto | A Onda 3 só entra depois de 1 e 2 validadas em staging. A ordem é código primeiro, banco depois |
-| `bulkMoveToPipeline` sem tratamento para contato sem negócio | Médio | 103 casos em produção. A Spec define o comportamento: ignorar, ou criar negócio no pipeline destino |
+| ~~`bulkMoveToPipeline` sem tratamento para contato sem negócio~~ | Eliminado | A função é inalcançável (13/08/2026). Não há operação que mova contato de pipeline em lote |
+| Regra de automação com condição em `stage_id` deixa de casar em silêncio | Médio | `evaluateCondition` lê o campo por nome. A Spec da Onda 2 enriquece o objeto com o stage do negócio antes de avaliar |
 | Spec escrita a partir de `supabase/migrations/` do Veltzy | Alto | A Spec parte do Hub (2.4). Os arquivos daqui são cópia histórica |
 | Migration aplicada sem policy ou sem grant | Alto | Precedente documentado em `docs/features/cadastro-produtos/Spec-onda1.md:1.1` |
 | Onda 3 antes da Onda 1.5 do histórico | Médio | Dropar `leads.stage_id` com `log_lead_activity` ainda referenciando `OLD.stage_id` quebra o trigger. As duas são coordenadas |

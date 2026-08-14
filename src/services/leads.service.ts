@@ -68,12 +68,10 @@ export async function resolveWhatsAppInstance(
 const LEAD_WITH_DETAILS_SELECT = `
   *,
   lead_sources:source_id(*),
-  pipeline_stages:stage_id(*),
   pipelines:pipeline_id(*)
 `
 
 interface LeadFilters {
-  stageId?: string
   sourceId?: string | null
   temperature?: string | null
   assignedTo?: string | null
@@ -102,9 +100,6 @@ export const getLeadsByCompany = async (companyId: string, filters?: LeadFilters
 
   if (filters?.pipelineId) {
     query = query.eq('pipeline_id', filters.pipelineId)
-  }
-  if (filters?.stageId) {
-    query = query.eq('stage_id', filters.stageId)
   }
   if (filters?.sourceId) {
     query = query.eq('source_id', filters.sourceId)
@@ -260,26 +255,3 @@ export const bulkDelete = async (companyId: string, leadIds: string[], userId: s
     })
   if (logError) throw logError
 }
-
-export const bulkMoveToPipeline = async (companyId: string, leadIds: string[], targetPipelineId: string): Promise<void> => {
-  // Buscar primeiro stage do pipeline destino
-  const { data: firstStage, error: stageError } = await veltzy()
-    .from('pipeline_stages')
-    .select('id')
-    .eq('pipeline_id', targetPipelineId)
-    .order('position')
-    .limit(1)
-    .single()
-  if (stageError) throw stageError
-
-  const batches = chunk(leadIds, BATCH_SIZE)
-  for (const batch of batches) {
-    const { error } = await veltzy()
-      .from('leads')
-      .update({ pipeline_id: targetPipelineId, stage_id: firstStage.id })
-      .in('id', batch)
-      .eq('company_id', companyId)
-    if (error) throw error
-  }
-}
-

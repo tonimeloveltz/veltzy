@@ -46,7 +46,11 @@ export const useExportLeads = () => {
       const prev = latestAt.get(d.lead_id)
       if (!prev || d.created_at > prev) {
         latestAt.set(d.lead_id, d.created_at)
-        dealByLead.set(d.lead_id, { value: d.value, status: d.status })
+        dealByLead.set(d.lead_id, {
+          value: d.value,
+          status: d.status,
+          stage_name: d.pipeline_stages?.name ?? null,
+        })
       }
     }
 

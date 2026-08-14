@@ -117,27 +117,6 @@ export const useBulkDeleteDeals = (onSuccess?: () => void) => {
   })
 }
 
-export const useBulkMovePipeline = (onSuccess?: () => void) => {
-  const companyId = useAuthStore((s) => s.company?.id)
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async ({ leadIds, targetPipelineId }: { leadIds: string[]; targetPipelineId: string }) => {
-      if (!companyId) throw new Error('Empresa nao encontrada')
-      await leadsService.bulkMoveToPipeline(companyId, leadIds, targetPipelineId)
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['dashboard-leads'] })
-      queryClient.invalidateQueries({ queryKey: ['leads'] })
-      toast.success('Leads movidos para o pipeline com sucesso')
-      onSuccess?.()
-    },
-    onError: () => {
-      toast.error('Erro ao mover leads de pipeline')
-    },
-  })
-}
-
 export const useBulkExport = () => {
   return {
     exportCsv: (leads: LeadWithDetails[]) => {

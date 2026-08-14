@@ -8,7 +8,7 @@ import type { ConversationStatus, LeadWithDetails, DealStatus } from '@/types/da
  * campos ficam vazios.
  */
 export type ExportLeadRow = LeadWithDetails & {
-  deal?: { value: number | null; status: DealStatus } | null
+  deal?: { value: number | null; status: DealStatus; stage_name?: string | null } | null
 }
 
 // Status e temperatura saem traduzidos, mas a linha exportada e montada tambem
@@ -30,7 +30,7 @@ const getLeadRows = (leads: ExportLeadRow[]) => //recebe leads - dealsasleads aq
     l.email ?? '',
     l.deal?.value != null ? l.deal.value.toString() : '',
     l.pipelines?.name ?? '',
-    l.pipeline_stages?.name ?? '',
+    l.deal?.stage_name ?? '',
     statusLabel(l.deal?.status),
     temperatureLabel(l.temperature),
     l.profiles?.name ?? '',
@@ -130,7 +130,7 @@ export const exportToPdf = async (leads: ExportLeadRow[], filename = 'leads.pdf'
     l.email ?? '-',
     l.deal?.value ? `R$ ${l.deal.value.toLocaleString('pt-BR')}` : '-',
     l.pipelines?.name ?? '-',
-    l.pipeline_stages?.name ?? '-',
+    l.deal?.stage_name ?? '-',
     statusLabel(l.deal?.status) || '-',
     temperatureLabel(l.temperature) || '-',
     l.profiles?.name ?? '-',

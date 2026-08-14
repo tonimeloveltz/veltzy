@@ -302,7 +302,6 @@ export const importLeads = async (
           phone: row.phone,
           email: row.email ?? null,
           source_id: row.source_id ?? null,
-          stage_id: row.stage_id,
           temperature: row.temperature ?? 'cold',
           observations: row.observations ?? null,
           tags: row.tags ?? [],

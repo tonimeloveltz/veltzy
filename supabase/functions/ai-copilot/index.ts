@@ -281,37 +281,45 @@ Seja especifico: cite nomes, valores e prazos reais. Maximo 3 alertas e 3 acoes.
         })
       }
 
-      // 2. Leads quentes sem contato ha 3+ dias
-      const { data: hotLeads } = await supabase
-        .from('leads')
-        .select('id, name, phone, assigned_to, stage_id, pipeline_stages:stage_id(name)')
+      // 2. Leads quentes sem contato ha 3+ dias. A etapa mora no negocio, entao
+      // a query parte de `deals` com o contato embutido. O `!inner` nao e
+      // opcional: sem ele o filtro por `leads.temperature` nao exclui a linha
+      // pai, so zera o embed, e o bloco notificaria sobre contato frio.
+      const { data: hotDeals, error: hotDealsError } = await supabase
+        .from('deals')
+        .select('id, stage_id, assigned_to, lead_id, pipeline_stages:stage_id(name), leads:lead_id!inner(name, phone)')
         .eq('company_id', companyId)
-        .in('temperature', ['warm', 'hot', 'fire'])
+        .eq('status', 'open')
+        .in('leads.temperature', ['warm', 'hot', 'fire'])
         .not('assigned_to', 'is', null)
         .limit(100)
+      if (hotDealsError) console.error('[ai-copilot] leads quentes:', hotDealsError.message)
 
-      for (const lead of hotLeads ?? []) {
-        // Verificar ultima mensagem
+      for (const d of hotDeals ?? []) {
+        // A notificacao e sobre o CONTATO: `d.lead_id` alimenta a busca de
+        // mensagem, o dedup e o action_data. Trocar pelo id do negocio quebraria
+        // o hasDuplicate.
         const { data: lastMsg } = await supabase
           .from('messages')
           .select('created_at')
-          .eq('lead_id', lead.id)
+          .eq('lead_id', d.lead_id)
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle()
 
         if (lastMsg && lastMsg.created_at > threeDaysAgo) continue
-        if (await hasDuplicate(lead.id, null)) continue
+        if (await hasDuplicate(d.lead_id, null)) continue
 
         const { data: profile } = await supabasePublic
           .from('profiles')
           .select('user_id')
-          .eq('id', lead.assigned_to)
+          .eq('id', d.assigned_to)
           .single()
         if (!profile) continue
 
-        const stage = lead.pipeline_stages as { name: string } | null
-        const leadName = lead.name || lead.phone
+        const stage = d.pipeline_stages as { name: string } | null
+        const contact = d.leads as { name: string | null; phone: string } | null
+        const leadName = contact?.name || contact?.phone
         const daysAgo = lastMsg
           ? Math.floor((now.getTime() - new Date(lastMsg.created_at).getTime()) / (24 * 60 * 60 * 1000))
           : 'muitos'
@@ -321,7 +329,7 @@ Seja especifico: cite nomes, valores e prazos reais. Maximo 3 alertas e 3 acoes.
           type: 'copilot',
           title: 'Lead quente sem contato',
           body: `${leadName} esta em ${stage?.name ?? 'pipeline'} ha ${daysAgo} dias sem interacao.`,
-          action_data: { leadId: lead.id },
+          action_data: { leadId: d.lead_id },
         })
       }
 

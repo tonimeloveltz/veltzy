@@ -141,9 +141,6 @@ const NewContactModal = ({ open, onClose, onCreated, contact }: NewContactModalP
       instagram_handle: values.instagram_handle || undefined,
       linkedin_url: values.linkedin_url || undefined,
       pipeline_id: resolvedPipelineId,
-      // stage_id e exigido pelo tipo, mas createLead nao grava negocio em leads
-      // (coluna nullable). Contato puro nasce sem stage/negocio.
-      stage_id: '',
     }
     const lead = await createContact.mutateAsync(input)
     onCreated?.(lead)
