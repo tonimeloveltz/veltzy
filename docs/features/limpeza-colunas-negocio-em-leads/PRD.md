@@ -1,9 +1,28 @@
 # PRD: Limpeza das colunas de negócio em `leads`
 
 > Feature: `limpeza-colunas-negocio-em-leads`
-> Status: Rascunho. Aguarda decisão da Leticia sobre D5 (pipeline_id)
-> Data: 2026-08-13
+> Status: Ondas 1 a 3 concluídas no staging. Produção pendente. Onda 4 bloqueada em decisão de produto (D5)
+> Data: 2026-08-13, estado atualizado em 14/08/2026
 > Continuação de: `docs/features/deal-refactor/` ("Fase de limpeza") e `docs/features/historico-por-negocio/PRD.md:156` (que lista esta remoção como fora do escopo dele)
+
+---
+
+## 0. Estado
+
+| Onda | Escopo | Código | Staging | Produção |
+|---|---|---|---|---|
+| 1 | `status`, `deal_value` | mergeada, PR #163 | aplicável (só código) | pendente de deploy do app |
+| 2 | `stage_id` | mergeada | aplicável (só código) | pendente de deploy do app |
+| 3 | drop das três colunas | migration no Hub | **aplicada 14/08/2026** (`20260814105318`), verificação 6.2 passou | **não aplicada** |
+| 4 | `pipeline_id` | não iniciada | — | — |
+
+**O que trava produção, e não é técnico:** a Onda 1 do `historico-por-negocio` (`20260812104156`, que cria `trg_log_deal_activity`) precisa ser promovida **antes** da Onda 3 chegar lá. Sem ela, remover os ramos de `log_lead_activity` deixa produção sem nenhum registro de mudança de etapa, e sem sintoma. Medido em 14/08/2026: o trigger existe no staging e não em produção. Verificação obrigatória em `Spec-onda3.md:6.1`, passo 3.
+
+Hoje esse pré-requisito é **documentado, não verificado**: nada na migration impede aplicá-la na ordem errada. A guarda seria um `DO $$ ... RAISE EXCEPTION` abortando quando `trg_log_deal_activity` não existir no ambiente. Não escrita.
+
+**O que trava a Onda 4:** a decisão de produto da seção 4, o dashboard mede contatos ou negócios. Enquanto ela não vier, `leads.pipeline_id` fica, e com ela a `mirror_deal_to_lead` e a trava multi-deal.
+
+**Pendências abertas** estão distribuídas nas três Specs: a de maior impacto para o usuário é a Fase vazia no modal (`Spec-onda2.md`, pendência 4), com causa isolada e correção provável de uma linha, adiada por decisão. Seguem também as três de erro engolido no caminho de IA (`Spec-onda1.md:6` e `Spec-onda2.md:6`) e o gateway do Hub com 500 no staging, diagnosticado até a fronteira e não além.
 
 ---
 
@@ -109,7 +128,11 @@ O ganho de remover, para registro: o cadastro de contato deixa de exigir pipelin
 
 ~~`bulkMoveToPipeline` passa a mover o negócio.~~ Corrigido em 13/08/2026, ao escrever a Spec: a versão de contatos é **código inalcançável**, pelo mesmo padrão do `bulkArchive` da Onda 1. O modal usa `useBulkMoveDealsPipeline`, e `useBulkMovePipeline` não tem consumidor. Ela é removida, não migrada, e com isso some a decisão de produto sobre os 103 contatos sem negócio. O guard do `deletePipeline` também sai desta onda: ele conta por `pipeline_id`, então é Onda 4.
 
-**Onda 3. Drop no Hub.** Colunas `stage_id`, `status`, `deal_value`; triggers `on_lead_stage_changed` e `trg_mirror_deal_to_lead`; funções `sync_lead_status_from_stage()` e `mirror_deal_to_lead()`; enum `veltzy.lead_status`; índice `idx_veltzy_leads_company_stage`.
+**Onda 3. Drop no Hub.** Colunas `stage_id`, `status`, `deal_value`; trigger `on_lead_stage_changed` e função `sync_lead_status_from_stage()`; enum `veltzy.lead_status`; índice `idx_veltzy_leads_company_stage`. Detalhada em `Spec-onda3.md`.
+
+O inventário no banco (14/08/2026) mostrou que são **quatro** funções a tratar, não duas: além de `log_lead_activity` e `sync_lead_status_from_stage`, entram `mirror_deal_to_lead` (reescrita para espelhar só `pipeline_id`, já que ela não pode morrer antes da Onda 4) e `check_stage_has_leads`, um guard **no banco** que duplica o da aplicação e que nenhuma Spec anterior tinha visto. `trg_mirror_deal_to_lead` **não** é dropado aqui, ao contrário do que este PRD dizia: só na Onda 4.
+
+A Onda 3 **absorve a Onda 1.5** do `historico-por-negocio`. O conteúdo daquela onda mudou de "condicionar os ramos por `pg_trigger_depth()`" para "remover os ramos", pelo achado da Onda 2, e virou pré-requisito técnico do drop em vez de limpeza opcional.
 
 **Onda 4, sem data.** `pipeline_id`, condicionada à D5.
 
@@ -138,7 +161,8 @@ Ponto de atenção para a Spec: o drop da Onda 3 é irreversível e leva junto o
 | Regra de automação com condição em `stage_id` deixa de casar em silêncio | Médio | `evaluateCondition` lê o campo por nome. A Spec da Onda 2 enriquece o objeto com o stage do negócio antes de avaliar |
 | Spec escrita a partir de `supabase/migrations/` do Veltzy | Alto | A Spec parte do Hub (2.4). Os arquivos daqui são cópia histórica |
 | Migration aplicada sem policy ou sem grant | Alto | Precedente documentado em `docs/features/cadastro-produtos/Spec-onda1.md:1.1` |
-| Onda 3 antes da Onda 1.5 do histórico | Médio | Dropar `leads.stage_id` com `log_lead_activity` ainda referenciando `OLD.stage_id` quebra o trigger. As duas são coordenadas |
+| Onda 3 aplicada em produção antes de a Onda 1 do histórico ser promovida | **Alto** | Medido em 14/08/2026: `trg_log_deal_activity` existe no staging e **não** em produção. Sem ele, tirar os ramos de `log_lead_activity` deixa produção sem nenhum registro de mudança de etapa, e sem sintoma. Verificação obrigatória em `Spec-onda3.md:6.1`, passo 3 |
+| Função plpgsql com referência órfã depois do drop | **Alto** | plpgsql não valida coluna até executar, então o `DROP COLUMN` passa e o próximo `UPDATE` em `leads` quebra o inbox inteiro. As quatro funções são tratadas antes do drop, e a verificação pós-drop começa por um `UPDATE` real (`Spec-onda3.md:6.2`) |
 
 ## 9. Métricas de sucesso
 
