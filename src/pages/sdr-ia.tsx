@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { usePipelines } from '@/hooks/use-pipelines'
 import { useAgentProfile } from '@/hooks/use-agent-profile'
+import { useFirstCompanyLead } from '@/hooks/use-leads'
 import { SdrV2Dashboard } from '@/components/sdr-v2/dashboard/SdrV2Dashboard'
 import { AgentProfileWizard } from '@/components/sdr-v2/agent-profile-wizard/AgentProfileWizard'
 import { AgentSandbox } from '@/components/sdr-v2/sandbox/AgentSandbox'
@@ -24,8 +25,9 @@ const SdrIaPage = () => {
   const pipelineId = selectedPipelineId || pipelines?.[0]?.id
   const { data: agentProfile, refetch: refetchProfile } = useAgentProfile(pipelineId)
 
-  // Lead de teste para sandbox (primeiro lead do pipeline)
-  const testLeadId = '376d8927-0bc7-41f4-80be-fcc148a633c0' // placeholder, idealmente buscar dinamicamente
+  // Lead de teste para o sandbox: primeiro lead REAL da empresa atual
+  // (evita id hardcoded de outra empresa -> mismatch lead<->company).
+  const { data: testLead } = useFirstCompanyLead()
 
   const handleWizardComplete = (_profile: AgentProfile) => {
     setShowWizard(false)
@@ -126,14 +128,21 @@ const SdrIaPage = () => {
 
         {/* Sandbox tab */}
         <TabsContent value="sandbox" className="mt-6">
-          {agentProfile ? (
-            <AgentSandbox agentProfile={agentProfile} leadId={testLeadId} />
-          ) : (
+          {!agentProfile ? (
             <Card>
               <CardContent className="py-12 text-center text-sm text-muted-foreground">
                 Configure um Agent Profile antes de usar o sandbox.
               </CardContent>
             </Card>
+          ) : !testLead ? (
+            <Card>
+              <CardContent className="py-12 text-center text-sm text-muted-foreground">
+                Nenhum lead nesta empresa para testar. Crie um lead de teste
+                para usar o sandbox.
+              </CardContent>
+            </Card>
+          ) : (
+            <AgentSandbox agentProfile={agentProfile} leadId={testLead.id} />
           )}
         </TabsContent>
       </Tabs>

@@ -42,6 +42,25 @@ export const useLeads = () => {
   })
 }
 
+// Primeiro lead (mais recente) da empresa atual. Usado pelo Sandbox do SDR v2
+// para obter um lead de teste REAL do tenant logado, em vez de um id hardcoded
+// (que apontava para um lead de outra empresa -> mismatch lead<->company).
+// Escopo por empresa (nao por pipeline): a associacao lead<->pipeline migrou
+// para deals (deal-centrico), entao nao dependemos de leads.pipeline_id.
+export const useFirstCompanyLead = () => {
+  const companyId = useAuthStore((s) => s.company?.id)
+
+  return useQuery({
+    queryKey: ['first-company-lead', companyId],
+    queryFn: async () => {
+      const leads = await leadsService.getLeadsByCompany(companyId!, { limit: 1 })
+      return leads[0] ?? null
+    },
+    enabled: !!companyId,
+    staleTime: 30 * 1000,
+  })
+}
+
 export const useUpdateLead = () => {
   const queryClient = useQueryClient()
   const companyId = useAuthStore((s) => s.company?.id)
