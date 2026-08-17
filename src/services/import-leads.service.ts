@@ -307,7 +307,6 @@ export const importLeads = async (
           tags: row.tags ?? [],
         }
         if (row.assigned_to) record.assigned_to = row.assigned_to
-        record.pipeline_id = row.pipeline_id
         if (instanceName) record.whatsapp_instance_name = instanceName
         insertData.push(record)
       }

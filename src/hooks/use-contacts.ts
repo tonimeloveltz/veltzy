@@ -59,8 +59,9 @@ export const useContacts = () => {
 
 /**
  * Cria um contato puro (lead sem negocio). NAO escreve em `deals` - o contato
- * nasce com 0 negocios. O service `createLead` ja nao grava campos de negocio;
- * pipeline_id e preenchido pelo modal (coluna NOT NULL ate a Fase 4).
+ * nasce com 0 negocios. O service `createLead` nao grava nenhum campo de
+ * negocio: desde a Onda 4 nem `pipeline_id`, que deixou de ser coluna de
+ * `leads`. Empresa sem pipeline nenhum consegue cadastrar contato.
  */
 export const useCreateContact = () => {
   const queryClient = useQueryClient()

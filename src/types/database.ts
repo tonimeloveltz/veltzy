@@ -218,7 +218,6 @@ export interface AdContext {
 export interface Lead {
   id: string
   company_id: string
-  pipeline_id: string
   name: string | null
   phone: string
   email: string | null
@@ -248,11 +247,13 @@ export interface Lead {
   updated_at: string
 }
 
+// Sem `pipelines`: o embed saiu do LEAD_WITH_DETAILS_SELECT na Onda 4. Manter o
+// campo no tipo faria os leitores compilarem limpo e a coluna sair vazia em
+// silencio, que foi o erro que a Onda 2 custou caro.
 export interface LeadWithDetails extends Lead {
   profiles?: Partial<Profile> | null
   lead_sources?: LeadSourceRecord | null
   pipeline_stages?: PipelineStage | null
-  pipelines?: Pipeline | null
 }
 
 export interface CreateLeadInput {
@@ -261,7 +262,13 @@ export interface CreateLeadInput {
   email?: string
   company_name?: string
   source_id?: string
-  pipeline_id: string
+  /**
+   * NAO e coluna de `leads` (removida na Onda 4). Continua aqui como contexto da
+   * chamada: `createLead` usa este valor para resolver `whatsapp_instance_name`
+   * pelo `sdr_instance_name` do pipeline. Opcional porque o cadastro manual de
+   * contato nao depende mais de funil.
+   */
+  pipeline_id?: string
   temperature?: LeadTemperature
   observations?: string
   assigned_to?: string

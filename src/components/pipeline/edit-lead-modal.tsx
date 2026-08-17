@@ -74,7 +74,10 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
   const assignDeal = useAssignDeal()
   const { data: deals, isError: dealsError } = useDealsByLead(lead?.id)
   const activeDeal = dealId ? deals?.find((d) => d.id === dealId) : deals?.[0]
-  const { data: stages } = usePipelineStages(activeDeal?.pipeline_id ?? lead?.pipeline_id)
+  // Sem fallback para o contato: o pipeline saiu de `leads` na Onda 4. Contato
+  // sem negocio fica sem etapas para escolher, que e o correto - oferecer as
+  // etapas de um pipeline que ele nao tem seria pior.
+  const { data: stages } = usePipelineStages(activeDeal?.pipeline_id)
   const { data: sources } = useLeadSources()
   const { data: members } = useTeamMembers()
   const { isAdmin, isManager } = useRoles()
