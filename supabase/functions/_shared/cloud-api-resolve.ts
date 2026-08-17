@@ -9,6 +9,7 @@ import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
  */
 
 export interface ResolvedNumber {
+  id: string                  // uuid de cloud_api_numbers (carimba leads.cloud_api_number_id — V2 multi-numero)
   companyId: string
   instanceLabel: string       // instance_label ?? phone_number_id (vai para *.instance_name)
   accessToken: string | null  // token do numero p/ baixar midia / outbound futuro
@@ -29,13 +30,14 @@ export async function resolveCloudApiNumber(
 ): Promise<ResolvedNumber | null> {
   const { data } = await supabaseVeltzy
     .from('cloud_api_numbers')
-    .select('company_id, instance_label, phone_number_id, access_token, status')
+    .select('id, company_id, instance_label, phone_number_id, access_token, status')
     .eq('phone_number_id', phoneNumberId)
     .maybeSingle()
 
   if (!data) return null
 
   return {
+    id: data.id,
     companyId: data.company_id,
     instanceLabel: data.instance_label ?? data.phone_number_id,
     accessToken: data.access_token,

@@ -70,7 +70,7 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
   const { isAdmin, isManager } = useRoles()
   const { data: waStatus } = useWhatsAppStatus()
   const showInstanceBadge = waStatus?.provider === 'evolution' || waStatus?.provider === 'cloud_api'
-  const toggleContactPanel = useInboxStore((s) => s.toggleContactPanel)
+  const setContactPanelOpen = useInboxStore((s) => s.setContactPanelOpen)
 
   const [createTaskOpen, setCreateTaskOpen] = useState(false)
 
@@ -212,7 +212,7 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
   const handleClose = () => {
     flushFields()
     flushObservations()
-    toggleContactPanel()
+    setContactPanelOpen(false)
   }
 
   const eligibleMembers = members?.filter((m) =>

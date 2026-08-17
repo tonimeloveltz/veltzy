@@ -103,7 +103,7 @@ const ImportLeadsModal = ({ open, onClose }: ImportLeadsModalProps) => {
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
-      <DialogContent className="max-h-[90vh] flex flex-col sm:max-w-2xl" onInteractOutside={(e) => isPending && e.preventDefault()}>
+      <DialogContent className="flex flex-col sm:max-w-2xl" onInteractOutside={(e) => isPending && e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>{STEP_TITLES[step]}</DialogTitle>
           <DialogDescription>

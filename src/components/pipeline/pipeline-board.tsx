@@ -1,10 +1,10 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
-import { cn } from '@/lib/utils'
 import {
   DndContext,
   DragOverlay,
   closestCorners,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   type DragStartEvent,
@@ -81,7 +81,13 @@ const PipelineBoard = () => {
   }, [transferDealId, deals])
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+    // Sensores separados por tipo de entrada. O PointerSensor unico nao
+    // funcionava em touch: sem `touch-action: none` o navegador reivindica
+    // o gesto e dispara pointercancel, abortando o arraste. E `touch-action:
+    // none` esta fora de questao porque mataria a rolagem do track e das
+    // colunas. O `delay` resolve sem CSS: mover o dedo rola, segurar arrasta.
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
   )
 
   const filteredDeals = useMemo(() => {
@@ -245,7 +251,7 @@ const PipelineBoard = () => {
 
   return (
     <div className="relative flex flex-col h-full animate-fade-in">
-      <div className="shrink-0 p-6 pb-4 space-y-3">
+      <div className="shrink-0 p-4 pb-3 sm:p-6 sm:pb-4 space-y-3">
         {pipelines && activePipelineId && (
           <PipelineSelector
             pipelines={pipelines}
@@ -264,7 +270,7 @@ const PipelineBoard = () => {
       </div>
 
       {orphanedCount > 0 && (
-        <div className="mx-6 mb-2 flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
+        <div className="mx-4 sm:mx-6 mb-2 flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <span>{orphanedCount} negocio{orphanedCount > 1 ? 's' : ''} sem etapa definida (invisive{orphanedCount > 1 ? 'is' : 'l'} no board). Mova-os para uma etapa pelo painel admin.</span>
         </div>
@@ -276,13 +282,10 @@ const PipelineBoard = () => {
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className={cn(
-          'flex-1 flex gap-4 overflow-x-auto overflow-y-hidden px-6 pb-4 transition-opacity duration-200',
-          isRefetching && 'opacity-50 pointer-events-none'
-        )}>
+        <div className="flex-1 min-h-0 flex gap-4 overflow-x-auto overflow-y-hidden px-4 sm:px-6 pb-4">
           {/* Coluna especial: Sem dono (pending_assignment) */}
           {pendingDeals.length > 0 && (
-            <div className="flex w-[300px] min-w-[280px] max-w-[320px] flex-shrink-0 flex-col h-full">
+            <div className="flex w-[300px] min-w-[280px] max-w-[320px] flex-shrink-0 flex-col h-full min-h-0">
               <div
                 className="mb-2 rounded-t-xl px-3 py-2.5"
                 style={{
@@ -302,7 +305,7 @@ const PipelineBoard = () => {
                   </span>
                 </div>
               </div>
-              <div className="kanban-column flex-1 space-y-2 rounded-xl p-2 overflow-y-auto scrollbar-minimal">
+              <div className="kanban-column flex-1 min-h-0 space-y-2 rounded-xl p-2 overflow-y-auto scrollbar-minimal">
                 {pendingDeals.map((deal) => (
                   <DealCard key={deal.id} deal={deal} onEditDeal={handleEditDeal} onTransfer={setTransferDealId} onMovePipeline={setMovePipelineDeal} onCreateDeal={handleCreateDeal} fireOnly={fireOnly} />
                 ))}
@@ -335,7 +338,7 @@ const PipelineBoard = () => {
           </div>
         )}
 
-        <DragOverlay>
+        <DragOverlay dropAnimation={null}>
           {activeDeal ? (
             <div className="w-[280px] rotate-2 scale-105 opacity-90 shadow-2xl">
               <DealCard deal={activeDeal} fireOnly={fireOnly} />

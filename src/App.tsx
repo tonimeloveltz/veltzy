@@ -35,7 +35,11 @@ const queryClient = new QueryClient({
     queries: {
       staleTime: 5 * 60 * 1000,
       gcTime: 10 * 60 * 1000,
-      refetchOnWindowFocus: true,
+      // Desligado: voltar para a aba nao deve refazer query nenhuma. As duas
+      // superficies que precisam de dado vivo (mensagens do inbox e deals do
+      // kanban) tem realtime do Supabase, e as demais revalidam ao navegar,
+      // porque refetchOnMount segue ligado.
+      refetchOnWindowFocus: false,
       retry: 1,
     },
   },
@@ -88,15 +92,18 @@ const App = () => {
                 <Route path="/" element={<DashboardPage />} />
                 <Route path="/pipeline" element={<PipelinePage />} />
                 <Route path="/inbox" element={<InboxPage />} />
+                <Route path="/inbox/:leadId" element={<InboxPage />} />
                 <Route path="/tarefas" element={<TarefasPage />} />
                 <Route path="/deals" element={<DealsPage />} />
                 <Route path="/contatos" element={<ContatosPage />} />
                 <Route path="/gestao" element={<ProtectedRoute requireRole={['manager', 'admin', 'super_admin']}><GestaoPage /></ProtectedRoute>} />
+                {/* Aliases legados mantidos de proposito: preservam links salvos/bookmarks antigos. Nao remover. */}
                 <Route path="/sellers" element={<Navigate to="/gestao?tab=vendedores" replace />} />
                 <Route path="/settings" element={<Navigate to="/minha-conta" replace />} />
                 <Route path="/minha-conta" element={<MinhaContaPage />} />
-                <Route path="/sdr-ia" element={<ProtectedRoute requireRole={['admin', 'manager', 'super_admin']}><SdrIaPage /></ProtectedRoute>} />
+                <Route path="/sdr-ia" element={<ProtectedRoute requireRole={['admin', 'manager', 'super_admin']} requireFeature="sdr_agent_v2"><SdrIaPage /></ProtectedRoute>} />
                 <Route path="/admin" element={<ProtectedRoute requireRole={['admin', 'super_admin']}><AdminPage /></ProtectedRoute>} />
+                {/* Alias legado mantido de proposito (ver bloco de aliases acima): protege links antigos para /company. */}
                 <Route path="/company" element={<Navigate to="/admin?tab=empresa" replace />} />
                 <Route path="/super-admin" element={<ProtectedRoute requireRole={['super_admin']}><SuperAdminPage /></ProtectedRoute>} />
               </Route>

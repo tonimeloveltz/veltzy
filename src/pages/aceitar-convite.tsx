@@ -128,7 +128,7 @@ const AceitarConvitePage = () => {
 
       const { data: pendingInvite, error: inviteError } = await supabase
         .from('invitations')
-        .select('*, companies(name)')
+        .select('*')
         .eq('email', userEmail)
         .eq('status', 'pending')
         .gt('expires_at', new Date().toISOString())
@@ -146,9 +146,8 @@ const AceitarConvitePage = () => {
       }
 
       // Encontrou convite — mostra formulário para criar senha
-      const inviteCompanyName = (pendingInvite.companies as unknown as { name: string })?.name ?? ''
       setInvite(pendingInvite)
-      setCompanyName(inviteCompanyName)
+      setCompanyName(pendingInvite.company_name ?? '')
       setState('needs_register')
     } catch (err) {
       console.error('[Convite] Erro:', err)
@@ -162,7 +161,7 @@ const AceitarConvitePage = () => {
 
     const { data, error } = await supabase
       .from('invitations')
-      .select('*, companies(name)')
+      .select('*')
       .eq('token', t)
       .single()
 
@@ -198,7 +197,7 @@ const AceitarConvitePage = () => {
     localStorage.setItem('pending_invite_token', t)
 
     setInvite(data)
-    setCompanyName((data.companies as unknown as { name: string })?.name ?? '')
+    setCompanyName(data.company_name ?? '')
 
     if (user) {
       setState('valid')
@@ -393,7 +392,7 @@ const AceitarConvitePage = () => {
 
   if (state === 'loading') {
     return (
-      <div className="flex h-screen items-center justify-center">
+      <div className="flex h-dvh items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     )
@@ -401,7 +400,7 @@ const AceitarConvitePage = () => {
 
   if (state === 'invalid' || state === 'expired') {
     return (
-      <div className="flex h-screen items-center justify-center p-4">
+      <div className="flex h-dvh items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <XCircle className="mx-auto h-12 w-12 text-destructive" />
@@ -426,7 +425,7 @@ const AceitarConvitePage = () => {
 
   if (state === 'accepted') {
     return (
-      <div className="flex h-screen items-center justify-center p-4">
+      <div className="flex h-dvh items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <CheckCircle2 className="mx-auto h-12 w-12 text-green-500" />
@@ -450,7 +449,7 @@ const AceitarConvitePage = () => {
 
   if (state === 'valid' || state === 'accepting') {
     return (
-      <div className="flex h-screen items-center justify-center p-4">
+      <div className="flex h-dvh items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <CardTitle>Aceitar convite</CardTitle>
@@ -458,7 +457,7 @@ const AceitarConvitePage = () => {
               Você foi convidado para {companyName} como <strong>{roleLabels[invite?.role ?? ''] ?? invite?.role}</strong>
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex justify-center gap-3">
+          <CardContent className="flex flex-wrap justify-center gap-3">
             <Button variant="outline" onClick={() => navigate('/auth')}>
               Cancelar
             </Button>
@@ -498,7 +497,7 @@ const AceitarConvitePage = () => {
 
   if (state === 'needs_login') {
     return (
-      <div className="ambient-bg flex min-h-screen items-center justify-center p-4">
+      <div className="ambient-bg flex min-h-dvh items-center justify-center p-4">
         <div className="w-full max-w-md animate-fade-in">
           {inviteHeader}
           <Card className="glass-card">
@@ -543,7 +542,7 @@ const AceitarConvitePage = () => {
 
   // needs_register
   return (
-    <div className="ambient-bg flex min-h-screen items-center justify-center p-4">
+    <div className="ambient-bg flex min-h-dvh items-center justify-center p-4">
       <div className="w-full max-w-md animate-fade-in">
         {inviteHeader}
         <Card className="glass-card">

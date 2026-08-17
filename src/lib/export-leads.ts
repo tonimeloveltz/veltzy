@@ -3,12 +3,22 @@ import { conversationStatusLabels, dealStatusConfig, leadTemperatureConfig } fro
 import type { ConversationStatus, LeadWithDetails, DealStatus } from '@/types/database'
 
 /**
- * Lead para export com o negocio representativo anexado. value/status do CSV
- * vem do deal (nao mais de leads.deal_value/leads.status). Lead sem deal:
- * campos ficam vazios.
+ * Lead para export com o negocio representativo anexado. value/status/pipeline
+ * do CSV vem do deal (nao mais de colunas de `leads`). Lead sem deal: campos
+ * ficam vazios.
+ *
+ * `pipeline_name` entrou na Onda 4 pelo mesmo motivo que `stage_name` entrou na
+ * Onda 2: a coluna saiu de `leads` e o nome passa a vir do negocio. Ele fica no
+ * MESMO objeto `deal` de proposito, para que Valor, Pipeline, Etapa e Status da
+ * linha descrevam todos o mesmo negocio.
  */
 export type ExportLeadRow = LeadWithDetails & {
-  deal?: { value: number | null; status: DealStatus } | null
+  deal?: {
+    value: number | null
+    status: DealStatus
+    stage_name?: string | null
+    pipeline_name?: string | null
+  } | null
 }
 
 // Status e temperatura saem traduzidos, mas a linha exportada e montada tambem
@@ -29,8 +39,8 @@ const getLeadRows = (leads: ExportLeadRow[]) => //recebe leads - dealsasleads aq
     l.phone,
     l.email ?? '',
     l.deal?.value != null ? l.deal.value.toString() : '',
-    l.pipelines?.name ?? '',
-    l.pipeline_stages?.name ?? '',
+    l.deal?.pipeline_name ?? '',
+    l.deal?.stage_name ?? '',
     statusLabel(l.deal?.status),
     temperatureLabel(l.temperature),
     l.profiles?.name ?? '',
@@ -129,8 +139,8 @@ export const exportToPdf = async (leads: ExportLeadRow[], filename = 'leads.pdf'
     l.phone,
     l.email ?? '-',
     l.deal?.value ? `R$ ${l.deal.value.toLocaleString('pt-BR')}` : '-',
-    l.pipelines?.name ?? '-',
-    l.pipeline_stages?.name ?? '-',
+    l.deal?.pipeline_name ?? '-',
+    l.deal?.stage_name ?? '-',
     statusLabel(l.deal?.status) || '-',
     temperatureLabel(l.temperature) || '-',
     l.profiles?.name ?? '-',

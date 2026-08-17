@@ -16,7 +16,6 @@ import {
 import { LeadTagsInput } from '@/components/pipeline/lead-tags-input'
 import { useCreateContact, type ContactRow } from '@/hooks/use-contacts'
 import { useUpdateLead } from '@/hooks/use-leads'
-import { usePipelines, useDefaultPipeline } from '@/hooks/use-pipelines'
 import { useLeadSources } from '@/hooks/use-lead-sources'
 import { useTeamMembers } from '@/hooks/use-team'
 import { isValidPhoneBR, PHONE_ERROR_MSG } from '@/lib/phone'
@@ -58,8 +57,6 @@ const NewContactModal = ({ open, onClose, onCreated, contact }: NewContactModalP
   const isEdit = !!contact
   const createContact = useCreateContact()
   const updateLead = useUpdateLead()
-  const { data: pipelines } = usePipelines()
-  const { data: defaultPipeline } = useDefaultPipeline()
   const { data: sources } = useLeadSources()
   const { data: members } = useTeamMembers()
 
@@ -68,12 +65,6 @@ const NewContactModal = ({ open, onClose, onCreated, contact }: NewContactModalP
     () => sources?.find((s) => s.slug === 'manual'),
     [sources],
   )
-
-  // pipeline_id e NOT NULL (ate a Fase 4): usa o pipeline default, ou o primeiro.
-  const resolvedPipelineId = defaultPipeline?.id
-    ?? pipelines?.find((p) => p.is_default)?.id
-    ?? pipelines?.[0]?.id
-    ?? ''
 
   const { register, handleSubmit, control, reset, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -140,10 +131,9 @@ const NewContactModal = ({ open, onClose, onCreated, contact }: NewContactModalP
       observations: values.observations || undefined,
       instagram_handle: values.instagram_handle || undefined,
       linkedin_url: values.linkedin_url || undefined,
-      pipeline_id: resolvedPipelineId,
-      // stage_id e exigido pelo tipo, mas createLead nao grava negocio em leads
-      // (coluna nullable). Contato puro nasce sem stage/negocio.
-      stage_id: '',
+      // Sem `pipeline_id`: contato puro nao tem negocio, entao nao depende de
+      // funil. A instancia de WhatsApp cai no fallback da primeira conectada da
+      // empresa, que ja era o comportamento de pipeline sem `sdr_instance_name`.
     }
     const lead = await createContact.mutateAsync(input)
     onCreated?.(lead)
@@ -151,12 +141,9 @@ const NewContactModal = ({ open, onClose, onCreated, contact }: NewContactModalP
     onClose()
   }
 
-  // noPipeline so bloqueia o create (edit nao cria negocio nem depende de pipeline).
-  const noPipeline = !isEdit && !resolvedPipelineId
-
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{isEdit ? 'Editar Contato' : 'Novo Contato'}</DialogTitle>
           <DialogDescription>
@@ -167,12 +154,6 @@ const NewContactModal = ({ open, onClose, onCreated, contact }: NewContactModalP
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          {noPipeline && (
-            <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
-              Nenhum pipeline disponivel para vincular o contato. Crie um pipeline primeiro.
-            </div>
-          )}
-
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Nome *</Label>
@@ -283,7 +264,7 @@ const NewContactModal = ({ open, onClose, onCreated, contact }: NewContactModalP
 
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
-            <Button type="submit" disabled={createContact.isPending || updateLead.isPending || noPipeline}>
+            <Button type="submit" disabled={createContact.isPending || updateLead.isPending}>
               {(createContact.isPending || updateLead.isPending) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {isEdit ? 'Salvar' : 'Criar Contato'}
             </Button>

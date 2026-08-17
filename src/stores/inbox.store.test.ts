@@ -3,21 +3,19 @@ import { useInboxStore } from './inbox.store'
 
 describe('inbox.store - contactPanel', () => {
   beforeEach(() => {
-    useInboxStore.setState({ contactPanelOpen: false, selectedLeadId: null })
+    useInboxStore.setState({ contactPanelOpen: null })
   })
 
-  it('contactPanelOpen default depende do viewport', () => {
-    // O store inicializa com window.matchMedia check
-    // No jsdom, window.innerWidth = 1024 por default, então < 1280 = false
-    // Aqui testamos o comportamento funcional após setState
-    expect(useInboxStore.getState().contactPanelOpen).toBe(false)
+  it('contactPanelOpen inicia como null (segue o viewport)', () => {
+    useInboxStore.setState({ contactPanelOpen: null })
+    expect(useInboxStore.getState().contactPanelOpen).toBeNull()
   })
 
-  it('toggleContactPanel alterna aberto/fechado', () => {
+  it('toggleContactPanel inverte o valor efetivo recebido', () => {
     const { toggleContactPanel } = useInboxStore.getState()
-    toggleContactPanel()
+    toggleContactPanel(false)
     expect(useInboxStore.getState().contactPanelOpen).toBe(true)
-    toggleContactPanel()
+    toggleContactPanel(true)
     expect(useInboxStore.getState().contactPanelOpen).toBe(false)
   })
 

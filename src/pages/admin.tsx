@@ -39,10 +39,10 @@ const EmpresaTab = () => {
 
 const AdminPage = () => {
   const [searchParams, setSearchParams] = useSearchParams()
-  const tab = searchParams.get('tab') ?? 'regras'
+  const tab = searchParams.get('tab') ?? 'integracoes'
 
   return (
-    <div className="space-y-6 animate-fade-in p-6">
+    <div className="space-y-6 animate-fade-in p-4 sm:p-6">
       <h1 className="text-2xl font-bold">Admin</h1>
 
       <Tabs value={tab} onValueChange={(v) => setSearchParams({ tab: v })}>
@@ -52,7 +52,7 @@ const AdminPage = () => {
           <TabsTrigger value="regras">Regras</TabsTrigger>
           <TabsTrigger value="empresa">Empresa</TabsTrigger>
           <TabsTrigger value="aparencia">Aparência</TabsTrigger>
-          <TabsTrigger value="logs-avancados">Logs avançados</TabsTrigger>
+          <TabsTrigger value="logs-avancados">Logs</TabsTrigger>
         </TabsList>
         <TabsContent value="integracoes" className="mt-4"><IntegrationsTab /></TabsContent>
         <TabsContent value="pipeline" className="mt-4"><PipelineTab /></TabsContent>

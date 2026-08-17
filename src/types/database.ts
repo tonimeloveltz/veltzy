@@ -1,5 +1,4 @@
 export type AppRole = 'super_admin' | 'admin' | 'manager' | 'seller' | 'representative'
-export type LeadStatus = 'new' | 'qualifying' | 'open' | 'deal' | 'lost' | 'archived'
 export type LeadTemperature = 'cold' | 'warm' | 'hot' | 'fire'
 export type SenderType = 'ai' | 'human' | 'lead' | 'internal'
 export type ConversationStatus = 'unread' | 'read' | 'replied' | 'waiting_client' | 'waiting_internal' | 'resolved'
@@ -98,6 +97,8 @@ export interface Invitation {
   expires_at: string
   accepted_at: string | null
   created_at: string
+  // Desnormalizado no momento do convite. Null nos convites criados antes da adição da coluna.
+  company_name: string | null
 }
 
 export type TransferRequestType = 'duplicate_conflict' | 'queue_transfer' | 'manual_transfer'
@@ -217,15 +218,12 @@ export interface AdContext {
 export interface Lead {
   id: string
   company_id: string
-  pipeline_id: string
   name: string | null
   phone: string
   email: string | null
   instagram_id: string | null
   linkedin_id: string | null
   source_id: string | null
-  stage_id: string
-  status: LeadStatus
   temperature: LeadTemperature
   ai_score: number
   assigned_to: string | null
@@ -233,11 +231,11 @@ export interface Lead {
   is_queued: boolean
   conversation_status: ConversationStatus
   tags: string[]
-  deal_value: number | null
   observations: string | null
   avatar_url: string | null
   ad_context: AdContext | null
   whatsapp_instance_name: string | null
+  cloud_api_number_id: string | null
   company_name: string | null
   transfer_summary: string | null
   last_customer_message_at: string | null
@@ -249,11 +247,13 @@ export interface Lead {
   updated_at: string
 }
 
+// Sem `pipelines`: o embed saiu do LEAD_WITH_DETAILS_SELECT na Onda 4. Manter o
+// campo no tipo faria os leitores compilarem limpo e a coluna sair vazia em
+// silencio, que foi o erro que a Onda 2 custou caro.
 export interface LeadWithDetails extends Lead {
   profiles?: Partial<Profile> | null
   lead_sources?: LeadSourceRecord | null
   pipeline_stages?: PipelineStage | null
-  pipelines?: Pipeline | null
 }
 
 export interface CreateLeadInput {
@@ -262,16 +262,21 @@ export interface CreateLeadInput {
   email?: string
   company_name?: string
   source_id?: string
-  stage_id: string
-  pipeline_id: string
+  /**
+   * NAO e coluna de `leads` (removida na Onda 4). Continua aqui como contexto da
+   * chamada: `createLead` usa este valor para resolver `whatsapp_instance_name`
+   * pelo `sdr_instance_name` do pipeline. Opcional porque o cadastro manual de
+   * contato nao depende mais de funil.
+   */
+  pipeline_id?: string
   temperature?: LeadTemperature
-  deal_value?: number
   observations?: string
   assigned_to?: string
   tags?: string[]
   instagram_handle?: string
   linkedin_url?: string
   whatsapp_instance_name?: string | null
+  cloud_api_number_id?: string | null
 }
 
 export interface UpdateLeadInput {
@@ -419,7 +424,19 @@ export interface ReplyTemplate {
   updated_at: string
 }
 
-export interface LeadWithLastMessage extends Omit<Lead, 'stage_id' | 'status' | 'deal_value'> {
+export interface Product {
+  id: string
+  company_id: string
+  name: string
+  description: string | null
+  link: string | null
+  category: string
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface LeadWithLastMessage extends Lead {
   profiles?: Partial<Profile> | null
   lead_sources?: LeadSourceRecord | null
   last_message?: Pick<Message, 'content' | 'sender_type' | 'created_at' | 'message_type'> | null
@@ -503,6 +520,7 @@ export interface CompanyInvite {
   expires_at: string
   accepted_at: string | null
   created_at: string
+  company_name: string | null
 }
 
 export interface ProfileWithRole extends Profile {

@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Loader2, Trash2, UserPlus, ArrowRight, User, MessageSquare, Plus, CheckSquare, Phone, Video, MessageCircle as FollowUpIcon, Check, UserRoundPen } from 'lucide-react'
+import { Loader2, Trash2, Plus, CheckSquare, Phone, Video, MessageCircle as FollowUpIcon, Check, UserRoundPen } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
@@ -22,11 +22,11 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { LeadTagsInput } from '@/components/pipeline/lead-tags-input'
+import { DealTimeline } from '@/components/pipeline/deal-timeline'
 import { useUpdateLead, useDeleteLead } from '@/hooks/use-leads'
 import { useDealsByLead, useUpdateDeal, useAssignDeal, useDeleteDeal } from '@/hooks/use-deals'
 import { usePipelineStages } from '@/hooks/use-pipeline-stages'
 import { useLeadSources } from '@/hooks/use-lead-sources'
-import { useLeadActivityLogs } from '@/hooks/use-activity-logs'
 import { useTeamMembers } from '@/hooks/use-team'
 import { useRoles } from '@/hooks/use-roles'
 import { triggerCelebration } from '@/lib/celebration'
@@ -34,7 +34,7 @@ import { isValidPhoneBR, PHONE_ERROR_MSG } from '@/lib/phone'
 import { useLeadTasks, useCompleteTask } from '@/hooks/use-tasks'
 import { CreateTaskModal } from '@/components/tarefas/create-task-modal'
 import { leadTemperatureConfig } from '@/lib/lead-config'
-import type { LeadWithDetails, ActivityLog, TaskType, UpdateLeadInput } from '@/types/database'
+import type { LeadWithDetails, TaskType, UpdateLeadInput } from '@/types/database'
 
 const schema = z.object({
   // Contato
@@ -72,9 +72,12 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
   const deleteLead = useDeleteLead()
   const deleteDeal = useDeleteDeal()
   const assignDeal = useAssignDeal()
-  const { data: deals } = useDealsByLead(lead?.id)
+  const { data: deals, isError: dealsError } = useDealsByLead(lead?.id)
   const activeDeal = dealId ? deals?.find((d) => d.id === dealId) : deals?.[0]
-  const { data: stages } = usePipelineStages(activeDeal?.pipeline_id ?? lead?.pipeline_id)
+  // Sem fallback para o contato: o pipeline saiu de `leads` na Onda 4. Contato
+  // sem negocio fica sem etapas para escolher, que e o correto - oferecer as
+  // etapas de um pipeline que ele nao tem seria pior.
+  const { data: stages } = usePipelineStages(activeDeal?.pipeline_id)
   const { data: sources } = useLeadSources()
   const { data: members } = useTeamMembers()
   const { isAdmin, isManager } = useRoles()
@@ -82,12 +85,35 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
   const [pendingAssignTo, setPendingAssignTo] = useState<string | null>(null)
   const [deleteDealOpen, setDeleteDealOpen] = useState(false)
 
+  // `defaultValues` nao e opcional aqui: o DialogContent do Radix so monta
+  // quando `open` vira true, e com a guarda `dealsReady` abaixo isso acontece
+  // ANTES do primeiro reset. Sem default, `tags` chega `undefined` no
+  // LeadTagsInput, que faz `.map()` direto e derruba o modal.
+  //
+  // `stage_id: ''` esta aqui pelo mesmo motivo, por outro sintoma: sem ele o
+  // Select vai de `undefined` para uuid, ou seja uncontrolled -> controlled, e
+  // essa transicao deixa o campo sem texto ate o usuario interagir. Com `''` a
+  // transicao e controlled -> controlled.
   const { register, handleSubmit, control, reset, formState: { errors, dirtyFields } } = useForm<FormValues>({
     resolver: zodResolver(schema),
+    defaultValues: { tags: [], stage_id: '' },
   })
 
+  // So resetar quando os negocios ja chegaram. Sem isso ha dois resets: o
+  // primeiro com `deals` ainda undefined grava `stage_id: ''`, e o Select do
+  // Radix nasce sem value; quando o negocio chega, o trigger nao reavalia o
+  // texto e a Fase fica vazia ate abrir o dropdown. Na segunda abertura o cache
+  // esta quente (staleTime 30s em useDealsByLead) e o value ja nasce certo, que
+  // e por que o bug so aparecia na primeira vez.
+  //
+  // `dealsError` entra na guarda para a falha da query degradar em vez de
+  // travar: sem ele, rede caindo ou RLS negando deixa `deals` undefined para
+  // sempre e o form nunca reseta, abrindo em branco. Com ele, o contato aparece
+  // e so a parte de negocio fica vazia.
+  const dealsReady = deals !== undefined || dealsError
+
   useEffect(() => {
-    if (lead) {
+    if (lead && dealsReady) {
       setPendingAssignTo(null)
       setTransferOpen(false)
       setDeleteDealOpen(false)
@@ -104,17 +130,17 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
         instagram_handle: lead.instagram_handle ?? '',
         linkedin_url: lead.linkedin_url ?? '',
         deal_name: activeDeal?.name ?? '',
-        deal_value: activeDeal?.value ?? lead.deal_value ?? 0,
+        deal_value: activeDeal?.value ?? 0,
         deal_observations: activeDeal?.observations ?? '',
-        stage_id: activeDeal?.stage_id ?? lead.stage_id,
+        stage_id: activeDeal?.stage_id ?? '',
       })
     }
-  }, [lead, activeDeal, reset])
+  }, [lead, activeDeal, dealsReady, reset])
 
   const onSubmit = async (values: FormValues) => {
     if (!lead) return
 
-    const oldStageId = activeDeal?.stage_id ?? lead.stage_id
+    const oldStageId = activeDeal?.stage_id
     const newStageId = values.stage_id
 
     // Atualizar contato (so dados de pessoa). stage_id/deal_value vao para o
@@ -203,7 +229,7 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
   return (
     <>
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{lead.name || lead.phone}</DialogTitle>
           <DialogDescription>
@@ -212,10 +238,10 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
         </DialogHeader>
 
         <Tabs defaultValue="info" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="info">Informações</TabsTrigger>
-            <TabsTrigger value="tasks">Tarefas</TabsTrigger>
-            <TabsTrigger value="history">Histórico</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-3 h-auto">
+            <TabsTrigger value="info" className="px-2 text-xs sm:px-3 sm:text-sm">Informações</TabsTrigger>
+            <TabsTrigger value="tasks" className="px-2 text-xs sm:px-3 sm:text-sm">Tarefas</TabsTrigger>
+            <TabsTrigger value="history" className="px-2 text-xs sm:px-3 sm:text-sm">Histórico</TabsTrigger>
           </TabsList>
 
           <TabsContent value="info" className="mt-4">
@@ -499,7 +525,7 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
                   control={control}
                   name="tags"
                   render={({ field }) => (
-                    <LeadTagsInput value={field.value} onChange={field.onChange} />
+                    <LeadTagsInput value={field.value ?? []} onChange={field.onChange} />
                   )}
                 />
               </div>
@@ -534,7 +560,7 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
           </TabsContent>
 
           <TabsContent value="history" className="mt-4">
-            <LeadTimeline leadId={lead.id} stages={stages} />
+            <DealTimeline dealId={activeDeal?.id} leadId={lead.id} stages={stages} />
           </TabsContent>
         </Tabs>
       </DialogContent>
@@ -578,87 +604,6 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
       </AlertDialogContent>
     </AlertDialog>
     </>
-  )
-}
-
-const actionConfig: Record<string, { icon: typeof UserPlus; label: string }> = {
-  created: { icon: UserPlus, label: 'Lead criado' },
-  stage_changed: { icon: ArrowRight, label: 'Movido para' },
-  assigned: { icon: User, label: 'Atribuído a' },
-  message_sent: { icon: MessageSquare, label: 'Mensagem enviada' },
-}
-
-const formatActivityLabel = (log: ActivityLog, stages?: { id: string; name: string }[]) => {
-  const meta = log.metadata ?? {}
-  const config = actionConfig[log.action]
-  if (!config) return log.action
-
-  if (log.action === 'stage_changed' && meta.to_stage) {
-    const stageName = stages?.find((s) => s.id === meta.to_stage)?.name ?? 'outra fase'
-    return `${config.label} ${stageName}`
-  }
-  if (log.action === 'assigned' && meta.to) {
-    return `${config.label} ${(meta.to_name as string) ?? 'outro vendedor'}`
-  }
-  return config.label
-}
-
-const LeadTimeline = ({
-  leadId,
-  stages,
-}: {
-  leadId: string
-  stages?: { id: string; name: string }[]
-}) => {
-  const { data: logs, isLoading } = useLeadActivityLogs(leadId)
-
-  if (isLoading) {
-    return (
-      <div className="flex h-32 items-center justify-center">
-        <Loader2 className="h-5 w-5 animate-spin text-primary" />
-      </div>
-    )
-  }
-
-  if (!logs || logs.length === 0) {
-    return (
-      <div className="flex h-32 items-center justify-center rounded-lg border border-dashed">
-        <p className="text-sm text-muted-foreground">Nenhuma atividade registrada ainda</p>
-      </div>
-    )
-  }
-
-  return (
-    <div className="max-h-[40vh] overflow-y-auto space-y-0">
-      {logs.map((log, idx) => {
-        const config = actionConfig[log.action] ?? actionConfig.created
-        const Icon = config.icon
-        const isLast = idx === logs.length - 1
-
-        return (
-          <div key={log.id} className="flex gap-3">
-            <div className="flex flex-col items-center">
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                <Icon className="h-3.5 w-3.5 text-primary" />
-              </div>
-              {!isLast && <div className="w-px flex-1 bg-border/50" />}
-            </div>
-            <div className="pb-4 pt-0.5">
-              <p className="text-sm font-medium">{formatActivityLabel(log, stages)}</p>
-              <p className="text-xs text-muted-foreground">
-                {new Date(log.created_at).toLocaleString('pt-BR', {
-                  day: '2-digit',
-                  month: '2-digit',
-                  year: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </p>
-            </div>
-          </div>
-        )
-      })}
-    </div>
   )
 }
 

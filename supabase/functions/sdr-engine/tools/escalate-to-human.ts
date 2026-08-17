@@ -67,10 +67,10 @@ export const escalateToHumanTool: ToolDefinition = {
     const leadId = ctx.lead.id as string
     const companyId = ctx.companyId
 
-    // 1. Buscar lead completo (assigned_to, pipeline_id)
+    // 1. Buscar lead completo (assigned_to)
     const { data: leadFull } = await ctx.supabase
       .from('leads')
-      .select('assigned_to, pipeline_id, name, phone')
+      .select('assigned_to, name, phone')
       .eq('id', leadId)
       .single()
 
@@ -93,13 +93,19 @@ export const escalateToHumanTool: ToolDefinition = {
       }
     }
 
-    // 3. Buscar template de transferencia do pipeline
+    // 3. Buscar template de transferencia do pipeline.
+    //
+    // O pipeline vem do agent_profile, nao do contato: a coluna saiu de `leads`
+    // na Onda 4. O sdr-engine carregou este agent_profile filtrando justamente
+    // por `pipeline_id`, entao ele E o pipeline ja resolvido, sem leitura extra
+    // e sem reimplementar a regra.
+    const pipelineId = ctx.agentProfile.pipeline_id as string | undefined
     let transferTemplate = FALLBACK_TRANSFER_TEMPLATE
-    if (leadFull?.pipeline_id) {
+    if (pipelineId) {
       const { data: pipeline } = await ctx.supabase
         .from('pipelines')
         .select('sdr_transfer_message_template, sdr_instance_name')
-        .eq('id', leadFull.pipeline_id)
+        .eq('id', pipelineId)
         .single()
 
       if (pipeline?.sdr_transfer_message_template) {

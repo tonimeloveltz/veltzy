@@ -184,14 +184,6 @@ export const checkDuplicates = async (companyId: string, phones: string[]): Prom
   return new Set((data ?? []).map((d: { phone: string }) => d.phone))
 }
 
-const resolveStatusFromStage = (stageId: string, stages: PipelineStage[]): string => {
-  const stage = stages.find((s) => s.id === stageId)
-  if (!stage) return 'new'
-  if (stage.is_final && stage.is_positive) return 'deal'
-  if (stage.is_final && stage.is_positive === false) return 'lost'
-  return 'new'
-}
-
 // Status do deal espelhando o estagio do lead importado (consistente com o
 // backfill 054 e com createLeadWithDeal). Estagio final -> won/lost; senao open.
 const resolveDealStatusFromStage = (stageId: string, stages: PipelineStage[]): DealStatus => {
@@ -303,7 +295,6 @@ export const importLeads = async (
 
       const insertData: Record<string, unknown>[] = []
       for (const row of toInsert) {
-        const status = stages ? resolveStatusFromStage(row.stage_id, stages) : 'new'
         const instanceName = await resolveInstance(row.assigned_to, row.pipeline_id)
         const record: Record<string, unknown> = {
           company_id: companyId,
@@ -311,15 +302,11 @@ export const importLeads = async (
           phone: row.phone,
           email: row.email ?? null,
           source_id: row.source_id ?? null,
-          stage_id: row.stage_id,
-          status,
           temperature: row.temperature ?? 'cold',
-          deal_value: row.deal_value ?? null,
           observations: row.observations ?? null,
           tags: row.tags ?? [],
         }
         if (row.assigned_to) record.assigned_to = row.assigned_to
-        record.pipeline_id = row.pipeline_id
         if (instanceName) record.whatsapp_instance_name = instanceName
         insertData.push(record)
       }

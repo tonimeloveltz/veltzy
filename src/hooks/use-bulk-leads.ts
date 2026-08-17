@@ -48,32 +48,7 @@ export const useBulkTransferDeals = (onSuccess?: () => void) => {
   })
 }
 
-export const useBulkArchive = (onSuccess?: () => void) => {
-  const companyId = useAuthStore((s) => s.company?.id)
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async ({ leadIds }: { leadIds: string[] }) => {
-      if (!companyId) throw new Error('Empresa nao encontrada')
-      await leadsService.bulkArchive(companyId, leadIds)
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['dashboard-leads'] })
-      queryClient.invalidateQueries({ queryKey: ['leads'] })
-      toast.success('Leads arquivados com sucesso')
-      onSuccess?.()
-    },
-    onError: () => {
-      toast.error('Erro ao arquivar leads')
-    },
-  })
-}
-
-/**
- * Contraparte de useBulkArchive para a tela de Negocios: escreve em `deals`.
- * Existe separada (em vez de um parametro dentro do hook de leads) para seguir
- * o mesmo par useBulkTransfer / useBulkTransferDeals ja adotado no transfer.
- */
+/** Arquivamento em lote da tela de Negocios: escreve em `deals`. */
 export const useBulkArchiveDeals = (onSuccess?: () => void) => {
   const companyId = useAuthStore((s) => s.company?.id)
   const queryClient = useQueryClient()
@@ -138,27 +113,6 @@ export const useBulkDeleteDeals = (onSuccess?: () => void) => {
     },
     onError: () => {
       toast.error('Erro ao excluir negócios')
-    },
-  })
-}
-
-export const useBulkMovePipeline = (onSuccess?: () => void) => {
-  const companyId = useAuthStore((s) => s.company?.id)
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async ({ leadIds, targetPipelineId }: { leadIds: string[]; targetPipelineId: string }) => {
-      if (!companyId) throw new Error('Empresa nao encontrada')
-      await leadsService.bulkMoveToPipeline(companyId, leadIds, targetPipelineId)
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['dashboard-leads'] })
-      queryClient.invalidateQueries({ queryKey: ['leads'] })
-      toast.success('Leads movidos para o pipeline com sucesso')
-      onSuccess?.()
-    },
-    onError: () => {
-      toast.error('Erro ao mover leads de pipeline')
     },
   })
 }

@@ -15,7 +15,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 interface BusinessRules {
   // existing fields
   fallback_role: string
-  auto_reply_enabled: boolean
   fallback_lead_owner: string | null
   // new fields
   round_robin_enabled: boolean
@@ -37,7 +36,6 @@ interface BusinessRules {
 
 const defaults: BusinessRules = {
   fallback_role: 'admin',
-  auto_reply_enabled: false,
   fallback_lead_owner: null,
   round_robin_enabled: true,
   handover_enabled: true,
@@ -315,10 +313,6 @@ const BusinessRulesTab = () => {
           </div>
         </CardContent>
       </Card>
-
-      <p className="text-xs text-muted-foreground px-1">
-        A configuracao de Resposta Automatica esta disponivel em Gestao &gt; Auto-Reply.
-      </p>
     </div>
   )
 }

@@ -246,7 +246,7 @@ const CreateTaskModal = ({ open, onClose, defaultLeadId, defaultTitle }: CreateT
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) { reset(); onClose() } }}>
-      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-md">
         {step === 'form' ? (
           <>
             <DialogHeader>
@@ -267,7 +267,7 @@ const CreateTaskModal = ({ open, onClose, defaultLeadId, defaultTitle }: CreateT
                   control={control}
                   name="type"
                   render={({ field }) => (
-                    <div className="grid grid-cols-4 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       {typeOptions.map((opt) => (
                         <button
                           key={opt.value}
@@ -354,7 +354,7 @@ const CreateTaskModal = ({ open, onClose, defaultLeadId, defaultTitle }: CreateT
                 <div className="border-t pt-4 space-y-4">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Dados da reuniao</p>
 
-                  <div className="grid gap-4 grid-cols-2">
+                  <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label>Data e hora *</Label>
                       <Input type="datetime-local" {...register('meeting_date')} />

@@ -1,138 +1,9 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const TIMEOUT_MS = 30_000
-const PRODUCT = 'veltzy'
-const FEATURE = 'ai-copilot'
+import { HubClient, HubError } from '../_shared/hub-client.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
-
-const MODEL_PRICES: Record<string, { input: number; output: number }> = {
-  'gpt-4.1-nano': { input: 0.10 / 1_000_000, output: 0.40 / 1_000_000 },
-  'gpt-4.1-mini': { input: 0.40 / 1_000_000, output: 1.60 / 1_000_000 },
-  'gpt-4.1':      { input: 2.00 / 1_000_000, output: 8.00 / 1_000_000 },
-  'claude-sonnet-4-6':         { input: 3.00 / 1_000_000, output: 15.00 / 1_000_000 },
-  'claude-haiku-4-5-20251001': { input: 1.00 / 1_000_000, output: 5.00 / 1_000_000 },
-  'gemini-2.5-flash':  { input: 0.30 / 1_000_000, output: 2.50 / 1_000_000 },
-  'gemini-flash-lite': { input: 0.10 / 1_000_000, output: 0.40 / 1_000_000 },
-}
-
-interface CallAIResult {
-  text: string
-  tokensInput: number
-  tokensOutput: number
-}
-
-async function callProvider(
-  provider: string,
-  model: string,
-  messages: Array<{ role: string; content: string }>,
-  temperature = 0.7,
-): Promise<CallAIResult> {
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS)
-
-  try {
-    if (provider === 'openai') {
-      const res = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
-        },
-        body: JSON.stringify({
-          model,
-          messages,
-          temperature,
-          max_tokens: 500,
-          response_format: { type: 'json_object' },
-        }),
-        signal: controller.signal,
-      })
-      const data = await res.json()
-      return {
-        text: data.choices?.[0]?.message?.content ?? '{}',
-        tokensInput: data.usage?.prompt_tokens ?? 0,
-        tokensOutput: data.usage?.completion_tokens ?? 0,
-      }
-    }
-
-    if (provider === 'anthropic') {
-      const systemMsg = messages.find((m) => m.role === 'system')?.content ?? ''
-      const userMsgs = messages.filter((m) => m.role !== 'system')
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': Deno.env.get('ANTHROPIC_API_KEY')!,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({ model, max_tokens: 500, system: systemMsg, messages: userMsgs }),
-        signal: controller.signal,
-      })
-      const data = await res.json()
-      return {
-        text: data.content?.[0]?.text ?? '{}',
-        tokensInput: data.usage?.input_tokens ?? 0,
-        tokensOutput: data.usage?.output_tokens ?? 0,
-      }
-    }
-
-    throw new Error(`Provider nao suportado: ${provider}`)
-  } finally {
-    clearTimeout(timeoutId)
-  }
-}
-
-async function getModelConfig(
-  supabase: ReturnType<typeof createClient>,
-  feature: string,
-): Promise<{ provider: string; model: string }> {
-  const { data } = await supabase
-    .from('ai_model_config')
-    .select('provider, model')
-    .eq('product', PRODUCT)
-    .eq('feature', feature)
-    .eq('is_active', true)
-    .single()
-  if (!data) throw new Error(`Model config not found: ${PRODUCT}/${feature}`)
-  return data
-}
-
-async function logUsage(
-  supabase: ReturnType<typeof createClient>,
-  companyId: string,
-  feature: string,
-  provider: string,
-  model: string,
-  tokensInput: number,
-  tokensOutput: number,
-  metadata: Record<string, unknown>,
-) {
-  const prices = MODEL_PRICES[model] ?? { input: 0, output: 0 }
-  const custoUsd = tokensInput * prices.input + tokensOutput * prices.output
-
-  await supabase.from('ai_usage').insert({
-    company_id: companyId,
-    product: PRODUCT,
-    provider,
-    model,
-    tokens_input: tokensInput,
-    tokens_output: tokensOutput,
-    tokens_cached: 0,
-    custo_estimado_usd: custoUsd,
-    feature,
-    metadata,
-  })
-
-  await supabase.rpc('increment_ai_spend', {
-    p_company_id: companyId,
-    p_custo: custoUsd,
-  })
-
-  return custoUsd
 }
 
 interface NotificationInput {
@@ -196,25 +67,29 @@ Deno.serve(async (req) => {
       }
       const { data: staleLeads } = await staleQuery.limit(10)
 
-      // Deals em aberto (valor total + top por valor)
+      // Deals em aberto (valor total + top por valor). Le de `deals`: o valor e
+      // o status do negocio moram ali, nao mais espelhados em `leads`.
       let dealsQuery = supabase
-        .from('leads')
-        .select('id, name, phone, deal_value, updated_at')
+        .from('deals')
+        .select('id, value, updated_at, leads:lead_id(name, phone)')
         .eq('company_id', company_id)
-        .not('deal_value', 'is', null)
-        .eq('conversation_status', 'open')
-        .order('deal_value', { ascending: false })
+        .eq('status', 'open')
+        // `deals.value` e numeric DEFAULT 0: negocio sem valor vem 0, nao null.
+        // `.gt(0)` e o que replica o filtro antigo sobre `leads.deal_value`.
+        .gt('value', 0)
+        .order('value', { ascending: false })
       if (isSeller && user_profile_id) {
         dealsQuery = dealsQuery.eq('assigned_to', user_profile_id)
       }
-      const { data: openDeals } = await dealsQuery.limit(5)
+      const { data: openDeals, error: dealsError } = await dealsQuery.limit(5)
+      if (dealsError) console.error('[ai-copilot] deals em aberto:', dealsError.message)
 
-      const totalOpenValue = (openDeals ?? []).reduce((sum, d) => sum + (d.deal_value ?? 0), 0)
+      const totalOpenValue = (openDeals ?? []).reduce((sum, d) => sum + (d.value ?? 0), 0)
 
       // Top deals com dias sem atualizacao
       const topDealsInfo = (openDeals ?? []).slice(0, 3).map(d => {
         const daysAgo = Math.floor((now.getTime() - new Date(d.updated_at).getTime()) / (24 * 60 * 60 * 1000))
-        return `- ${d.name || d.phone} (ID: ${d.id}): R$ ${d.deal_value?.toFixed(2)} - ${daysAgo} dias sem atualizacao`
+        return `- ${d.leads?.name || d.leads?.phone} (ID: ${d.id}): R$ ${d.value?.toFixed(2)} - ${daysAgo} dias sem atualizacao`
       }).join('\n')
 
       // Leads hot/fire sem resposta hoje
@@ -285,26 +160,41 @@ Responda APENAS em JSON valido com esta estrutura exata:
 }
 Seja especifico: cite nomes, valores e prazos reais. Maximo 3 alertas e 3 acoes. Responda em portugues brasileiro com acentuacao correta (ex: situacao -> situação, acao -> ação, atencao -> atenção).`
 
-      // Consultar modelo configurado em ai_model_config
-      const supabasePublicForConfig = createClient(url, key)
-      const { provider, model } = await getModelConfig(supabasePublicForConfig, FEATURE)
+      // Toda IA passa pelo gateway do Hub (ai-complete): resolve o modelo pelo
+      // catalogo, roda check_ai_access e loga o custo. NAO resolver modelo, nem
+      // logar ai_usage, nem incrementar spend aqui — seria double-count de orcamento.
+      let hubResp
+      try {
+        const hub = new HubClient()
+        hubResp = await hub.complete({
+          company_id,
+          product: 'veltzy',
+          feature: 'ai_copilot',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: dataContext },
+          ],
+          temperature: 0.7,
+          max_tokens: 500,
+        })
+      } catch (err) {
+        // Gate do gateway: empresa sem IA habilitada (is_ai_enabled=false) ou
+        // limite estourado. Propaga 403 + { ok:false, error } para o front degradar.
+        if (err instanceof HubError && (err.code === 'TENANT_DISABLED' || err.code === 'LIMIT_EXCEEDED')) {
+          return new Response(
+            JSON.stringify({ ok: false, error: { code: err.code, message: err.message } }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          )
+        }
+        throw err
+      }
 
-      const aiResult = await callProvider(provider, model, [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: dataContext },
-      ], 0.7)
-
-      // Registrar uso
-      await logUsage(supabasePublicForConfig, company_id, FEATURE, provider, model, aiResult.tokensInput, aiResult.tokensOutput, {
-        user_profile_id,
-        role,
-      })
-
+      const content = hubResp.data?.content ?? '{}'
       let parsed
       try {
-        parsed = JSON.parse(aiResult.text)
+        parsed = JSON.parse(content)
       } catch {
-        parsed = { situacao: aiResult.text, alertas: [], acoes: [] }
+        parsed = { situacao: content, alertas: [], acoes: [] }
       }
 
       return new Response(JSON.stringify(parsed), {
@@ -391,37 +281,45 @@ Seja especifico: cite nomes, valores e prazos reais. Maximo 3 alertas e 3 acoes.
         })
       }
 
-      // 2. Leads quentes sem contato ha 3+ dias
-      const { data: hotLeads } = await supabase
-        .from('leads')
-        .select('id, name, phone, assigned_to, stage_id, pipeline_stages:stage_id(name)')
+      // 2. Leads quentes sem contato ha 3+ dias. A etapa mora no negocio, entao
+      // a query parte de `deals` com o contato embutido. O `!inner` nao e
+      // opcional: sem ele o filtro por `leads.temperature` nao exclui a linha
+      // pai, so zera o embed, e o bloco notificaria sobre contato frio.
+      const { data: hotDeals, error: hotDealsError } = await supabase
+        .from('deals')
+        .select('id, stage_id, assigned_to, lead_id, pipeline_stages:stage_id(name), leads:lead_id!inner(name, phone)')
         .eq('company_id', companyId)
-        .in('temperature', ['warm', 'hot', 'fire'])
+        .eq('status', 'open')
+        .in('leads.temperature', ['warm', 'hot', 'fire'])
         .not('assigned_to', 'is', null)
         .limit(100)
+      if (hotDealsError) console.error('[ai-copilot] leads quentes:', hotDealsError.message)
 
-      for (const lead of hotLeads ?? []) {
-        // Verificar ultima mensagem
+      for (const d of hotDeals ?? []) {
+        // A notificacao e sobre o CONTATO: `d.lead_id` alimenta a busca de
+        // mensagem, o dedup e o action_data. Trocar pelo id do negocio quebraria
+        // o hasDuplicate.
         const { data: lastMsg } = await supabase
           .from('messages')
           .select('created_at')
-          .eq('lead_id', lead.id)
+          .eq('lead_id', d.lead_id)
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle()
 
         if (lastMsg && lastMsg.created_at > threeDaysAgo) continue
-        if (await hasDuplicate(lead.id, null)) continue
+        if (await hasDuplicate(d.lead_id, null)) continue
 
         const { data: profile } = await supabasePublic
           .from('profiles')
           .select('user_id')
-          .eq('id', lead.assigned_to)
+          .eq('id', d.assigned_to)
           .single()
         if (!profile) continue
 
-        const stage = lead.pipeline_stages as { name: string } | null
-        const leadName = lead.name || lead.phone
+        const stage = d.pipeline_stages as { name: string } | null
+        const contact = d.leads as { name: string | null; phone: string } | null
+        const leadName = contact?.name || contact?.phone
         const daysAgo = lastMsg
           ? Math.floor((now.getTime() - new Date(lastMsg.created_at).getTime()) / (24 * 60 * 60 * 1000))
           : 'muitos'
@@ -431,7 +329,7 @@ Seja especifico: cite nomes, valores e prazos reais. Maximo 3 alertas e 3 acoes.
           type: 'copilot',
           title: 'Lead quente sem contato',
           body: `${leadName} esta em ${stage?.name ?? 'pipeline'} ha ${daysAgo} dias sem interacao.`,
-          action_data: { leadId: lead.id },
+          action_data: { leadId: d.lead_id },
         })
       }
 
@@ -524,6 +422,7 @@ Seja especifico: cite nomes, valores e prazos reais. Maximo 3 alertas e 3 acoes.
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     )
   } catch (err) {
+    console.error('[ai-copilot]', err)
     return new Response(
       JSON.stringify({ error: (err as Error).message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },

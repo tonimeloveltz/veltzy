@@ -17,6 +17,10 @@ export interface InboundParams {
   fileMimeType: string | null
   source: 'whatsapp' | 'instagram' | 'webhook'
   instanceName: string | null
+  /** Número Cloud API que originou a conversa (V2 multi-número). Carimba
+   *  leads.cloud_api_number_id para o outbound responder pelo número certo.
+   *  null para Evolution/Z-API. */
+  cloudApiNumberId?: string | null
   adContext: Record<string, unknown> | null
   /** Se true, tenta buscar foto de perfil via WhatsApp provider */
   fetchAvatar?: {
@@ -36,6 +40,22 @@ export interface InboundParams {
   utmCampaign?: string | null
   /** Se true, pula atribuicao imediata e coloca lead na fila (distribute-queue) */
   useQueue?: boolean
+  /** sender_type da mensagem gravada. Default 'lead' (o contato escreveu).
+   *  'human' = eco do dono pelo app (smb_message_echoes, coexistence);
+   *  'ai' reservado. */
+  senderType?: 'lead' | 'human' | 'ai'
+  /** Se true, pula os efeitos de engajamento automatico: criacao de deal,
+   *  SDR, automacoes e auto-reply. Usado por echoes/history da coexistence
+   *  (mensagens do proprio dono ou historicas): nao devem fazer a IA responder
+   *  nem gerar oportunidade/automacao. Default false (comportamento atual). */
+  skipSideEffects?: boolean
+  /** Se true, marca a mensagem como historica (is_history=true, coluna da
+   *  migration 070) — dump de history do onboarding coexistence. A chave
+   *  is_history so entra no INSERT quando true, entao mensagens normais nao
+   *  referenciam a coluna e o codigo NAO depende da 070 estar aplicada: sem a
+   *  migration, so a importacao de history falha, o inbound normal segue intacto.
+   *  O caller de history passa isHistory e skipSideEffects juntos. Default false. */
+  isHistory?: boolean
 }
 
 export interface InboundResult {
@@ -48,6 +68,10 @@ export interface InboundResult {
 export async function handleInboundMessage(params: InboundParams): Promise<InboundResult> {
   const supabase = createClient(params.supabaseUrl, params.supabaseKey, { db: { schema: 'veltzy' } })
   const supabasePublic = createClient(params.supabaseUrl, params.supabaseKey)
+
+  // Echoes (dono mandou pelo app) e history (dump) nao disparam engajamento
+  // automatico: sem deal novo, sem SDR, sem automacao, sem auto-reply.
+  const skipSideEffects = params.skipSideEffects ?? false
 
   // 0. Origem -> pipeline: resolver UMA vez (RF6, elimina o ponto duplo de decisao).
   //    source_id: webhook usa o override (params.sourceId); WhatsApp/IG resolve pelo slug 'whatsapp'.
@@ -75,7 +99,7 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
   // 1. Buscar lead existente
   let { data: lead } = await supabase
     .from('leads')
-    .select('id, assigned_to, avatar_url, name, whatsapp_instance_name')
+    .select('id, assigned_to, avatar_url, name, whatsapp_instance_name, cloud_api_number_id')
     .eq('company_id', params.companyId)
     .eq('phone', params.phone)
     .maybeSingle()
@@ -92,6 +116,15 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
       .eq('id', lead.id)
   }
 
+  // Carimbar o numero Cloud API de origem se veio e mudou (V2 multi-numero):
+  // o outbound (whatsapp-send) le leads.cloud_api_number_id para responder
+  // pelo numero certo. Espelha a logica de whatsapp_instance_name acima.
+  if (lead && params.cloudApiNumberId && lead.cloud_api_number_id !== params.cloudApiNumberId) {
+    await supabase.from('leads')
+      .update({ cloud_api_number_id: params.cloudApiNumberId })
+      .eq('id', lead.id)
+  }
+
   const isNewLead = !lead
 
   // 2. Criar lead se nao existe
@@ -103,8 +136,11 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
     throw new Error('Failed to create lead')
   }
 
-  // 2.5. Criar deal para o lead (novo ou existente)
-  await createDealForLead(supabase, supabasePublic, params, lead, isNewLead, resolved, origin)
+  // 2.5. Criar deal para o lead (novo ou existente).
+  // skipSideEffects (echoes/history): nao gerar oportunidade automatica.
+  if (!skipSideEffects) {
+    await createDealForLead(supabase, supabasePublic, params, lead, isNewLead, resolved, origin)
+  }
 
   // 3. Buscar avatar do WhatsApp (se solicitado e lead sem avatar)
   // Webhook: sem avatar (lead de formulario, nao tem WhatsApp profile)
@@ -159,7 +195,7 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
         lead_id: lead.id,
         company_id: params.companyId,
         content: params.content,
-        sender_type: 'lead',
+        sender_type: params.senderType ?? 'lead',
         message_type: params.messageType,
         file_url: params.fileUrl,
         file_name: params.fileName,
@@ -168,6 +204,9 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
         external_id: params.externalId,
         instance_name: params.instanceName,
         delivery_status: 'sent',
+        // is_history so entra quando historica (migration 070): mensagens
+        // normais nao referenciam a coluna -> deploy nao depende da 070.
+        ...(params.isHistory ? { is_history: true } : {}),
       }).select('id').single()
 
       // Race condition: unique violation entre check e insert → tratar como duplicata
@@ -213,34 +252,47 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
   }
 
   // 6. Transcricao de audio (async, nao bloqueia)
-  // Nota: transcricao usa fileUrl original (ainda valida neste momento)
+  // Roteada pela edge ai-transcribe do Hub, que detem a chave, decide acesso
+  // (check_ai_access) e loga o custo por empresa. Nota: usa fileUrl original
+  // (ainda valida neste momento).
   if ((params.messageType === 'audio') && params.fileUrl && savedMessage?.id) {
-    const openaiKey = Deno.env.get('OPENAI_API_KEY')
-    if (openaiKey) {
-      transcribeAudio(supabase, params.fileUrl, savedMessage.id, openaiKey)
-    }
+    transcribeAudio(
+      supabase,
+      params.supabaseUrl,
+      params.supabaseKey,
+      params.companyId,
+      lead.id,
+      params.fileUrl,
+      savedMessage.id,
+    )
   }
 
   // 7. Disparar SDR e automacoes (async, best-effort)
   const fnHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${params.supabaseKey}` }
 
-  // SDR dispatch: apenas para WhatsApp/Instagram (precisa de mensagem para responder)
-  if (params.source !== 'webhook') {
+  // SDR dispatch: apenas para WhatsApp/Instagram (precisa de mensagem para responder).
+  // skipSideEffects (echoes/history): nao acionar a IA (senao ela responde a
+  // propria mensagem do dono / mensagens antigas).
+  if (params.source !== 'webhook' && !skipSideEffects) {
     try {
       const { data: leadFull } = await supabase
         .from('leads')
-        .select('is_ai_active, pipeline_id')
+        .select('is_ai_active')
         .eq('id', lead.id)
         .single()
 
       if (leadFull?.is_ai_active) {
-        // Verificar se pipeline tem agent_profile v2 ativo
+        // Verificar se pipeline tem agent_profile v2 ativo.
+        //
+        // O pipeline vem de `resolved` (:97), nao mais do contato: a coluna saiu
+        // de `leads` na Onda 4. E o mesmo valor, ja resolvido uma vez por
+        // inbound, entao isso tambem economiza uma leitura de banco.
         let useV2 = false
-        if (leadFull.pipeline_id) {
+        if (resolved.pipelineId) {
           const { data: agentProfile } = await supabase
             .from('agent_profiles')
             .select('id, is_active')
-            .eq('pipeline_id', leadFull.pipeline_id)
+            .eq('pipeline_id', resolved.pipelineId)
             .maybeSingle()
 
           if (agentProfile?.is_active) {
@@ -265,7 +317,7 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
               companyId: params.companyId,
               messageContent: params.content,
               messageType: params.messageType,
-              pipelineId: leadFull.pipeline_id,
+              pipelineId: resolved.pipelineId,
               instanceName: params.instanceName,
             }),
           }).catch(() => {})
@@ -279,6 +331,10 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
               companyId: params.companyId,
               messageContent: params.content,
               conversationHistory: [],
+              // O sdr-ai nao le mais `leads.pipeline_id` (coluna removida na
+              // Onda 4): recebe o pipeline daqui. Este e o unico chamador do
+              // sdr-ai no repo, entao a mudanca e completa.
+              pipelineId: resolved.pipelineId,
             }),
           }).catch(() => {})
         }
@@ -286,22 +342,26 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
     } catch { /* best-effort */ }
   }
 
-  // Automacoes: dispara para TODOS os sources (webhook incluso)
-  try {
-    fetch(`${params.supabaseUrl}/functions/v1/run-automations`, {
-      method: 'POST',
-      headers: fnHeaders,
-      body: JSON.stringify({
-        trigger: isNewLead ? 'lead_created' : 'message_received',
-        leadId: lead.id,
-        companyId: params.companyId,
-        triggerData: { messageContent: params.content, source: params.source },
-      }),
-    }).catch(() => {})
-  } catch { /* best-effort */ }
+  // Automacoes: dispara para TODOS os sources (webhook incluso).
+  // skipSideEffects (echoes/history): nao disparar automacao.
+  if (!skipSideEffects) {
+    try {
+      fetch(`${params.supabaseUrl}/functions/v1/run-automations`, {
+        method: 'POST',
+        headers: fnHeaders,
+        body: JSON.stringify({
+          trigger: isNewLead ? 'lead_created' : 'message_received',
+          leadId: lead.id,
+          companyId: params.companyId,
+          triggerData: { messageContent: params.content, source: params.source },
+        }),
+      }).catch(() => {})
+    } catch { /* best-effort */ }
+  }
 
-  // 8. Auto-reply fora do horario (apenas para leads novos de WhatsApp/Instagram)
-  if (params.source !== 'webhook' && isNewLead) {
+  // 8. Auto-reply fora do horario (apenas para leads novos de WhatsApp/Instagram).
+  // skipSideEffects (echoes/history): nao responder automaticamente.
+  if (params.source !== 'webhook' && isNewLead && !skipSideEffects) {
     await handleAutoReply(supabase, params, lead.id)
   }
 
@@ -316,10 +376,10 @@ async function createLead(
   params: InboundParams,
   resolved: ResolvedPipeline,
   sourceId: string | null,
-): Promise<{ id: string; assigned_to: string | null; avatar_url: string | null; name: string | null; whatsapp_instance_name: string | null } | null> {
+): Promise<{ id: string; assigned_to: string | null; avatar_url: string | null; name: string | null; whatsapp_instance_name: string | null; cloud_api_number_id: string | null } | null> {
   // Pipeline e source_id ja resolvidos UMA vez no handler (RF6): sem calculo proprio aqui.
-  // leads.pipeline_id e NOT NULL (migration 027); createLead so roda para lead NOVO (D-3).
-  const pipelineId = resolved.pipelineId ?? undefined
+  // `resolved.pipelineId` nao e mais gravado no contato (Onda 4): ele vai para o
+  // negocio, em createDealForLead.
 
   // Atribuicao: webhook usa fila (distribute-queue), outros atribuem imediatamente
   let assignedTo: string | null = null
@@ -389,20 +449,20 @@ async function createLead(
   const { data: newLead } = await supabase
     .from('leads')
     .insert({
-      // Negocio fica em deals: createDealForLead (chamado depois) cria o deal e
-      // o espelho (trg_mirror_deal_to_lead) replica o stage de volta para o lead.
-      // pipeline_id permanece porque leads.pipeline_id e NOT NULL (migration 027).
+      // Negocio fica inteiro em deals: createDealForLead (chamado depois) cria o
+      // deal com o pipeline resolvido. Nenhum campo de negocio e gravado aqui,
+      // nem pipeline_id, que deixou de ser coluna de leads na Onda 4.
       company_id: params.companyId,
       phone: params.phone,
       name: params.senderName,
-      pipeline_id: pipelineId,
       source_id: sourceId,
       assigned_to: assignedTo,
       is_queued: !assignedTo,
       ad_context: params.adContext,
       whatsapp_instance_name: params.instanceName,
+      cloud_api_number_id: params.cloudApiNumberId ?? null,
     })
-    .select('id, assigned_to, avatar_url, name, whatsapp_instance_name')
+    .select('id, assigned_to, avatar_url, name, whatsapp_instance_name, cloud_api_number_id')
     .single()
 
   return newLead
@@ -557,11 +617,40 @@ function extensionFromMime(mime: string): string {
   return map[base] ?? base.split('/')[1]?.replace(/[^a-z0-9]/g, '') ?? 'bin'
 }
 
+export interface TranscribeGatewayResult {
+  ok?: boolean
+  data?: { text?: string; duration_seconds?: number; cost_usd?: number; model?: string }
+  error?: { code?: string; message?: string }
+}
+
+/**
+ * Decide, a partir da resposta da edge ai-transcribe, se atualiza a mensagem com
+ * o texto ou pula silenciosamente. Funcao pura (testavel sem a edge).
+ * - 403 (empresa sem acesso de IA) -> pula.
+ * - ok:false / corpo ausente -> pula.
+ * - ok:true com texto nao-vazio -> aplica.
+ */
+export function decideTranscriptionUpdate(
+  status: number,
+  body: TranscribeGatewayResult | null,
+): { apply: true; text: string } | { apply: false; reason: string } {
+  if (status === 403) return { apply: false, reason: 'no_access_403' }
+  if (!body || body.ok === false) return { apply: false, reason: 'gateway_not_ok' }
+  const text = body.data?.text
+  if (body.ok === true && typeof text === 'string' && text.trim().length > 0) {
+    return { apply: true, text }
+  }
+  return { apply: false, reason: 'empty_text' }
+}
+
 async function transcribeAudio(
   supabase: SupabaseClient,
+  supabaseUrl: string,
+  supabaseKey: string,
+  companyId: string,
+  leadId: string | null,
   audioUrl: string,
   messageId: string,
-  openaiKey: string,
 ): Promise<void> {
   try {
     const audioResponse = await fetch(audioUrl)
@@ -569,18 +658,27 @@ async function transcribeAudio(
 
     const formData = new FormData()
     formData.append('file', new Blob([audioBuffer], { type: 'audio/ogg' }), 'audio.ogg')
-    formData.append('model', 'whisper-1')
+    formData.append('company_id', companyId)
+    formData.append('product', 'veltzy')
+    formData.append('feature', 'audio_transcription')
     formData.append('language', 'pt')
+    // lead_id (opcional): rastreabilidade da linha em ai_usage no gateway.
+    if (leadId) formData.append('lead_id', leadId)
 
-    const whisperResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    // Edge->edge no padrao interno do Veltzy (Bearer service key). NAO setar
+    // Content-Type: o fetch define o boundary do multipart automaticamente.
+    const res = await fetch(`${supabaseUrl}/functions/v1/ai-transcribe`, {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${openaiKey}` },
+      headers: { 'Authorization': `Bearer ${supabaseKey}` },
       body: formData,
     })
 
-    const result = await whisperResponse.json()
-    if (result.text) {
-      await supabase.from('messages').update({ content: result.text }).eq('id', messageId)
+    const body = await res.json().catch(() => null) as TranscribeGatewayResult | null
+    const decision = decideTranscriptionUpdate(res.status, body)
+    if (decision.apply) {
+      await supabase.from('messages').update({ content: decision.text }).eq('id', messageId)
+    } else {
+      console.log(`Transcription skipped for message ${messageId}: ${decision.reason}`)
     }
   } catch (err) {
     console.error('Transcription failed:', err)

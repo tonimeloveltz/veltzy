@@ -50,29 +50,48 @@ export function useSalesPulse() {
     ? 'admin'
     : 'seller'
 
-  const query = useQuery<SalesPulseData>({
+  // Contrato hibrido: retorna SalesPulseData quando a empresa TEM acesso de IA e a
+  // edge respondeu com payload valido; retorna null em QUALQUER modo de falha
+  // (403 sem acesso, ok:false, 5xx, timeout, erro de rede/excecao). Nunca lanca —
+  // null sinaliza ao card para cair no fallback heuristico local. O card nunca quebra.
+  const query = useQuery<SalesPulseData | null>({
     queryKey: ['sales-pulse', company?.id],
     queryFn: async () => {
-      // Tenta cache primeiro
+      // Cache primeiro (staleTime 10min + sessionStorage por dia): segura custo por pageview.
       if (company?.id) {
         const cached = getFromCache(company.id)
         if (cached) return cached
       }
 
-      const { data, error } = await supabase.functions.invoke('ai-copilot', {
-        body: {
-          action: 'sales-pulse',
-          company_id: company?.id,
-          user_profile_id: profile?.id,
-          user_name: profile?.name,
-          role,
-        },
-      })
-      if (error) throw error
+      try {
+        // company_id = tenant dono (useAuthStore): e o que faz check_ai_access e o
+        // log de custo baterem por empresa no gateway. Nao trocar a fonte.
+        const { data, error } = await supabase.functions.invoke('ai-copilot', {
+          body: {
+            action: 'sales-pulse',
+            company_id: company?.id,
+            user_profile_id: profile?.id,
+            user_name: profile?.name,
+            role,
+          },
+        })
 
-      const result = data as SalesPulseData
-      if (company?.id) saveToCache(company.id, result)
-      return result
+        // Qualquer erro (403 do gate, 5xx) degrada para o fallback.
+        if (error) return null
+
+        // Defesa de shape: { ok:false } ou resposta sem 'situacao' tambem degrada.
+        const result = data as (Partial<SalesPulseData> & { ok?: boolean }) | null
+        if (!result || result.ok === false || typeof result.situacao !== 'string') {
+          return null
+        }
+
+        const pulse = result as SalesPulseData
+        if (company?.id) saveToCache(company.id, pulse)
+        return pulse
+      } catch {
+        // Erro de rede/excecao: degrada para o fallback, sem quebrar o card.
+        return null
+      }
     },
     enabled: !!company?.id,
     staleTime: 10 * 60 * 1000,

@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { BadgeCheck, QrCode, ArrowLeft, CheckCircle2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { useWhatsAppCategories } from '@/hooks/use-whatsapp-categories'
 import { useCloudApiConnection } from '@/hooks/use-cloud-api-connection'
 import {
@@ -12,16 +13,27 @@ import {
 } from '@/lib/whatsapp-categories'
 import { WhatsAppInstances } from './whatsapp-instances'
 import { WhatsAppEmbeddedSignup } from './whatsapp-embedded-signup'
+import { WhatsAppTemplatesManager } from './whatsapp-templates-manager'
 
 const CATEGORY_ICON: Record<WhatsAppCategoryKey, React.ComponentType<{ className?: string }>> = {
   official: BadgeCheck,
   qr_code: QrCode,
 }
 
-export const WhatsAppConnectChoice = () => {
+interface WhatsAppConnectChoiceProps {
+  // Notifica o container quando o canal esta em modo "gerenciar" (uma opcao aberta),
+  // pra ele esconder os outros cards de canal e nao vazarem embaixo da gestao.
+  onManagingChange?: (managing: boolean) => void
+}
+
+export const WhatsAppConnectChoice = ({ onManagingChange }: WhatsAppConnectChoiceProps = {}) => {
   const { data: categories, isLoading } = useWhatsAppCategories()
   const { connected: officialConnected } = useCloudApiConnection()
   const [selected, setSelected] = useState<WhatsAppCategoryKey | null>(null)
+
+  useEffect(() => {
+    onManagingChange?.(selected !== null)
+  }, [selected, onManagingChange])
 
   if (isLoading || !categories) {
     return <Skeleton className="h-40 w-full rounded-lg" />
@@ -40,7 +52,8 @@ export const WhatsAppConnectChoice = () => {
     )
   }
 
-  // Fluxo oficial selecionado: cadastro incorporado.
+  // Fluxo oficial selecionado: cadastro incorporado. Com o oficial ja conectado,
+  // separa em sub-abas Numeros / Templates; sem conexao, so o cadastro incorporado.
   if (selected === 'official') {
     return (
       <div className="space-y-3">
@@ -48,7 +61,22 @@ export const WhatsAppConnectChoice = () => {
           <ArrowLeft className="h-3.5 w-3.5" />
           Voltar
         </Button>
-        <WhatsAppEmbeddedSignup />
+        {officialConnected ? (
+          <Tabs defaultValue="numeros">
+            <TabsList>
+              <TabsTrigger value="numeros">Números</TabsTrigger>
+              <TabsTrigger value="templates">Templates</TabsTrigger>
+            </TabsList>
+            <TabsContent value="numeros" className="mt-3">
+              <WhatsAppEmbeddedSignup />
+            </TabsContent>
+            <TabsContent value="templates" className="mt-3">
+              <WhatsAppTemplatesManager />
+            </TabsContent>
+          </Tabs>
+        ) : (
+          <WhatsAppEmbeddedSignup />
+        )}
       </div>
     )
   }

@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { NavLink } from 'react-router-dom'
 import {
@@ -15,6 +16,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useIsMobile } from '@/hooks/use-mobile'
 import { useAuth } from '@/hooks/use-auth'
 import { useRoles } from '@/hooks/use-roles'
 import { useToggleAvailability } from '@/hooks/use-sellers'
@@ -24,6 +26,7 @@ import { useFeatureFlag } from '@/hooks/use-feature-flag'
 import { useThemeSettings } from '@/hooks/use-theme-settings'
 import { ThemeToggle } from '@/components/layout/theme-toggle'
 import { NotificationCenter } from '@/components/shared/notification-center'
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { Separator } from '@/components/ui/separator'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
@@ -50,7 +53,12 @@ const getInitials = (name: string | undefined) =>
     .slice(0, 2)
     .toUpperCase() ?? '?'
 
-const AppSidebar = () => {
+interface SidebarContentProps {
+  /** Sem handler (desktop) e no-op. No mobile, fecha o drawer ao navegar. */
+  onNavigate?: () => void
+}
+
+const SidebarContent = ({ onNavigate }: SidebarContentProps) => {
   const navigate = useNavigate()
   const { profile, company, signOut } = useAuth()
   const { canAccessGestao, canAccessAdmin, isSuperAdmin, isAdmin, isManager } = useRoles()
@@ -58,8 +66,6 @@ const AppSidebar = () => {
   const { data: members } = useTeamMembers()
   const { data: taskCounts } = useMyTaskCounts()
   const isSdrAgentV2 = useFeatureFlag('sdr_agent_v2')
-  const { data: themeSettings } = useThemeSettings()
-  const isGlassSidebar = themeSettings?.sidebar_style === 'glass'
 
   const available = profile?.is_available ?? false
   const onlineMembers = members?.filter((m) => {
@@ -70,6 +76,11 @@ const AppSidebar = () => {
     return lastSeen > twoMinutesAgo
   }) ?? []
 
+  // Os 6 primeiros itens (sem `visible`) sao a base de vendedor: aparecem para
+  // TODAS as roles, incluindo `seller` e `representative` (ver matriz em useRoles).
+  // O `representative` nao tem tratamento especial aqui de proposito: ve a base e e
+  // barrado dos itens gated por canAccessGestao/canAccessAdmin (false para ele), em
+  // vez de cair num fallback implicito. Nao recebe auto-distribuicao (regra no hook).
   const navItems: NavItem[] = [
     { label: 'Dashboard', href: '/', icon: LayoutDashboard },
     { label: 'Pipeline', href: '/pipeline', icon: Kanban },
@@ -86,12 +97,7 @@ const AppSidebar = () => {
   const initials = getInitials(profile?.name)
 
   return (
-    <aside
-      className={cn(
-        'flex h-screen w-64 flex-col border-r border-sidebar-border text-sidebar-foreground',
-        isGlassSidebar ? 'sidebar-glass' : 'bg-sidebar'
-      )}
-    >
+    <>
       <div className="flex items-center gap-3 px-4 py-5">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-sm shrink-0">
           {company?.name?.[0]?.toUpperCase() ?? 'V'}
@@ -115,6 +121,7 @@ const AppSidebar = () => {
             <NavLink
               key={item.href}
               to={item.href}
+              onClick={() => onNavigate?.()}
               className={({ isActive }) =>
                 cn(
                   'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-smooth',
@@ -222,7 +229,57 @@ const AppSidebar = () => {
           </TooltipContent>
         </Tooltip>
       </div>
-    </aside>
+    </>
+  )
+}
+
+interface AppSidebarProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}
+
+const AppSidebar = ({ open, onOpenChange }: AppSidebarProps) => {
+  const { data: themeSettings } = useThemeSettings()
+  const isGlassSidebar = themeSettings?.sidebar_style === 'glass'
+  // Mesma expressao do <aside>, para o drawer pintar identico ao desktop.
+  const surface = isGlassSidebar ? 'sidebar-glass' : 'bg-sidebar'
+
+  const isMobile = useIsMobile()
+
+  // Drawer aberto que sobrevive ao crescimento da janela deixaria a trava de
+  // scroll do body ativa no desktop.
+  useEffect(() => {
+    if (!isMobile && open) onOpenChange(false)
+  }, [isMobile, open, onOpenChange])
+
+  return (
+    <>
+      <aside
+        className={cn(
+          'hidden lg:flex h-screen w-64 flex-col border-r border-sidebar-border text-sidebar-foreground',
+          surface
+        )}
+      >
+        <SidebarContent />
+      </aside>
+
+      <Sheet open={open} onOpenChange={onOpenChange}>
+        {/* surface="none": nenhuma utility bg-* na string final, senao o
+            bg-background do variant venceria o .sidebar-glass (utilities e
+            emitido depois de components). O fundo vem so de `surface`. */}
+        <SheetContent
+          side="left"
+          surface="none"
+          className={cn(
+            'flex w-[280px] max-w-[85vw] flex-col gap-0 p-0 border-r border-sidebar-border text-sidebar-foreground lg:hidden',
+            surface
+          )}
+        >
+          <SheetTitle className="sr-only">Menu de navegação</SheetTitle>
+          <SidebarContent onNavigate={() => onOpenChange(false)} />
+        </SheetContent>
+      </Sheet>
+    </>
   )
 }
 

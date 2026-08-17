@@ -20,16 +20,9 @@ Deno.serve(async (req) => {
 
     const configs = await getAllConnectedConfigs(supabasePublic)
 
-    if (configs.length === 0) {
-      return new Response(
-        JSON.stringify({ ok: true, checked: 0 }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-      )
-    }
-
     const results: { companyId: string; oldStatus: string; newStatus: string }[] = []
 
-    for (const config of configs) {
+    for (const config of configs ?? []) {
       let newStatus: string = 'connected'
 
       try {
@@ -74,8 +67,43 @@ Deno.serve(async (req) => {
       }
     }
 
+    // --- Cobertura Cloud API (V5) ---
+    // cloud_api nao vive em oauth_integrations; "estar conectado" e existir >=1
+    // numero ativo em cloud_api_numbers (mesma verdade simples da V3). Derivacao
+    // sem chamada Graph pesada e sem depender das flags do onboard do Hub
+    // (subscribed_apps_ok/sync), que ainda nao existem no schema do Veltzy.
+    // Apuramos e reportamos o estado; a NOTIFICACAO de transicao fica como
+    // follow-up: nao ha onde persistir o status de saude por empresa, entao
+    // notificar a cada execucao viraria spam. Um sinal mais rico entra quando o
+    // Hub expuser subscribed_apps_ok/sync pro Veltzy.
+    const { data: cloudApiCompanies } = await supabasePublic
+      .from('companies')
+      .select('id')
+      .eq('active_whatsapp_provider', 'cloud_api')
+
+    const cloudApiResults: { companyId: string; activeNumbers: number; healthy: boolean }[] = []
+    for (const company of cloudApiCompanies ?? []) {
+      const { count } = await supabase
+        .from('cloud_api_numbers')
+        .select('id', { count: 'exact', head: true })
+        .eq('company_id', company.id)
+        .eq('status', 'active')
+
+      const activeNumbers = count ?? 0
+      const healthy = activeNumbers > 0
+      if (!healthy) {
+        console.warn(`[health] cloud_api company=${company.id} sem numero ativo`)
+      }
+      cloudApiResults.push({ companyId: company.id, activeNumbers, healthy })
+    }
+
     return new Response(
-      JSON.stringify({ ok: true, checked: configs.length, changed: results }),
+      JSON.stringify({
+        ok: true,
+        checked: (configs?.length ?? 0) + cloudApiResults.length,
+        changed: results,
+        cloudApi: cloudApiResults,
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     )
   } catch (err) {

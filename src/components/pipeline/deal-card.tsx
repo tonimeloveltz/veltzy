@@ -139,11 +139,6 @@ const DealCard = ({ deal, onEditDeal, onTransfer, onMovePipeline, onCreateDeal, 
                 {lead.phone}
               </p>
             )}
-            {lead?.whatsapp_instance_name && (
-              <span className="text-[9px] text-muted-foreground/60 bg-muted px-1 py-0.5 rounded shrink-0 w-fit">
-                ...{lead.whatsapp_instance_name.slice(-4)}
-              </span>
-            )}
           </div>
 
           <div className="flex flex-col items-center gap-1 shrink-0">
@@ -238,7 +233,7 @@ const DealCard = ({ deal, onEditDeal, onTransfer, onMovePipeline, onCreateDeal, 
             <button
               onClick={(e) => {
                 e.stopPropagation()
-                navigate(`/inbox?lead=${deal.lead_id}`)
+                navigate(`/inbox/${deal.lead_id}`)
               }}
               className="rounded p-0.5 text-muted-foreground hover:text-primary transition-smooth cursor-pointer"
             >

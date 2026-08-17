@@ -87,7 +87,7 @@ const LegalDocumentPage = ({ content, documentTitle, metaDescription, footerExtr
   }, [metaDescription])
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-dvh bg-background text-foreground">
       <title>{documentTitle}</title>
 
       <header className="border-b border-border">

@@ -58,7 +58,10 @@ export async function launchEmbeddedSignup(): Promise<EmbeddedSignupResult> {
 
       if (parsed.type !== 'WA_EMBEDDED_SIGNUP') return
 
-      if (parsed.event === 'FINISH') {
+      // 'FINISH' = fluxo padrao (migracao/novo numero).
+      // 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING' = coexistence (numero segue no
+      // app WhatsApp Business). Ambos entregam code/phone_number_id/waba_id igual.
+      if (parsed.event === 'FINISH' || parsed.event === 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING') {
         const d = parsed.data
         if (d?.phone_number_id && d?.waba_id) {
           session = { phoneNumberId: d.phone_number_id, wabaId: d.waba_id }
@@ -90,7 +93,10 @@ export async function launchEmbeddedSignup(): Promise<EmbeddedSignupResult> {
         config_id: META_ES_CONFIG_ID,
         response_type: 'code',
         override_default_response_type: true,
-        extras: { sessionInfoVersion: META_SESSION_INFO_VERSION },
+        extras: {
+          sessionInfoVersion: META_SESSION_INFO_VERSION,
+          featureType: 'whatsapp_business_app_onboarding',
+        },
       },
     )
   })

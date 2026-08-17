@@ -84,7 +84,7 @@ Deno.serve(async (req) => {
     // Buscar lead
     const { data: lead } = await supabase
       .from('leads')
-      .select('phone, whatsapp_instance_name, assigned_to, pipeline_id, company_id, cloud_api_number_id')
+      .select('phone, whatsapp_instance_name, assigned_to, company_id, cloud_api_number_id')
       .eq('id', payload.leadId)
       .single()
 
@@ -119,14 +119,35 @@ Deno.serve(async (req) => {
       instanceName = payload.instanceName ?? null
 
       if (!instanceName) {
+        const mode = senderType === 'ai' ? 'sdr' : 'human'
+
+        // O pipeline vem do negocio (Onda 4): regra R1, negocio ABERTO mais
+        // recente. So o modo 'sdr' usa esse valor, entao o envio humano nao
+        // paga a consulta. Sem negocio aberto vai `undefined`, e a cadeia do
+        // resolveInstanceName desce para o numero do vendedor.
+        let sdrPipelineId: string | undefined
+        if (mode === 'sdr') {
+          const { data: activeDeal } = await supabase
+            .from('deals')
+            .select('pipeline_id')
+            .eq('company_id', companyId)
+            .eq('lead_id', payload.leadId)
+            .eq('status', 'open')
+            .not('pipeline_id', 'is', null)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+          sdrPipelineId = activeDeal?.pipeline_id ?? undefined
+        }
+
         // supabase usa schema 'veltzy'; resolveInstanceName tipa o 1o param com o
         // SupabaseClient default (schema 'public'). Cast type-only, runtime inalterado.
         instanceName = await resolveInstanceName(supabase as unknown as typeof supabasePublic, supabasePublic, {
           leadId: payload.leadId,
           companyId,
           userId: profileId ?? undefined,
-          mode: senderType === 'ai' ? 'sdr' : 'human',
-          pipelineId: lead.pipeline_id,
+          mode,
+          pipelineId: sdrPipelineId,
         })
       }
 

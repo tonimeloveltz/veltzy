@@ -26,7 +26,9 @@ import type { LeadTemperature } from '@/types/database'
 const fmt = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
 
-const thClass = 'pb-3 text-xs font-medium text-muted-foreground'
+const thClass = 'pb-3 px-2 first:pl-0 last:pr-0 text-xs font-medium text-muted-foreground'
+
+const tdClass = 'py-3 px-2 first:pl-0 last:pr-0 text-left'
 
 const ContatosPage = () => {
   const navigate = useNavigate()
@@ -60,7 +62,7 @@ const ContatosPage = () => {
   }, [contacts, search, sourceId, temperature])
 
   return (
-    <div className="min-h-full p-6">
+    <div className="min-h-full p-4 sm:p-6">
       <div className="space-y-6 animate-fade-in">
 
         {/* HEADER */}
@@ -161,7 +163,7 @@ const ContatosPage = () => {
 
                 {isError && !isLoading && (
                   <tr>
-                    <td colSpan={7} className="py-12">
+                    <td colSpan={7} className={cn(tdClass, 'py-12')}>
                       <div className="flex flex-col items-center justify-center gap-3">
                         <AlertCircle className="h-8 w-8 text-destructive" />
                         <p className="text-sm text-muted-foreground">Erro ao carregar contatos</p>
@@ -180,7 +182,7 @@ const ContatosPage = () => {
                       className="border-b border-border/10 last:border-0 hover:bg-muted/20 transition-smooth cursor-pointer"
                     >
                       {/* Contato (identidade rica: nome + telefone no subtitulo) */}
-                      <td className="py-3 text-left">
+                      <td className={cn(tdClass)}>
                         <IdentityCell
                           title={leadDisplayName(c.name, c.phone ?? '')}
                           subtitle={c.phone || null}
@@ -189,7 +191,7 @@ const ContatosPage = () => {
                       </td>
 
                       {/* Canal: origem + instancia */}
-                      <td className="py-3 text-left">
+                      <td className={cn(tdClass)}>
                         {c.lead_sources ? (
                           <span className="inline-flex flex-col gap-0.5">
                             <LeadSourceBadge source={c.lead_sources} />
@@ -205,15 +207,15 @@ const ContatosPage = () => {
                       </td>
 
                       {/* Negocios (contagem, nao-clicavel) */}
-                      <td className="py-3 text-left text-xs font-medium">{c.dealCount}</td>
+                      <td className={cn(tdClass, 'text-xs font-medium')}>{c.dealCount}</td>
 
                       {/* Valor total (LTV) */}
-                      <td className="py-3 text-left font-semibold text-primary">
+                      <td className={cn(tdClass, 'font-semibold text-primary')}>
                         {c.ltv ? fmt(c.ltv) : <span className="text-muted-foreground/40 font-normal">-</span>}
                       </td>
 
                       {/* Temperatura (compacta) */}
-                      <td className="py-3 text-left">
+                      <td className={cn(tdClass)}>
                         {temp && (
                           <span className="inline-flex items-center gap-1 text-[10px]" title={temp.label}>
                             <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', temp.dotColor)} />
@@ -223,14 +225,14 @@ const ContatosPage = () => {
                       </td>
 
                       {/* Responsavel */}
-                      <td className="py-3 text-left text-xs">
+                      <td className={cn(tdClass, 'text-xs')}>
                         {c.profiles?.name ?? <span className="text-muted-foreground/40">Sem responsavel</span>}
                       </td>
 
                       {/* Chat */}
-                      <td className="py-3 text-left">
+                      <td className={cn(tdClass)}>
                         <button
-                          onClick={(e) => { e.stopPropagation(); navigate(`/inbox?lead=${c.id}`) }}
+                          onClick={(e) => { e.stopPropagation(); navigate(`/inbox/${c.id}`) }}
                           className="inline-flex items-center text-muted-foreground hover:text-primary transition-smooth cursor-pointer"
                           title="Abrir conversa"
                         >
@@ -243,7 +245,7 @@ const ContatosPage = () => {
 
                 {!isLoading && !isError && rows.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-sm text-muted-foreground">
+                    <td colSpan={7} className={cn(tdClass, 'py-12 text-center text-sm text-muted-foreground')}>
                       Nenhum contato encontrado
                     </td>
                   </tr>

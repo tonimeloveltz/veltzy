@@ -9,11 +9,12 @@ import { BulkMovePipelineModal } from './bulk-move-pipeline-modal'
 import { BulkArchiveDialog } from './bulk-archive-dialog'
 import { BulkDeleteDialog } from './bulk-delete-dialog'
 import { useBulkExport } from '@/hooks/use-bulk-leads'
-import type { AppRole, LeadWithDetails } from '@/types/database'
+import type { ExportLeadRow } from '@/lib/export-leads'
+import type { AppRole } from '@/types/database'
 
 interface BulkActionBarProps {
   selectedIds: Set<string>
-  leads: LeadWithDetails[]
+  leads: ExportLeadRow[]
   onClear: () => void
   userRole: AppRole
   mode?: 'leads' | 'deals'
@@ -35,7 +36,7 @@ export const BulkActionBar = ({ selectedIds, leads, onClear, userRole, mode = 'l
 
   // Nao faz sentido arquivar itens ja arquivados: esconde o botao quando toda a
   // selecao ja esta arquivada (ex.: filtro "Mostrar arquivados" ativo).
-  const allArchived = selectedLeads.length > 0 && selectedLeads.every((l) => l.status === 'archived')
+  const allArchived = selectedLeads.length > 0 && selectedLeads.every((l) => l.deal?.status === 'archived')
 
   return (
     <>
