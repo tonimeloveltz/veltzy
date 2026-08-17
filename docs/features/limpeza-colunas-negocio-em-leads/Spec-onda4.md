@@ -217,34 +217,30 @@ Fica só `activeDeal?.pipeline_id`. Contato sem negócio passa a não ter etapas
 
 Arquivo em `hub/supabase/migrations/`, nunca em `veltzy/supabase/migrations/`, mesmo sendo tabela do schema `veltzy`.
 
-### 5.0 A migration é DUAS, e essa correção veio de falha em teste
+### 5.0 Uma migration só, com janela de quebra assumida
 
-**Corrigido em 17/08/2026, depois de a criação de contato falhar no staging.** A versão anterior desta Spec previa uma migration só, aplicada depois do deploy do código. Está errado, e o teste provou: `pipeline_id` é `NOT NULL` sem default, então **código novo com a coluna ainda obrigatória quebra o insert imediatamente**. O raciocínio da seção 6 só tinha olhado o lado oposto (código velho com a coluna já dropada), e concluiu que existia uma ordem segura entre dois passos. Não existe. Faltava um passo.
+**Decisão da Leticia em 17/08/2026, tomada com o custo na mesa.** Registrada aqui porque não é a escolha tecnicamente neutra, e quem ler daqui a três meses precisa saber que foi deliberada.
 
-O padrão correto é expand/contract, em três tempos:
+O problema que a levanta: `pipeline_id` é `NOT NULL` **sem default** (`baseline.sql:3533`), então os dois sentidos quebram. Código novo com a coluna obrigatória derruba a criação de contato; código velho com a coluna dropada derruba o inbound. Descoberto quando a criação de contato falhou no teste, e é a correção do raciocínio pela metade que estava na seção 6.
 
-| # | O quê | Por que é seguro |
-|---|---|---|
-| 1 | **Migration A:** `ALTER TABLE "veltzy"."leads" ALTER COLUMN "pipeline_id" DROP NOT NULL;` | código velho continua gravando normalmente, código novo pode omitir |
-| 2 | **Deploy do código** (app e Edge Functions) | a coluna aceita `NULL`, então nenhum dos dois lados quebra |
-| 3 | **Migration B:** backup, drop do trigger, da função e da coluna (5.1 a 5.4) | já não há quem leia nem quem escreva |
+A saída sem quebra nenhuma seria expand/contract em três tempos: `DROP NOT NULL`, deploy, drop. **Ela foi avaliada e descartada em favor de arquivo único**, aceitando a janela.
 
-A janela entre 1 e 3 é a única fase em que os dois mundos coexistem, e é justamente para isso que a Migration A existe.
+**Sequência acordada:**
 
-**Efeitos colaterais da Migration A, todos aceitáveis e temporários:**
+| # | O quê |
+|---|---|
+| 1 | Terminar o código: `src/` (feito) e as seis Edge Functions |
+| 2 | Deploy do app **e** das Edge Functions, juntos |
+| 3 | Aplicar a migration única (5.1 a 5.4) logo em seguida |
 
-- contato criado pelo app nasce com `pipeline_id` nulo. Quando ganhar um negócio, a `mirror_deal_to_lead` preenche sozinha, porque ela já tem a guarda `NEW.pipeline_id IS NOT NULL` e o `IS DISTINCT FROM`;
-- as Edge Functions ainda não migradas continuam gravando o valor, sem alteração;
-- os leitores de Edge Function que ainda existem toleram nulo: `resolve-instance.ts:38` cai no próximo nível, `sdr-engine:58` devolve o 400 que já devolvia, `sdr-ai:374` cai no template padrão;
-- a FK `ON DELETE SET NULL` deixa de ser contraditória enquanto durar a janela.
+**A janela é entre o passo 2 e o passo 3**, e nela a criação de contato e o import de CSV falham por violação de `NOT NULL`. Dura o tempo do `supabase db push`. Mitigação: aplicar em seguida ao deploy, não em horário de pico, e não deixar o passo 3 para outro dia.
 
-**Migration A pode ser aplicada agora**, e deve: ela é o que destrava o código de `src/` que já está na árvore. **Migration B só depois das Edge Functions**, senão o inbound quebra: elas ainda gravam `pipeline_id` no insert do lead.
+**Consequência que morde antes disso: o `src/` que já está na árvore não é totalmente testável até o passo 3.** Tudo que cria contato falha:
 
-**A Migration A é pré-requisito do teste, não só do deploy.** Enquanto ela não for aplicada, o código de `src/` que já está na árvore **não funciona**: a criação de contato falha por violação de `NOT NULL`. Quem for revisar o diff e testar no navegador precisa aplicar A antes, senão o sintoma aparece como regressão do código e não como o que é, a coluna ainda obrigatória.
+- **não testável agora:** cadastro pelo modal de contato, import de CSV;
+- **testável agora, e recomendado:** os dois exports, a contagem do painel admin, as duas desativações de pipeline, o cabeçalho do inbox, o modal de edição e os smokes. São leitura ou atualização, não inserção.
 
-**Ela é reversível, ao contrário da Onda 3 e da Migration B.** `SET NOT NULL` traz de volta, e `DROP NOT NULL` não reescreve tabela nem toca em dado, por isso não há backup aqui. Mas a reversão só é limpa **enquanto não existir linha com nulo**: depois que o app novo criar o primeiro contato sem funil, voltar atrás passa a exigir decidir o que fazer com essas linhas. Se for para desistir da onda, desista antes de deployar o app.
-
-Precisão sobre o espelho, verificada no corpo da função como a Onda 3 a deixou: a trava é `IF deal_count > 1 THEN RETURN NEW`, então ela **roda no primeiro negócio** e preenche o `pipeline_id`; o silêncio começa no segundo.
+Não há Migration A. O arquivo `20260817112504_leads_pipeline_id_drop_not_null.sql`, escrito antes desta decisão, é descartado sem ter sido aplicado.
 
 ### 5.1 Backup
 
@@ -303,7 +299,7 @@ Nada aqui pode chegar em produção antes disto, **nesta ordem**:
 
 ~~Dentro desta onda, o código vai **antes** da migration, pelo motivo simétrico: enquanto o app gravar `pipeline_id` no insert, o `DROP COLUMN` derruba a criação de contato e a entrada de lead pelo WhatsApp.~~
 
-**Corrigido em 17/08/2026.** Aquilo estava pela metade: é verdade que código velho com a coluna dropada quebra, mas código novo com a coluna `NOT NULL` quebra também, e foi o que aconteceu no teste da criação de contato. Não há ordem segura entre dois passos. A sequência dentro desta onda é a de três tempos da 5.0: **Migration A (`DROP NOT NULL`) → deploy do código → Migration B (o drop)**. Em produção, essa sequência inteira entra depois dos quatro passos da tabela acima.
+**Corrigido em 17/08/2026.** Aquilo estava pela metade: é verdade que código velho com a coluna dropada quebra, mas código novo com a coluna `NOT NULL` quebra também, e foi o que aconteceu no teste da criação de contato. Não há ordem segura entre dois passos com uma migration só. A sequência acordada é a da 5.0: **terminar o código → deploy de app e Edge Functions juntos → migration logo em seguida**, com a janela de quebra entre os dois últimos assumida por decisão. Em produção, essa sequência entra depois dos quatro passos da tabela acima.
 
 **No staging nada disso bloqueia**, porque a Onda 3 está aplicada lá desde 14/08.
 

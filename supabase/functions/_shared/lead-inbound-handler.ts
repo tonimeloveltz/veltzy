@@ -277,18 +277,22 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
     try {
       const { data: leadFull } = await supabase
         .from('leads')
-        .select('is_ai_active, pipeline_id')
+        .select('is_ai_active')
         .eq('id', lead.id)
         .single()
 
       if (leadFull?.is_ai_active) {
-        // Verificar se pipeline tem agent_profile v2 ativo
+        // Verificar se pipeline tem agent_profile v2 ativo.
+        //
+        // O pipeline vem de `resolved` (:97), nao mais do contato: a coluna saiu
+        // de `leads` na Onda 4. E o mesmo valor, ja resolvido uma vez por
+        // inbound, entao isso tambem economiza uma leitura de banco.
         let useV2 = false
-        if (leadFull.pipeline_id) {
+        if (resolved.pipelineId) {
           const { data: agentProfile } = await supabase
             .from('agent_profiles')
             .select('id, is_active')
-            .eq('pipeline_id', leadFull.pipeline_id)
+            .eq('pipeline_id', resolved.pipelineId)
             .maybeSingle()
 
           if (agentProfile?.is_active) {
@@ -313,7 +317,7 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
               companyId: params.companyId,
               messageContent: params.content,
               messageType: params.messageType,
-              pipelineId: leadFull.pipeline_id,
+              pipelineId: resolved.pipelineId,
               instanceName: params.instanceName,
             }),
           }).catch(() => {})
@@ -327,6 +331,10 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
               companyId: params.companyId,
               messageContent: params.content,
               conversationHistory: [],
+              // O sdr-ai nao le mais `leads.pipeline_id` (coluna removida na
+              // Onda 4): recebe o pipeline daqui. Este e o unico chamador do
+              // sdr-ai no repo, entao a mudanca e completa.
+              pipelineId: resolved.pipelineId,
             }),
           }).catch(() => {})
         }
@@ -370,8 +378,8 @@ async function createLead(
   sourceId: string | null,
 ): Promise<{ id: string; assigned_to: string | null; avatar_url: string | null; name: string | null; whatsapp_instance_name: string | null; cloud_api_number_id: string | null } | null> {
   // Pipeline e source_id ja resolvidos UMA vez no handler (RF6): sem calculo proprio aqui.
-  // leads.pipeline_id e NOT NULL (migration 027); createLead so roda para lead NOVO (D-3).
-  const pipelineId = resolved.pipelineId ?? undefined
+  // `resolved.pipelineId` nao e mais gravado no contato (Onda 4): ele vai para o
+  // negocio, em createDealForLead.
 
   // Atribuicao: webhook usa fila (distribute-queue), outros atribuem imediatamente
   let assignedTo: string | null = null
@@ -441,13 +449,12 @@ async function createLead(
   const { data: newLead } = await supabase
     .from('leads')
     .insert({
-      // Negocio fica em deals: createDealForLead (chamado depois) cria o deal e
-      // o espelho (trg_mirror_deal_to_lead) replica o stage de volta para o lead.
-      // pipeline_id permanece porque leads.pipeline_id e NOT NULL (migration 027).
+      // Negocio fica inteiro em deals: createDealForLead (chamado depois) cria o
+      // deal com o pipeline resolvido. Nenhum campo de negocio e gravado aqui,
+      // nem pipeline_id, que deixou de ser coluna de leads na Onda 4.
       company_id: params.companyId,
       phone: params.phone,
       name: params.senderName,
-      pipeline_id: pipelineId,
       source_id: sourceId,
       assigned_to: assignedTo,
       is_queued: !assignedTo,

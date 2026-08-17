@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
     // 1. Carregar lead
     const { data: lead } = await supabase
       .from('leads')
-      .select('id, name, phone, email, observations, tags, ai_score, temperature, is_ai_active, assigned_to, pipeline_id, whatsapp_instance_name')
+      .select('id, name, phone, email, observations, tags, ai_score, temperature, is_ai_active, assigned_to, whatsapp_instance_name')
       .eq('id', leadId)
       .single()
 
@@ -54,10 +54,28 @@ Deno.serve(async (req) => {
       return jsonResponse({ ok: false, error: 'Lead nao encontrado' }, 404)
     }
 
-    // Resolver pipeline_id
-    const resolvedPipelineId = pipelineId ?? lead.pipeline_id
+    // Resolver pipeline. A coluna saiu de `leads` na Onda 4: sem `pipelineId`
+    // explicito no payload, deriva do negocio ABERTO mais recente (regra R1).
+    // Na pratica quase nunca cai aqui: quem chama e o inbound, que ja passa.
+    let resolvedPipelineId = pipelineId
     if (!resolvedPipelineId) {
-      return jsonResponse({ ok: false, error: 'Lead sem pipeline_id' }, 400)
+      const { data: activeDeal } = await supabase
+        .from('deals')
+        .select('pipeline_id')
+        .eq('company_id', companyId)
+        .eq('lead_id', leadId)
+        .eq('status', 'open')
+        .not('pipeline_id', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      resolvedPipelineId = activeDeal?.pipeline_id ?? null
+    }
+
+    // Recusar continua sendo a resposta certa: sem pipeline nao ha agent_profile,
+    // e escolher um arbitrario faria a IA responder com a persona de outro funil.
+    if (!resolvedPipelineId) {
+      return jsonResponse({ ok: false, error: 'Lead sem negócio: nao ha pipeline para resolver o agent_profile' }, 400)
     }
 
     // 2. Carregar agent_profile
