@@ -14,7 +14,7 @@
 | 1 | `status`, `deal_value` | mergeada, PR #163 | aplicável (só código) | pendente de deploy do app |
 | 2 | `stage_id` | mergeada | aplicável (só código) | pendente de deploy do app |
 | 3 | drop das três colunas | migration no Hub | **aplicada 14/08/2026** (`20260814105318`), verificação 6.2 passou | **não aplicada** |
-| 4 | `pipeline_id` | não iniciada (dashboard já migrado fora dela, ver 0.1) | — | — |
+| 4 | `pipeline_id` | não iniciada, Spec pronta (`Spec-onda4.md`) | — | — |
 
 **O que trava produção, e não é técnico:** a Onda 1 do `historico-por-negocio` (`20260812104156`, que cria `trg_log_deal_activity`) precisa ser promovida **antes** da Onda 3 chegar lá. Sem ela, remover os ramos de `log_lead_activity` deixa produção sem nenhum registro de mudança de etapa, e sem sintoma. Medido em 14/08/2026: o trigger existe no staging e não em produção. Verificação obrigatória em `Spec-onda3.md:6.1`, passo 3.
 
@@ -33,10 +33,9 @@ Duas consequências na tela, ambas aceitas:
 1. **Contato com negócios em dois pipelines conta nos dois.** A soma por pipeline pode ultrapassar o total sem filtro. É o comportamento correto (ele está nos dois mesmo), mas os números deixam de fechar por soma. A seção 4 não previa isso: a previsão original era só a consequência 2.
 2. **Contato sem negócio sai de toda métrica filtrada por pipeline.** São os 103 da seção 4, já previstos e aceitos ali. Sem filtro seguem contando.
 
-O que sobra para a Onda 4, então, não é mais o dashboard. São dois leitores:
+O que sobra para a Onda 4 já não inclui o dashboard. ~~São dois leitores.~~
 
-- `src/services/leads.service.ts:102` — `LeadFilters.pipelineId`, filtro da lista de contatos;
-- `src/services/pipelines.service.ts:105` — guarda do `deletePipeline`, que além de ler a coluna **conta `leads` sem filtrar por `company_id`**, violando a regra de ouro do CLAUDE.md. Corrigir as duas coisas na mesma passada, contando `deals` e filtrando por empresa, como a Onda 2 fez no `deleteStage`.
+**Correção de 17/08/2026:** a versão anterior desta seção listava dois leitores (`leads.service.ts:102` e a guarda do `deletePipeline`). Estava errado. Aquela lista veio de um levantamento feito de dentro do dashboard, não de uma varredura do repo. A varredura completa encontrou **dezoito pontos de código, seis Edge Functions e quatro decisões de produto**, entre eles dois leitores que nenhuma Spec tinha visto: a contagem por pipeline do painel admin (`pipeline-list-manager.tsx:133`) e o pipeline no cabeçalho do inbox (`chat-header.tsx:29`). O inventário conferido está em `Spec-onda4.md`, seção 1.
 
 **Precede a Onda 4:** a frente da truncagem por `max_rows` (achado da seção 6.1). Ela mexe nas mesmas queries e corrige número que já está errado na tela hoje.
 
@@ -175,7 +174,7 @@ O inventário no banco (14/08/2026) mostrou que são **quatro** funções a trat
 
 A Onda 3 **absorve a Onda 1.5** do `historico-por-negocio`. O conteúdo daquela onda mudou de "condicionar os ramos por `pg_trigger_depth()`" para "remover os ramos", pelo achado da Onda 2, e virou pré-requisito técnico do drop em vez de limpeza opcional.
 
-**Onda 4, sem data.** `pipeline_id`. ~~Condicionada à D5.~~ Destravada em 17/08/2026. Escopo reduzido ao que 0.1 lista: `leads.service.ts:102` e a guarda do `deletePipeline`. Depende da frente de `max_rows` (6.1) vir antes.
+**Onda 4, sem data.** `pipeline_id`. ~~Condicionada à D5.~~ Destravada em 17/08/2026, com a D5 decidida. Detalhada em `Spec-onda4.md`: dezoito pontos de código, seis Edge Functions, quatro decisões de produto (D9 a D12) e a migration que dropa a coluna, o índice, a `mirror_deal_to_lead` e a trava multi-deal. ~~Depende da frente de `max_rows` (6.1) vir antes.~~ Corrigido em 17/08/2026: aquilo era prioridade, não pré-requisito. As duas frentes só se tocam na D10, e a Spec resolve ali. Em produção o que trava de verdade é a fila de quatro passos da Spec, seção 6.
 
 A Onda 2 tem efeito colateral que interessa a outra frente, e ele é maior do que este PRD supunha. A Spec da Onda 1 do `historico-por-negocio` registra que os ramos de `log_lead_activity` não podem ser removidos porque `bulkMoveToPipeline` escreveria `leads.stage_id` direto e sem log. **Essa premissa já não vale**: a função é inalcançável hoje (ver acima). Depois da Onda 2, nada no código escreve `leads.stage_id`, e o único UPDATE que resta na coluna é o eco do próprio espelho, o que permite à Onda 1.5 remover os ramos em vez de distingui-los por `pg_trigger_depth()`. A decisão é da outra frente; aqui fica só o registro de que a justificativa mudou. Ver `Spec-onda2.md:2`.
 
@@ -184,6 +183,8 @@ A Onda 2 tem efeito colateral que interessa a outra frente, e ele é maior do qu
 ### 6.1 Truncagem silenciosa por `max_rows` (frente própria, prioridade acima da Onda 4)
 
 `supabase/config.toml:18` define `max_rows = 1000`. As queries de negócio do `dashboard.service.ts` não paginam: a do `getDashboardKpis` puxa **todos** os negócios da empresa sem `range`. Passando de mil, o PostgREST corta a resposta sem erro e os KPIs saem truncados, em silêncio. Produção tem 1479 contatos, então a contagem de negócios provavelmente já ultrapassou o corte: **é número errado na tela hoje.**
+
+**E não é só o dashboard.** Achado em 17/08/2026, ao varrer o repo para a Onda 4: `useContacts` busca os contatos com `limit: 0` (`use-contacts.ts:35`), que pula o `range` e cai direto no teto. Com 1479 contatos em produção, **a página de Contatos já está truncada em 1000 hoje**, sem erro e sem sintoma. É o pior caso conhecido desta frente, porque é lista, não métrica: o usuário procura um contato que existe e não acha.
 
 Vale para `leads` também, não só `deals`: `getDashboardKpis` sem `days` é all-time, e `getLeadsBySource` e os dois `getMonthlyComparison*` já buscavam linhas sem `range`.
 

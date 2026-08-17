@@ -101,13 +101,17 @@ export const deletePipeline = async (companyId: string, pipelineId: string): Pro
     throw new Error('Nao e possivel desativar o unico pipeline ativo')
   }
 
+  // O pipeline e do negocio: contar `deals`, nao `leads`. O `.eq('company_id')`
+  // faltava aqui, o que viola a regra de ouro do CLAUDE.md: o RLS e a ultima
+  // linha de defesa, nao a unica.
   const { count } = await veltzy()
-    .from('leads')
+    .from('deals')
     .select('id', { count: 'exact', head: true })
+    .eq('company_id', companyId)
     .eq('pipeline_id', pipelineId)
 
   if (count && count > 0) {
-    throw new Error('Mova os leads para outro pipeline antes de desativar')
+    throw new Error('Mova os negócios para outro pipeline antes de desativar')
   }
 
   const { error } = await veltzy()
