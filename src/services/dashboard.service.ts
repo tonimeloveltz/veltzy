@@ -15,15 +15,121 @@ const getPeriodDates = (days: number) => {
   }
 }
 
+interface PagedResponse<T> {
+  data: T[] | null
+  error: unknown
+}
+
+/**
+ * Busca TODAS as linhas de uma query, pagina a pagina.
+ *
+ * O PostgREST corta a resposta em `max_rows` (1000 em `supabase/config.toml`)
+ * sem avisar e sem erro, entao qualquer contagem derivada de `data.length` capa
+ * naquele teto em silencio. Contagem vinda do servidor (`count: 'exact'` com
+ * `head: true`) nao sofre disso e nao precisa deste helper.
+ *
+ * Avanca pelo tamanho recebido em vez de assumir 1000, entao funciona com
+ * qualquer `max_rows` do ambiente. `buildQuery` recebe o intervalo e precisa
+ * ordenar por chave unica, senao a paginacao repete ou pula linhas.
+ *
+ * Exportada para teste (`dashboard.service.test.ts`), nao para uso externo.
+ */
+export const fetchAllRows = async <T>(buildQuery: (from: number, to: number) => PromiseLike<PagedResponse<T>>): Promise<T[]> => {
+  const PAGE = 1000
+  const all: T[] = []
+  let from = 0
+
+  for (;;) {
+    const { data, error } = await buildQuery(from, from + PAGE - 1)
+    if (error) throw error
+    const rows = data ?? []
+    if (rows.length === 0) break
+    all.push(...rows)
+    from += rows.length
+  }
+
+  return all
+}
+
+/**
+ * Contatos que tem negocio no pipeline informado.
+ *
+ * O pipeline e do negocio, nao do contato. `leads.pipeline_id` congela quando o
+ * contato passa a ter 2+ negocios (a trava multi-deal do gatilho
+ * `mirror_deal_to_lead` faz o espelho se calar), entao filtrar por aquela coluna
+ * atribui o contato a um pipeline por acidente historico: ele some de um
+ * pipeline onde tem negocio aberto e aparece em outro onde nao tem nenhum.
+ *
+ * Duas consequencias assumidas ao trocar a fonte do recorte:
+ * - contato com negocios em pipelines diferentes passa a contar nos dois, entao
+ *   a soma por pipeline pode ultrapassar o total sem filtro. E o comportamento
+ *   correto: ele esta nos dois mesmo;
+ * - contato sem negocio nenhum sai de toda metrica filtrada por pipeline, porque
+ *   nao ha negocio que o coloque em pipeline algum. Sem filtro ele continua
+ *   contando normalmente.
+ *
+ * Nao filtra por status: um negocio ganho ou perdido tambem colocou o contato
+ * naquele pipeline.
+ *
+ * Usa `fetchAllRows` porque o conjunto precisa estar COMPLETO: um corte aqui
+ * faria contatos sumirem das metricas em silencio.
+ */
+const getLeadIdsInPipeline = async (companyId: string, pipelineId: string): Promise<Set<string>> => {
+  const rows = await fetchAllRows<{ lead_id: string | null }>((from, to) =>
+    veltzy()
+      .from('deals')
+      .select('lead_id')
+      .eq('company_id', companyId)
+      .eq('pipeline_id', pipelineId)
+      .order('id')
+      .range(from, to)
+  )
+
+  const ids = new Set<string>()
+  rows.forEach((d) => { if (d.lead_id) ids.add(d.lead_id) })
+  return ids
+}
+
+/**
+ * Recorte de pipeline sobre contatos ja carregados. `null` = sem filtro.
+ * Exportada para teste (`dashboard.service.test.ts`), nao para uso externo.
+ */
+export const onlyInPipeline = <T extends { id: string }>(rows: T[] | null, leadIds: Set<string> | null): T[] => {
+  const all = rows ?? []
+  return leadIds ? all.filter((r) => leadIds.has(r.id)) : all
+}
+
 export const getConversionMetrics = async (companyId: string, days = 30, pipelineId?: string, sellerProfileId?: string): Promise<ConversionMetrics> => {
   const { start, prevStart, prevEnd } = getPeriodDates(days)
 
+  const leadIdsInPipeline = pipelineId ? await getLeadIdsInPipeline(companyId, pipelineId) : null
+
   // Leads count (total leads created in period)
-  let currentLeadsQuery = veltzy().from('leads').select('id', { count: 'exact', head: true }).eq('company_id', companyId).gte('created_at', start)
-  if (pipelineId) currentLeadsQuery = currentLeadsQuery.eq('pipeline_id', pipelineId)
-  if (sellerProfileId) currentLeadsQuery = currentLeadsQuery.eq('assigned_to', sellerProfileId)
-  const { count: currentLeadsCount, error: clError } = await currentLeadsQuery
-  if (clError) throw clError
+  //
+  // Dois caminhos de proposito. Sem recorte de pipeline, `count: 'exact'` com
+  // `head: true` conta no servidor: e exato e imune a `max_rows`. Com recorte,
+  // os ids precisam voltar para o cruzamento, e ai a paginacao e obrigatoria,
+  // senao a contagem capa em `max_rows` sem sintoma.
+  const countLeadsInWindow = async (windowStart: string, windowEnd?: string): Promise<number> => {
+    if (!leadIdsInPipeline) {
+      let q = veltzy().from('leads').select('id', { count: 'exact', head: true }).eq('company_id', companyId).gte('created_at', windowStart)
+      if (windowEnd) q = q.lt('created_at', windowEnd)
+      if (sellerProfileId) q = q.eq('assigned_to', sellerProfileId)
+      const { count, error } = await q
+      if (error) throw error
+      return count ?? 0
+    }
+
+    const rows = await fetchAllRows<{ id: string }>((from, to) => {
+      let q = veltzy().from('leads').select('id').eq('company_id', companyId).gte('created_at', windowStart)
+      if (windowEnd) q = q.lt('created_at', windowEnd)
+      if (sellerProfileId) q = q.eq('assigned_to', sellerProfileId)
+      return q.order('id').range(from, to)
+    })
+    return onlyInPipeline(rows, leadIdsInPipeline).length
+  }
+
+  const currentLeadsCount = await countLeadsInWindow(start)
 
   // Deals in period
   let currentDealsQuery = veltzy().from('deals').select('status, value').eq('company_id', companyId).gte('created_at', start)
@@ -33,11 +139,7 @@ export const getConversionMetrics = async (companyId: string, days = 30, pipelin
   if (cdError) throw cdError
 
   // Previous period leads count
-  let prevLeadsQuery = veltzy().from('leads').select('id', { count: 'exact', head: true }).eq('company_id', companyId).gte('created_at', prevStart).lt('created_at', prevEnd)
-  if (pipelineId) prevLeadsQuery = prevLeadsQuery.eq('pipeline_id', pipelineId)
-  if (sellerProfileId) prevLeadsQuery = prevLeadsQuery.eq('assigned_to', sellerProfileId)
-  const { count: prevLeadsCount, error: plError } = await prevLeadsQuery
-  if (plError) throw plError
+  const prevLeadsCount = await countLeadsInWindow(prevStart, prevEnd)
 
   // Previous period deals
   let prevDealsQuery = veltzy().from('deals').select('status, value').eq('company_id', companyId).gte('created_at', prevStart).lt('created_at', prevEnd)
@@ -52,8 +154,8 @@ export const getConversionMetrics = async (companyId: string, days = 30, pipelin
     return { total: leadsTotal, deals: won.length, rate: leadsTotal > 0 ? (won.length / leadsTotal) * 100 : 0, revenue }
   }
 
-  const c = calc(currentLeadsCount ?? 0, currentDeals)
-  const p = calc(prevLeadsCount ?? 0, prevDeals)
+  const c = calc(currentLeadsCount, currentDeals)
+  const p = calc(prevLeadsCount, prevDeals)
 
   return {
     totalLeads: c.total, dealsClosed: c.deals, conversionRate: Math.round(c.rate * 10) / 10, totalRevenue: c.revenue,
@@ -91,20 +193,19 @@ export const getDashboardKpis = async (companyId: string, days?: number, pipelin
   const { data: deals, error: dealsError } = await dealsQuery
   if (dealsError) throw dealsError
 
+  const leadIdsInPipeline = pipelineId ? await getLeadIdsInPipeline(companyId, pipelineId) : null
+
   // Leads query for ai_score + total count
-  let leadsQuery = veltzy().from('leads').select('ai_score').eq('company_id', companyId)
-  if (pipelineId) leadsQuery = leadsQuery.eq('pipeline_id', pipelineId)
-  if (sellerProfileId) leadsQuery = leadsQuery.eq('assigned_to', sellerProfileId)
-  if (days) {
-    const start = new Date()
-    start.setDate(start.getDate() - days)
-    leadsQuery = leadsQuery.gte('created_at', start.toISOString())
-  }
-  const { data: leads, error: leadsError } = await leadsQuery
-  if (leadsError) throw leadsError
+  const leadsStartIso = days ? new Date(Date.now() - days * 86400000).toISOString() : null
+  const leads = await fetchAllRows<{ id: string; ai_score: number | null }>((from, to) => {
+    let q = veltzy().from('leads').select('id, ai_score').eq('company_id', companyId)
+    if (sellerProfileId) q = q.eq('assigned_to', sellerProfileId)
+    if (leadsStartIso) q = q.gte('created_at', leadsStartIso)
+    return q.order('id').range(from, to)
+  })
 
   const allDeals = deals ?? []
-  const allLeads = leads ?? []
+  const allLeads = onlyInPipeline(leads, leadIdsInPipeline)
   const totalLeads = allLeads.length
 
   // Filtro de periodo por status:
@@ -146,15 +247,16 @@ export const getDashboardKpis = async (companyId: string, days?: number, pipelin
     const prevStart = new Date(prevEnd)
     prevStart.setDate(prevStart.getDate() - days)
 
-    let prevLeadsQuery = veltzy()
-      .from('leads')
-      .select('ai_score')
-      .eq('company_id', companyId)
-      .gte('created_at', prevStart.toISOString())
-      .lt('created_at', prevEnd.toISOString())
-    if (pipelineId) prevLeadsQuery = prevLeadsQuery.eq('pipeline_id', pipelineId)
-    if (sellerProfileId) prevLeadsQuery = prevLeadsQuery.eq('assigned_to', sellerProfileId)
-    const { data: prevLeads } = await prevLeadsQuery
+    const prevLeads = await fetchAllRows<{ id: string; ai_score: number | null }>((from, to) => {
+      let q = veltzy()
+        .from('leads')
+        .select('id, ai_score')
+        .eq('company_id', companyId)
+        .gte('created_at', prevStart.toISOString())
+        .lt('created_at', prevEnd.toISOString())
+      if (sellerProfileId) q = q.eq('assigned_to', sellerProfileId)
+      return q.order('id').range(from, to)
+    })
 
     let prevDealsQuery = veltzy()
       .from('deals')
@@ -164,9 +266,10 @@ export const getDashboardKpis = async (companyId: string, days?: number, pipelin
       .lt('created_at', prevEnd.toISOString())
     if (pipelineId) prevDealsQuery = prevDealsQuery.eq('pipeline_id', pipelineId)
     if (sellerProfileId) prevDealsQuery = prevDealsQuery.eq('assigned_to', sellerProfileId)
-    const { data: prevDeals } = await prevDealsQuery
+    const { data: prevDeals, error: prevDealsError } = await prevDealsQuery
+    if (prevDealsError) throw prevDealsError
 
-    const pLeads = prevLeads ?? []
+    const pLeads = onlyInPipeline(prevLeads, leadIdsInPipeline)
     const pDeals = prevDeals ?? []
     const pClosed = pDeals.filter((d) => d.status === 'won')
     prevConversionRate = pDeals.length > 0 ? Math.round((pClosed.length / pDeals.length) * 100) : 0
@@ -197,21 +300,21 @@ export const getDashboardKpis = async (companyId: string, days?: number, pipelin
 }
 
 export const getLeadsBySource = async (companyId: string, days?: number, pipelineId?: string, sellerProfileId?: string): Promise<SourceMetrics[]> => {
-  let query = veltzy().from('leads').select('source_id').eq('company_id', companyId)
-  if (pipelineId) query = query.eq('pipeline_id', pipelineId)
-  if (sellerProfileId) query = query.eq('assigned_to', sellerProfileId)
-  if (days) {
-    const start = new Date()
-    start.setDate(start.getDate() - days)
-    query = query.gte('created_at', start.toISOString())
-  }
-  const { data: leads, error: leadsError } = await query
-  if (leadsError) throw leadsError
+  const leadIdsInPipeline = pipelineId ? await getLeadIdsInPipeline(companyId, pipelineId) : null
+
+  const startIso = days ? new Date(Date.now() - days * 86400000).toISOString() : null
+  const leads = await fetchAllRows<{ id: string; source_id: string | null }>((from, to) => {
+    let q = veltzy().from('leads').select('id, source_id').eq('company_id', companyId)
+    if (sellerProfileId) q = q.eq('assigned_to', sellerProfileId)
+    if (startIso) q = q.gte('created_at', startIso)
+    return q.order('id').range(from, to)
+  })
+
   const { data: sources, error: sourcesError } = await veltzy().from('lead_sources').select('id, name, color').eq('company_id', companyId)
   if (sourcesError) throw sourcesError
 
   const counts: Record<string, number> = {}
-  leads?.forEach((l) => { if (l.source_id) counts[l.source_id] = (counts[l.source_id] ?? 0) + 1 })
+  onlyInPipeline(leads, leadIdsInPipeline).forEach((l) => { if (l.source_id) counts[l.source_id] = (counts[l.source_id] ?? 0) + 1 })
 
   return (sources ?? []).map((s) => ({ source_id: s.id, name: s.name, color: s.color, count: counts[s.id] ?? 0 })).filter((s) => s.count > 0)
 }
@@ -254,12 +357,14 @@ export const getMonthlyComparison = async (companyId: string, days?: number, pip
   startDate.setMonth(startDate.getMonth() - monthsBack)
   const startIso = startDate.toISOString()
 
+  const leadIdsInPipeline = pipelineId ? await getLeadIdsInPipeline(companyId, pipelineId) : null
+
   // Leads per month (total incoming)
-  let leadsQuery = veltzy().from('leads').select('created_at').eq('company_id', companyId).gte('created_at', startIso)
-  if (pipelineId) leadsQuery = leadsQuery.eq('pipeline_id', pipelineId)
-  if (sellerProfileId) leadsQuery = leadsQuery.eq('assigned_to', sellerProfileId)
-  const { data: leads, error: leadsError } = await leadsQuery
-  if (leadsError) throw leadsError
+  const leads = await fetchAllRows<{ id: string; created_at: string }>((from, to) => {
+    let q = veltzy().from('leads').select('id, created_at').eq('company_id', companyId).gte('created_at', startIso)
+    if (sellerProfileId) q = q.eq('assigned_to', sellerProfileId)
+    return q.order('id').range(from, to)
+  })
 
   // Won deals per month
   let dealsQuery = veltzy().from('deals').select('created_at').eq('company_id', companyId).eq('status', 'won').gte('created_at', startIso)
@@ -270,7 +375,7 @@ export const getMonthlyComparison = async (companyId: string, days?: number, pip
 
   const months: Record<string, { leads: number; deals: number }> = {}
 
-  leads?.forEach((l) => {
+  onlyInPipeline(leads, leadIdsInPipeline).forEach((l) => {
     const d = new Date(l.created_at)
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
     if (!months[key]) months[key] = { leads: 0, deals: 0 }
@@ -303,12 +408,14 @@ export const getMonthlyComparisonGrid = async (companyId: string, months = 6, pi
   startDate.setMonth(startDate.getMonth() - months)
   const startIso = startDate.toISOString()
 
+  const leadIdsInPipeline = pipelineId ? await getLeadIdsInPipeline(companyId, pipelineId) : null
+
   // Leads per month
-  let leadsQuery = veltzy().from('leads').select('created_at').eq('company_id', companyId).gte('created_at', startIso)
-  if (pipelineId) leadsQuery = leadsQuery.eq('pipeline_id', pipelineId)
-  if (sellerProfileId) leadsQuery = leadsQuery.eq('assigned_to', sellerProfileId)
-  const { data: leads, error: leadsError } = await leadsQuery
-  if (leadsError) throw leadsError
+  const leads = await fetchAllRows<{ id: string; created_at: string }>((from, to) => {
+    let q = veltzy().from('leads').select('id, created_at').eq('company_id', companyId).gte('created_at', startIso)
+    if (sellerProfileId) q = q.eq('assigned_to', sellerProfileId)
+    return q.order('id').range(from, to)
+  })
 
   // Won deals per month with value
   let dealsQuery = veltzy().from('deals').select('status, value, created_at').eq('company_id', companyId).gte('created_at', startIso)
@@ -331,7 +438,7 @@ export const getMonthlyComparisonGrid = async (companyId: string, months = 6, pi
     buckets[key] = { leads: 0, deals: 0, value: 0 }
   })
 
-  leads?.forEach((l) => {
+  onlyInPipeline(leads, leadIdsInPipeline).forEach((l) => {
     const d = new Date(l.created_at)
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
     if (!buckets[key]) buckets[key] = { leads: 0, deals: 0, value: 0 }
