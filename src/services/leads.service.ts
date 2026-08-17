@@ -76,6 +76,7 @@ interface LeadFilters {
   sourceId?: string | null
   temperature?: string | null
   assignedTo?: string | null
+  pipelineId?: string | null
   search?: string
   limit?: number
   offset?: number
@@ -106,6 +107,9 @@ export const getLeadsByCompany = async (companyId: string, filters?: LeadFilters
   }
   if (filters?.assignedTo) {
     query = query.eq('assigned_to', filters.assignedTo)
+  }
+  if (filters?.pipelineId) {
+    query = query.eq('pipeline_id', filters.pipelineId)
   }
   if (filters?.search) {
     const sanitized = sanitizeSearch(filters.search)
