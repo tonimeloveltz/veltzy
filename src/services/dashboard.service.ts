@@ -163,6 +163,132 @@ export const getConversionMetrics = async (companyId: string, days = 30, pipelin
   }
 }
 
+const MONTH_NAMES_PT = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
+
+/**
+ * Um ponto da curva dos cards de KPI.
+ *
+ * `conversionRate` e `avgAiScore` sao `null` quando a faixa nao teve nenhum
+ * negocio / nenhum contato: media de nada nao e zero, e desenhar zero criaria um
+ * vale que nao aconteceu. O grafico liga os pontos por cima do buraco.
+ * `dealsClosed` e contagem, entao faixa vazia e zero de verdade.
+ */
+export interface KpiTrendPoint {
+  label: string
+  conversionRate: number | null
+  avgAiScore: number | null
+  dealsClosed: number
+}
+
+interface TrendBucket {
+  start: number
+  end: number
+  label: string
+}
+
+const pad2 = (n: number) => String(n).padStart(2, '0')
+
+/**
+ * Inicio da janela do periodo selecionado, em ms. `null` = "Total", sem recorte.
+ *
+ * PONTO UNICO DE VERDADE da janela: o recorte dos contatos, o recorte dos
+ * negocios e as faixas da curva (`buildTrendBuckets`) derivam TODOS daqui, de
+ * proposito. Se um deles calculasse a janela por conta propria, um registro
+ * poderia entrar no numero grande do card e cair fora de toda faixa
+ * (`indexOfBucket` devolve -1 e descarta em silencio): o numero e a curva
+ * passariam a discordar sem erro nenhum aparecer.
+ *
+ * "Hoje" (days === 1) e CALENDARIO, nao janela deslizante: comeca a meia-noite
+ * LOCAL do dia corrente. As 09h ele olha 9 horas, nao 24, e o negocio fechado
+ * ontem as 22h fica de fora, que e o comportamento pedido. O service roda no
+ * browser da usuaria, entao "local" e America/Sao_Paulo na pratica.
+ *
+ * "Semana" e "Mes" continuam janela deslizante (`agora - days`).
+ */
+export const periodStartMs = (days: number | undefined, now: number): number | null => {
+  if (days === undefined) return null
+  if (days <= 1) {
+    const midnight = new Date(now)
+    midnight.setHours(0, 0, 0, 0)
+    return midnight.getTime()
+  }
+  return now - days * 86400000
+}
+
+/**
+ * Fatia o periodo selecionado em faixas que o cobrem por INTEIRO, sem sobra e
+ * sem sobreposicao. E isso que faz a curva fechar com o numero grande do card:
+ * cada registro do periodo cai em exatamente uma faixa, entao a soma dos pontos
+ * e o total exibido.
+ *
+ * A janela vem de `periodStartMs`, a MESMA usada pelo recorte dos KPIs: para
+ * "Semana" e "Mes" e deslizante (`agora - days`), para "Hoje" e o calendario a
+ * partir da meia-noite local. Calcular a janela aqui de novo abriria a porta
+ * para faixas e filtro divergirem.
+ *
+ * Sem periodo ("Total"), o recorte e por mes de calendario a partir do registro
+ * mais antigo, porque a janela e a vida inteira da empresa.
+ *
+ * A ultima faixa termina no infinito para abrigar o registro salvo neste exato
+ * instante (e o de `closed_at` levemente adiantado por relogio dessincronizado).
+ */
+export const buildTrendBuckets = (days: number | undefined, now: number, earliest: number): TrendBucket[] => {
+  const buckets: TrendBucket[] = []
+  const windowStart = periodStartMs(days, now)
+
+  // `windowStart === null` acontece exatamente quando `days` e `undefined`; o
+  // teste duplo esta aqui para o compilador estreitar os dois de uma vez.
+  if (days === undefined || windowStart === null) {
+    const first = new Date(Math.min(earliest, now))
+    const cursor = new Date(first.getFullYear(), first.getMonth(), 1)
+    while (cursor.getTime() <= now) {
+      const start = cursor.getTime()
+      const next = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1).getTime()
+      buckets.push({
+        start,
+        end: next,
+        label: `${MONTH_NAMES_PT[cursor.getMonth()]}/${String(cursor.getFullYear()).slice(2)}`,
+      })
+      cursor.setMonth(cursor.getMonth() + 1)
+    }
+  } else if (days <= 1) {
+    // "Hoje" = uma faixa por hora DECORRIDA, da meia-noite local ate a hora
+    // corrente. Nao sao 24 fixas: faixa futura vazia desenharia a curva morrendo
+    // no meio do card.
+    const width = 3600000
+    const slots = new Date(now).getHours() + 1
+    for (let i = 0; i < slots; i++) {
+      const start = windowStart + i * width
+      buckets.push({ start, end: start + width, label: `${pad2(new Date(start).getHours())}h` })
+    }
+  } else {
+    // Um ponto por dia ate 30 dias; acima disso agrupa para a curva nao virar ruido.
+    const slots = Math.min(days, 30)
+    const width = (days * 86400000) / slots
+    for (let i = 0; i < slots; i++) {
+      const start = windowStart + i * width
+      const d = new Date(start)
+      buckets.push({ start, end: start + width, label: `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}` })
+    }
+  }
+
+  if (buckets.length === 0) {
+    buckets.push({ start: now, end: Number.POSITIVE_INFINITY, label: '' })
+  }
+  buckets[buckets.length - 1].end = Number.POSITIVE_INFINITY
+
+  return buckets
+}
+
+/**
+ * Data que coloca o negocio no periodo: ganho e perdido contam quando fecharam,
+ * o resto conta quando entrou no funil. Mesma regra usada pelo recorte dos KPIs
+ * e pela curva, de proposito: se as duas divergirem, a curva deixa de somar o
+ * numero do card.
+ */
+const dealRefDate = (d: { status: string; created_at: string; closed_at: string | null }) =>
+  d.status === 'won' || d.status === 'lost' ? d.closed_at ?? d.created_at : d.created_at
+
 export interface DashboardKpis {
   conversionRate: number
   avgAiScore: number
@@ -182,6 +308,7 @@ export interface DashboardKpis {
   prevConversionRate: number
   prevAvgAiScore: number
   prevDealsClosed: number
+  trend: KpiTrendPoint[]
 }
 
 export const getDashboardKpis = async (companyId: string, days?: number, pipelineId?: string, sellerProfileId?: string): Promise<DashboardKpis> => {
@@ -195,12 +322,22 @@ export const getDashboardKpis = async (companyId: string, days?: number, pipelin
 
   const leadIdsInPipeline = pipelineId ? await getLeadIdsInPipeline(companyId, pipelineId) : null
 
+  // Um unico "agora" para o recorte e para as faixas da curva. Duas chamadas a
+  // Date.now() deslocariam as faixas alguns milissegundos em relacao a janela do
+  // KPI, e registros da borda cairiam fora da curva sem cair fora do numero.
+  const now = Date.now()
+
+  // Janela do periodo, uma unica vez: o recorte dos contatos abaixo, o dos
+  // negocios (`inPeriod`) e as faixas da curva (`buildTrendBuckets`) usam este
+  // mesmo inicio. Ver `periodStartMs` para por que os tres tem que andar juntos.
+  const windowStart = periodStartMs(days, now)
+  const periodStartIso = windowStart === null ? null : new Date(windowStart).toISOString()
+
   // Leads query for ai_score + total count
-  const leadsStartIso = days ? new Date(Date.now() - days * 86400000).toISOString() : null
-  const leads = await fetchAllRows<{ id: string; ai_score: number | null }>((from, to) => {
-    let q = veltzy().from('leads').select('id, ai_score').eq('company_id', companyId)
+  const leads = await fetchAllRows<{ id: string; ai_score: number | null; created_at: string }>((from, to) => {
+    let q = veltzy().from('leads').select('id, ai_score, created_at').eq('company_id', companyId)
     if (sellerProfileId) q = q.eq('assigned_to', sellerProfileId)
-    if (leadsStartIso) q = q.gte('created_at', leadsStartIso)
+    if (periodStartIso) q = q.gte('created_at', periodStartIso)
     return q.order('id').range(from, to)
   })
 
@@ -213,19 +350,17 @@ export const getDashboardKpis = async (companyId: string, days?: number, pipelin
   // - won/lost: closed_at (fechados no periodo)
   // - archived: created_at
   // - Sem periodo (Total): mostra tudo
-  const periodStart = days ? new Date(Date.now() - days * 86400000).toISOString() : null
-
   const inPeriod = (dateStr: string | null) => {
-    if (!periodStart) return true
+    if (!periodStartIso) return true
     if (!dateStr) return false
-    return dateStr >= periodStart
+    return dateStr >= periodStartIso
   }
 
-  const open = allDeals.filter((d) => d.status === 'open' && inPeriod(d.created_at))
-  const closed = allDeals.filter((d) => d.status === 'won' && inPeriod(d.closed_at ?? d.created_at))
-  const lost = allDeals.filter((d) => d.status === 'lost' && inPeriod(d.closed_at ?? d.created_at))
-  const pending = allDeals.filter((d) => d.status === 'pending_assignment' && inPeriod(d.created_at))
-  const archived = allDeals.filter((d) => d.status === 'archived' && inPeriod(d.created_at))
+  const open = allDeals.filter((d) => d.status === 'open' && inPeriod(dealRefDate(d)))
+  const closed = allDeals.filter((d) => d.status === 'won' && inPeriod(dealRefDate(d)))
+  const lost = allDeals.filter((d) => d.status === 'lost' && inPeriod(dealRefDate(d)))
+  const pending = allDeals.filter((d) => d.status === 'pending_assignment' && inPeriod(dealRefDate(d)))
+  const archived = allDeals.filter((d) => d.status === 'archived' && inPeriod(dealRefDate(d)))
   const totalDeals = open.length + closed.length + lost.length + pending.length + archived.length
 
   const sumVal = (arr: typeof allDeals) => arr.reduce((s, d) => s + (Number(d.value) || 0), 0)
@@ -238,14 +373,59 @@ export const getDashboardKpis = async (companyId: string, days?: number, pipelin
   const conversionRate = totalDeals > 0 ? Math.round((closed.length / totalDeals) * 100) : 0
   const avgTicket = closed.length > 0 ? closedValue / closed.length : 0
 
+  // Curva dos cards de KPI: os mesmos registros que produzem os numeros acima,
+  // agora distribuidos no tempo. Nao ha consulta nova, so redistribuicao, entao
+  // a curva nao pode discordar do card.
+  const periodDeals = [...open, ...closed, ...lost, ...pending, ...archived]
+  const dealStamps = periodDeals.map((d) => ({ ts: new Date(dealRefDate(d)).getTime(), won: d.status === 'won' }))
+  const leadStamps = allLeads.map((l) => ({ ts: new Date(l.created_at).getTime(), score: l.ai_score ?? 0 }))
+
+  const stamps = [...dealStamps.map((d) => d.ts), ...leadStamps.map((l) => l.ts)].filter((t) => Number.isFinite(t))
+  const earliest = stamps.length > 0 ? Math.min(...stamps) : now
+  const buckets = buildTrendBuckets(days, now, earliest)
+
+  const acc = buckets.map(() => ({ deals: 0, won: 0, leads: 0, scoreSum: 0 }))
+  const indexOfBucket = (ts: number) => {
+    if (!Number.isFinite(ts)) return -1
+    for (let i = 0; i < buckets.length; i++) {
+      if (ts >= buckets[i].start && ts < buckets[i].end) return i
+    }
+    return -1
+  }
+
+  dealStamps.forEach((d) => {
+    const i = indexOfBucket(d.ts)
+    if (i < 0) return
+    acc[i].deals++
+    if (d.won) acc[i].won++
+  })
+
+  leadStamps.forEach((l) => {
+    const i = indexOfBucket(l.ts)
+    if (i < 0) return
+    acc[i].leads++
+    acc[i].scoreSum += l.score
+  })
+
+  const trend: KpiTrendPoint[] = buckets.map((b, i) => ({
+    label: b.label,
+    conversionRate: acc[i].deals > 0 ? Math.round((acc[i].won / acc[i].deals) * 100) : null,
+    avgAiScore: acc[i].leads > 0 ? Math.round(acc[i].scoreSum / acc[i].leads) : null,
+    dealsClosed: acc[i].won,
+  }))
+
   let prevConversionRate = 0
   let prevAvgAiScore = 0
   let prevDealsClosed = 0
   if (days) {
-    const prevEnd = new Date()
-    prevEnd.setDate(prevEnd.getDate() - days)
+    // Periodo anterior com a MESMA semantica do atual, senao a variacao compara
+    // recortes diferentes: para "Hoje" (calendario) o anterior e ONTEM por
+    // inteiro, [00h de ontem, 00h de hoje); para os demais e a janela deslizante
+    // imediatamente anterior. `windowStart` nao e nulo aqui porque `days` existe.
+    const prevEnd = new Date(windowStart ?? now)
     const prevStart = new Date(prevEnd)
-    prevStart.setDate(prevStart.getDate() - days)
+    if (days <= 1) prevStart.setDate(prevStart.getDate() - 1)
+    else prevStart.setTime(prevEnd.getTime() - days * 86400000)
 
     const prevLeads = await fetchAllRows<{ id: string; ai_score: number | null }>((from, to) => {
       let q = veltzy()
@@ -296,6 +476,7 @@ export const getDashboardKpis = async (companyId: string, days?: number, pipelin
     prevConversionRate,
     prevAvgAiScore,
     prevDealsClosed,
+    trend,
   }
 }
 
@@ -457,8 +638,7 @@ export const getMonthlyComparisonGrid = async (companyId: string, months = 6, pi
   return allMonths.map((month) => {
     const data = buckets[month]
     const [y, m] = month.split('-')
-    const monthNames = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
-    const label = `${monthNames[Number(m) - 1]}/${y.slice(2)}`
+    const label = `${MONTH_NAMES_PT[Number(m) - 1]}/${y.slice(2)}`
     return {
       month: label,
       leads: data.leads,
