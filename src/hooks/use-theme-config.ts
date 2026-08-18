@@ -47,11 +47,19 @@ const applyCompanyColors = (primaryColor?: string, secondaryColor?: string) => {
     const primary = isDark && l < 20 ? `${h} ${s}% 55%` : `${h} ${s}% ${l}%`
     PRIMARY_VARS.forEach((v) => root.style.setProperty(v, primary))
 
-    // Accent tintado pela marca — sand mantem o tom de areia do stylesheet.
+    // Accent tintado pela marca — sand mantem o tom de areia do stylesheet,
+    // mas so no FUNDO. `--accent-foreground` e a cor do TEXTO no hover
+    // (`hover:text-accent-foreground` nas variantes ghost e outline do Button) e
+    // tem que seguir a marca nos tres temas: sem isso o sand fica preso no verde
+    // hardcoded de `.sand` em globals.css, qualquer que seja a cor escolhida.
     if (!isSand) {
       root.style.setProperty('--accent', isDark ? `${h} ${Math.round(s * 0.1)}% 16%` : `${h} ${Math.round(s * 0.6)}% 94%`)
-      root.style.setProperty('--accent-foreground', isDark ? `${h} ${s}% 58%` : `${h} ${s}% 32%`)
     }
+    // A luminosidade acompanha o tema de proposito: 58% sobre o fundo escuro do
+    // hover, 32% sobre o claro. Igualar os dois em 58% ja foi tentado e o texto
+    // sumiu no light e no sand (1.4x de contraste com a marca verde padrao,
+    // contra os 4.5x que a WCAG pede para texto normal).
+    root.style.setProperty('--accent-foreground', isDark ? `${h} ${s}% 58%` : `${h} ${s}% 32%`)
 
     // Persiste pro script de pre-render (index.html) aplicar antes do React montar.
     localStorage.setItem(PRIMARY_KEY, primaryColor as string)
