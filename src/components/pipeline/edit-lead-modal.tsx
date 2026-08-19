@@ -224,7 +224,15 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
     m.user_roles?.some((r) => ['admin', 'manager', 'seller', 'super_admin'].includes(r.role))
   ) ?? []
 
-  if (!lead) return null
+  // Nao montar o form antes dos negocios chegarem. A secao "Negocio" (e com ela
+  // o Select da Fase) e condicional a `activeDeal`: se ela nascer no mesmo
+  // commit em que o useEffect dispara o reset(), o Controller acabou de se
+  // registrar e o react-hook-form nao o notifica - o campo fica com o default
+  // `''` e a Fase abre vazia. Era so na primeira abertura porque na segunda o
+  // cache de useDealsByLead (staleTime 30s) ja entrega `deals` no primeiro
+  // render, e o campo monta junto com o form. `dealsReady` inclui `dealsError`,
+  // entao a falha da query degrada em vez de travar o modal fechado.
+  if (!lead || !dealsReady) return null
 
   return (
     <>

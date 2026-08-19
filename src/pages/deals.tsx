@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
 import { leadDisplayName } from '@/lib/phone'
 import { filterByPeriod } from '@/lib/deals-period-filter'
 import { useDashboardDeals } from '@/hooks/use-deals'
-import { usePipelineStages } from '@/hooks/use-pipeline-stages'
+import { useAllPipelineStages } from '@/hooks/use-pipeline-stages'
 import { useAccessiblePipelines } from '@/hooks/use-pipeline-access'
 import { useRoles } from '@/hooks/use-roles'
 import { PipelineFilter } from '@/components/shared/pipeline-filter'
@@ -73,12 +73,15 @@ const DealsPage = () => {
 
   const { data: pipelines } = useAccessiblePipelines()
   const { data: allDeals, isLoading, isError, refetch } = useDashboardDeals(selectedPipelineId, showArchived)
-  const { data: stages } = usePipelineStages()
+  // Negocios lista deals de TODOS os pipelines, entao o map precisa de todas as
+  // stages da empresa. usePipelineStages() so traz as do pipeline ativo (e fica
+  // desabilitado quando nenhum pipeline foi aberto ainda).
+  const { data: stages } = useAllPipelineStages()
 
   // Fetch lead for edit modal
   const { data: selectedLeadData } = useLeadDetail(selectedLeadId)
 
-  const pipelineMap = new Map((pipelines ?? []).map((p) => [p.id, p]))
+  const pipelineMap = useMemo(() => new Map((pipelines ?? []).map((p) => [p.id, p])), [pipelines])
   const periodDeals = filterByPeriod(allDeals ?? [], selectedDays)
 
   const deals = useMemo(() => {
@@ -117,7 +120,7 @@ const DealsPage = () => {
   const lostValue = lostDeals.reduce((sum, d) => sum + (d.value ?? 0), 0)
   const avgTicket = closedDeals.length > 0 ? closedValue / closedDeals.length : 0
 
-  const stageMap = new Map(stages?.map((s) => [s.id, s]) ?? [])
+  const stageMap = useMemo(() => new Map((stages ?? []).map((s) => [s.id, s])), [stages])
 
   const cardBase = 'bg-card border border-border/30 rounded-2xl p-5'
 
