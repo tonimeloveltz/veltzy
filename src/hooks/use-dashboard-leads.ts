@@ -20,8 +20,11 @@ export const useDashboardLeads = (pipelineId?: string | null, showArchived = fal
   return useQuery({
     queryKey: ['dashboard-leads', companyId, pipelineId, showArchived, isSeller ? profileId : null, membersReady],
     queryFn: async () => {
+      // Sem recorte por pipeline: a coluna saiu de `leads` na Onda 4, e aqui ele
+      // ja era redundante. Quem consome (`CopilotLocalTips`) cruza com os
+      // `activeLeadIds` do `useDashboardDeals(pipelineId)`, entao o recorte por
+      // funil vem da intersecao, nao desta query.
       const leads = await leadsService.getLeadsByCompany(companyId!, {
-        pipelineId: pipelineId ?? undefined,
         assignedTo: isSeller ? profileId : undefined,
         limit: 500,
       })

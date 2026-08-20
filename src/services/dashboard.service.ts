@@ -15,15 +15,121 @@ const getPeriodDates = (days: number) => {
   }
 }
 
+interface PagedResponse<T> {
+  data: T[] | null
+  error: unknown
+}
+
+/**
+ * Busca TODAS as linhas de uma query, pagina a pagina.
+ *
+ * O PostgREST corta a resposta em `max_rows` (1000 em `supabase/config.toml`)
+ * sem avisar e sem erro, entao qualquer contagem derivada de `data.length` capa
+ * naquele teto em silencio. Contagem vinda do servidor (`count: 'exact'` com
+ * `head: true`) nao sofre disso e nao precisa deste helper.
+ *
+ * Avanca pelo tamanho recebido em vez de assumir 1000, entao funciona com
+ * qualquer `max_rows` do ambiente. `buildQuery` recebe o intervalo e precisa
+ * ordenar por chave unica, senao a paginacao repete ou pula linhas.
+ *
+ * Exportada para teste (`dashboard.service.test.ts`), nao para uso externo.
+ */
+export const fetchAllRows = async <T>(buildQuery: (from: number, to: number) => PromiseLike<PagedResponse<T>>): Promise<T[]> => {
+  const PAGE = 1000
+  const all: T[] = []
+  let from = 0
+
+  for (;;) {
+    const { data, error } = await buildQuery(from, from + PAGE - 1)
+    if (error) throw error
+    const rows = data ?? []
+    if (rows.length === 0) break
+    all.push(...rows)
+    from += rows.length
+  }
+
+  return all
+}
+
+/**
+ * Contatos que tem negocio no pipeline informado.
+ *
+ * O pipeline e do negocio, nao do contato. `leads.pipeline_id` congela quando o
+ * contato passa a ter 2+ negocios (a trava multi-deal do gatilho
+ * `mirror_deal_to_lead` faz o espelho se calar), entao filtrar por aquela coluna
+ * atribui o contato a um pipeline por acidente historico: ele some de um
+ * pipeline onde tem negocio aberto e aparece em outro onde nao tem nenhum.
+ *
+ * Duas consequencias assumidas ao trocar a fonte do recorte:
+ * - contato com negocios em pipelines diferentes passa a contar nos dois, entao
+ *   a soma por pipeline pode ultrapassar o total sem filtro. E o comportamento
+ *   correto: ele esta nos dois mesmo;
+ * - contato sem negocio nenhum sai de toda metrica filtrada por pipeline, porque
+ *   nao ha negocio que o coloque em pipeline algum. Sem filtro ele continua
+ *   contando normalmente.
+ *
+ * Nao filtra por status: um negocio ganho ou perdido tambem colocou o contato
+ * naquele pipeline.
+ *
+ * Usa `fetchAllRows` porque o conjunto precisa estar COMPLETO: um corte aqui
+ * faria contatos sumirem das metricas em silencio.
+ */
+const getLeadIdsInPipeline = async (companyId: string, pipelineId: string): Promise<Set<string>> => {
+  const rows = await fetchAllRows<{ lead_id: string | null }>((from, to) =>
+    veltzy()
+      .from('deals')
+      .select('lead_id')
+      .eq('company_id', companyId)
+      .eq('pipeline_id', pipelineId)
+      .order('id')
+      .range(from, to)
+  )
+
+  const ids = new Set<string>()
+  rows.forEach((d) => { if (d.lead_id) ids.add(d.lead_id) })
+  return ids
+}
+
+/**
+ * Recorte de pipeline sobre contatos ja carregados. `null` = sem filtro.
+ * Exportada para teste (`dashboard.service.test.ts`), nao para uso externo.
+ */
+export const onlyInPipeline = <T extends { id: string }>(rows: T[] | null, leadIds: Set<string> | null): T[] => {
+  const all = rows ?? []
+  return leadIds ? all.filter((r) => leadIds.has(r.id)) : all
+}
+
 export const getConversionMetrics = async (companyId: string, days = 30, pipelineId?: string, sellerProfileId?: string): Promise<ConversionMetrics> => {
   const { start, prevStart, prevEnd } = getPeriodDates(days)
 
+  const leadIdsInPipeline = pipelineId ? await getLeadIdsInPipeline(companyId, pipelineId) : null
+
   // Leads count (total leads created in period)
-  let currentLeadsQuery = veltzy().from('leads').select('id', { count: 'exact', head: true }).eq('company_id', companyId).gte('created_at', start)
-  if (pipelineId) currentLeadsQuery = currentLeadsQuery.eq('pipeline_id', pipelineId)
-  if (sellerProfileId) currentLeadsQuery = currentLeadsQuery.eq('assigned_to', sellerProfileId)
-  const { count: currentLeadsCount, error: clError } = await currentLeadsQuery
-  if (clError) throw clError
+  //
+  // Dois caminhos de proposito. Sem recorte de pipeline, `count: 'exact'` com
+  // `head: true` conta no servidor: e exato e imune a `max_rows`. Com recorte,
+  // os ids precisam voltar para o cruzamento, e ai a paginacao e obrigatoria,
+  // senao a contagem capa em `max_rows` sem sintoma.
+  const countLeadsInWindow = async (windowStart: string, windowEnd?: string): Promise<number> => {
+    if (!leadIdsInPipeline) {
+      let q = veltzy().from('leads').select('id', { count: 'exact', head: true }).eq('company_id', companyId).gte('created_at', windowStart)
+      if (windowEnd) q = q.lt('created_at', windowEnd)
+      if (sellerProfileId) q = q.eq('assigned_to', sellerProfileId)
+      const { count, error } = await q
+      if (error) throw error
+      return count ?? 0
+    }
+
+    const rows = await fetchAllRows<{ id: string }>((from, to) => {
+      let q = veltzy().from('leads').select('id').eq('company_id', companyId).gte('created_at', windowStart)
+      if (windowEnd) q = q.lt('created_at', windowEnd)
+      if (sellerProfileId) q = q.eq('assigned_to', sellerProfileId)
+      return q.order('id').range(from, to)
+    })
+    return onlyInPipeline(rows, leadIdsInPipeline).length
+  }
+
+  const currentLeadsCount = await countLeadsInWindow(start)
 
   // Deals in period
   let currentDealsQuery = veltzy().from('deals').select('status, value').eq('company_id', companyId).gte('created_at', start)
@@ -33,11 +139,7 @@ export const getConversionMetrics = async (companyId: string, days = 30, pipelin
   if (cdError) throw cdError
 
   // Previous period leads count
-  let prevLeadsQuery = veltzy().from('leads').select('id', { count: 'exact', head: true }).eq('company_id', companyId).gte('created_at', prevStart).lt('created_at', prevEnd)
-  if (pipelineId) prevLeadsQuery = prevLeadsQuery.eq('pipeline_id', pipelineId)
-  if (sellerProfileId) prevLeadsQuery = prevLeadsQuery.eq('assigned_to', sellerProfileId)
-  const { count: prevLeadsCount, error: plError } = await prevLeadsQuery
-  if (plError) throw plError
+  const prevLeadsCount = await countLeadsInWindow(prevStart, prevEnd)
 
   // Previous period deals
   let prevDealsQuery = veltzy().from('deals').select('status, value').eq('company_id', companyId).gte('created_at', prevStart).lt('created_at', prevEnd)
@@ -52,14 +154,140 @@ export const getConversionMetrics = async (companyId: string, days = 30, pipelin
     return { total: leadsTotal, deals: won.length, rate: leadsTotal > 0 ? (won.length / leadsTotal) * 100 : 0, revenue }
   }
 
-  const c = calc(currentLeadsCount ?? 0, currentDeals)
-  const p = calc(prevLeadsCount ?? 0, prevDeals)
+  const c = calc(currentLeadsCount, currentDeals)
+  const p = calc(prevLeadsCount, prevDeals)
 
   return {
     totalLeads: c.total, dealsClosed: c.deals, conversionRate: Math.round(c.rate * 10) / 10, totalRevenue: c.revenue,
     prevTotalLeads: p.total, prevDealsClosed: p.deals, prevConversionRate: Math.round(p.rate * 10) / 10, prevTotalRevenue: p.revenue,
   }
 }
+
+const MONTH_NAMES_PT = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
+
+/**
+ * Um ponto da curva dos cards de KPI.
+ *
+ * `conversionRate` e `avgAiScore` sao `null` quando a faixa nao teve nenhum
+ * negocio / nenhum contato: media de nada nao e zero, e desenhar zero criaria um
+ * vale que nao aconteceu. O grafico liga os pontos por cima do buraco.
+ * `dealsClosed` e contagem, entao faixa vazia e zero de verdade.
+ */
+export interface KpiTrendPoint {
+  label: string
+  conversionRate: number | null
+  avgAiScore: number | null
+  dealsClosed: number
+}
+
+interface TrendBucket {
+  start: number
+  end: number
+  label: string
+}
+
+const pad2 = (n: number) => String(n).padStart(2, '0')
+
+/**
+ * Inicio da janela do periodo selecionado, em ms. `null` = "Total", sem recorte.
+ *
+ * PONTO UNICO DE VERDADE da janela: o recorte dos contatos, o recorte dos
+ * negocios e as faixas da curva (`buildTrendBuckets`) derivam TODOS daqui, de
+ * proposito. Se um deles calculasse a janela por conta propria, um registro
+ * poderia entrar no numero grande do card e cair fora de toda faixa
+ * (`indexOfBucket` devolve -1 e descarta em silencio): o numero e a curva
+ * passariam a discordar sem erro nenhum aparecer.
+ *
+ * "Hoje" (days === 1) e CALENDARIO, nao janela deslizante: comeca a meia-noite
+ * LOCAL do dia corrente. As 09h ele olha 9 horas, nao 24, e o negocio fechado
+ * ontem as 22h fica de fora, que e o comportamento pedido. O service roda no
+ * browser da usuaria, entao "local" e America/Sao_Paulo na pratica.
+ *
+ * "Semana" e "Mes" continuam janela deslizante (`agora - days`).
+ */
+export const periodStartMs = (days: number | undefined, now: number): number | null => {
+  if (days === undefined) return null
+  if (days <= 1) {
+    const midnight = new Date(now)
+    midnight.setHours(0, 0, 0, 0)
+    return midnight.getTime()
+  }
+  return now - days * 86400000
+}
+
+/**
+ * Fatia o periodo selecionado em faixas que o cobrem por INTEIRO, sem sobra e
+ * sem sobreposicao. E isso que faz a curva fechar com o numero grande do card:
+ * cada registro do periodo cai em exatamente uma faixa, entao a soma dos pontos
+ * e o total exibido.
+ *
+ * A janela vem de `periodStartMs`, a MESMA usada pelo recorte dos KPIs: para
+ * "Semana" e "Mes" e deslizante (`agora - days`), para "Hoje" e o calendario a
+ * partir da meia-noite local. Calcular a janela aqui de novo abriria a porta
+ * para faixas e filtro divergirem.
+ *
+ * Sem periodo ("Total"), o recorte e por mes de calendario a partir do registro
+ * mais antigo, porque a janela e a vida inteira da empresa.
+ *
+ * A ultima faixa termina no infinito para abrigar o registro salvo neste exato
+ * instante (e o de `closed_at` levemente adiantado por relogio dessincronizado).
+ */
+export const buildTrendBuckets = (days: number | undefined, now: number, earliest: number): TrendBucket[] => {
+  const buckets: TrendBucket[] = []
+  const windowStart = periodStartMs(days, now)
+
+  // `windowStart === null` acontece exatamente quando `days` e `undefined`; o
+  // teste duplo esta aqui para o compilador estreitar os dois de uma vez.
+  if (days === undefined || windowStart === null) {
+    const first = new Date(Math.min(earliest, now))
+    const cursor = new Date(first.getFullYear(), first.getMonth(), 1)
+    while (cursor.getTime() <= now) {
+      const start = cursor.getTime()
+      const next = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1).getTime()
+      buckets.push({
+        start,
+        end: next,
+        label: `${MONTH_NAMES_PT[cursor.getMonth()]}/${String(cursor.getFullYear()).slice(2)}`,
+      })
+      cursor.setMonth(cursor.getMonth() + 1)
+    }
+  } else if (days <= 1) {
+    // "Hoje" = uma faixa por hora DECORRIDA, da meia-noite local ate a hora
+    // corrente. Nao sao 24 fixas: faixa futura vazia desenharia a curva morrendo
+    // no meio do card.
+    const width = 3600000
+    const slots = new Date(now).getHours() + 1
+    for (let i = 0; i < slots; i++) {
+      const start = windowStart + i * width
+      buckets.push({ start, end: start + width, label: `${pad2(new Date(start).getHours())}h` })
+    }
+  } else {
+    // Um ponto por dia ate 30 dias; acima disso agrupa para a curva nao virar ruido.
+    const slots = Math.min(days, 30)
+    const width = (days * 86400000) / slots
+    for (let i = 0; i < slots; i++) {
+      const start = windowStart + i * width
+      const d = new Date(start)
+      buckets.push({ start, end: start + width, label: `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}` })
+    }
+  }
+
+  if (buckets.length === 0) {
+    buckets.push({ start: now, end: Number.POSITIVE_INFINITY, label: '' })
+  }
+  buckets[buckets.length - 1].end = Number.POSITIVE_INFINITY
+
+  return buckets
+}
+
+/**
+ * Data que coloca o negocio no periodo: ganho e perdido contam quando fecharam,
+ * o resto conta quando entrou no funil. Mesma regra usada pelo recorte dos KPIs
+ * e pela curva, de proposito: se as duas divergirem, a curva deixa de somar o
+ * numero do card.
+ */
+const dealRefDate = (d: { status: string; created_at: string; closed_at: string | null }) =>
+  d.status === 'won' || d.status === 'lost' ? d.closed_at ?? d.created_at : d.created_at
 
 export interface DashboardKpis {
   conversionRate: number
@@ -80,6 +308,7 @@ export interface DashboardKpis {
   prevConversionRate: number
   prevAvgAiScore: number
   prevDealsClosed: number
+  trend: KpiTrendPoint[]
 }
 
 export const getDashboardKpis = async (companyId: string, days?: number, pipelineId?: string, sellerProfileId?: string): Promise<DashboardKpis> => {
@@ -91,20 +320,29 @@ export const getDashboardKpis = async (companyId: string, days?: number, pipelin
   const { data: deals, error: dealsError } = await dealsQuery
   if (dealsError) throw dealsError
 
+  const leadIdsInPipeline = pipelineId ? await getLeadIdsInPipeline(companyId, pipelineId) : null
+
+  // Um unico "agora" para o recorte e para as faixas da curva. Duas chamadas a
+  // Date.now() deslocariam as faixas alguns milissegundos em relacao a janela do
+  // KPI, e registros da borda cairiam fora da curva sem cair fora do numero.
+  const now = Date.now()
+
+  // Janela do periodo, uma unica vez: o recorte dos contatos abaixo, o dos
+  // negocios (`inPeriod`) e as faixas da curva (`buildTrendBuckets`) usam este
+  // mesmo inicio. Ver `periodStartMs` para por que os tres tem que andar juntos.
+  const windowStart = periodStartMs(days, now)
+  const periodStartIso = windowStart === null ? null : new Date(windowStart).toISOString()
+
   // Leads query for ai_score + total count
-  let leadsQuery = veltzy().from('leads').select('ai_score').eq('company_id', companyId)
-  if (pipelineId) leadsQuery = leadsQuery.eq('pipeline_id', pipelineId)
-  if (sellerProfileId) leadsQuery = leadsQuery.eq('assigned_to', sellerProfileId)
-  if (days) {
-    const start = new Date()
-    start.setDate(start.getDate() - days)
-    leadsQuery = leadsQuery.gte('created_at', start.toISOString())
-  }
-  const { data: leads, error: leadsError } = await leadsQuery
-  if (leadsError) throw leadsError
+  const leads = await fetchAllRows<{ id: string; ai_score: number | null; created_at: string }>((from, to) => {
+    let q = veltzy().from('leads').select('id, ai_score, created_at').eq('company_id', companyId)
+    if (sellerProfileId) q = q.eq('assigned_to', sellerProfileId)
+    if (periodStartIso) q = q.gte('created_at', periodStartIso)
+    return q.order('id').range(from, to)
+  })
 
   const allDeals = deals ?? []
-  const allLeads = leads ?? []
+  const allLeads = onlyInPipeline(leads, leadIdsInPipeline)
   const totalLeads = allLeads.length
 
   // Filtro de periodo por status:
@@ -112,19 +350,17 @@ export const getDashboardKpis = async (companyId: string, days?: number, pipelin
   // - won/lost: closed_at (fechados no periodo)
   // - archived: created_at
   // - Sem periodo (Total): mostra tudo
-  const periodStart = days ? new Date(Date.now() - days * 86400000).toISOString() : null
-
   const inPeriod = (dateStr: string | null) => {
-    if (!periodStart) return true
+    if (!periodStartIso) return true
     if (!dateStr) return false
-    return dateStr >= periodStart
+    return dateStr >= periodStartIso
   }
 
-  const open = allDeals.filter((d) => d.status === 'open' && inPeriod(d.created_at))
-  const closed = allDeals.filter((d) => d.status === 'won' && inPeriod(d.closed_at ?? d.created_at))
-  const lost = allDeals.filter((d) => d.status === 'lost' && inPeriod(d.closed_at ?? d.created_at))
-  const pending = allDeals.filter((d) => d.status === 'pending_assignment' && inPeriod(d.created_at))
-  const archived = allDeals.filter((d) => d.status === 'archived' && inPeriod(d.created_at))
+  const open = allDeals.filter((d) => d.status === 'open' && inPeriod(dealRefDate(d)))
+  const closed = allDeals.filter((d) => d.status === 'won' && inPeriod(dealRefDate(d)))
+  const lost = allDeals.filter((d) => d.status === 'lost' && inPeriod(dealRefDate(d)))
+  const pending = allDeals.filter((d) => d.status === 'pending_assignment' && inPeriod(dealRefDate(d)))
+  const archived = allDeals.filter((d) => d.status === 'archived' && inPeriod(dealRefDate(d)))
   const totalDeals = open.length + closed.length + lost.length + pending.length + archived.length
 
   const sumVal = (arr: typeof allDeals) => arr.reduce((s, d) => s + (Number(d.value) || 0), 0)
@@ -137,24 +373,70 @@ export const getDashboardKpis = async (companyId: string, days?: number, pipelin
   const conversionRate = totalDeals > 0 ? Math.round((closed.length / totalDeals) * 100) : 0
   const avgTicket = closed.length > 0 ? closedValue / closed.length : 0
 
+  // Curva dos cards de KPI: os mesmos registros que produzem os numeros acima,
+  // agora distribuidos no tempo. Nao ha consulta nova, so redistribuicao, entao
+  // a curva nao pode discordar do card.
+  const periodDeals = [...open, ...closed, ...lost, ...pending, ...archived]
+  const dealStamps = periodDeals.map((d) => ({ ts: new Date(dealRefDate(d)).getTime(), won: d.status === 'won' }))
+  const leadStamps = allLeads.map((l) => ({ ts: new Date(l.created_at).getTime(), score: l.ai_score ?? 0 }))
+
+  const stamps = [...dealStamps.map((d) => d.ts), ...leadStamps.map((l) => l.ts)].filter((t) => Number.isFinite(t))
+  const earliest = stamps.length > 0 ? Math.min(...stamps) : now
+  const buckets = buildTrendBuckets(days, now, earliest)
+
+  const acc = buckets.map(() => ({ deals: 0, won: 0, leads: 0, scoreSum: 0 }))
+  const indexOfBucket = (ts: number) => {
+    if (!Number.isFinite(ts)) return -1
+    for (let i = 0; i < buckets.length; i++) {
+      if (ts >= buckets[i].start && ts < buckets[i].end) return i
+    }
+    return -1
+  }
+
+  dealStamps.forEach((d) => {
+    const i = indexOfBucket(d.ts)
+    if (i < 0) return
+    acc[i].deals++
+    if (d.won) acc[i].won++
+  })
+
+  leadStamps.forEach((l) => {
+    const i = indexOfBucket(l.ts)
+    if (i < 0) return
+    acc[i].leads++
+    acc[i].scoreSum += l.score
+  })
+
+  const trend: KpiTrendPoint[] = buckets.map((b, i) => ({
+    label: b.label,
+    conversionRate: acc[i].deals > 0 ? Math.round((acc[i].won / acc[i].deals) * 100) : null,
+    avgAiScore: acc[i].leads > 0 ? Math.round(acc[i].scoreSum / acc[i].leads) : null,
+    dealsClosed: acc[i].won,
+  }))
+
   let prevConversionRate = 0
   let prevAvgAiScore = 0
   let prevDealsClosed = 0
   if (days) {
-    const prevEnd = new Date()
-    prevEnd.setDate(prevEnd.getDate() - days)
+    // Periodo anterior com a MESMA semantica do atual, senao a variacao compara
+    // recortes diferentes: para "Hoje" (calendario) o anterior e ONTEM por
+    // inteiro, [00h de ontem, 00h de hoje); para os demais e a janela deslizante
+    // imediatamente anterior. `windowStart` nao e nulo aqui porque `days` existe.
+    const prevEnd = new Date(windowStart ?? now)
     const prevStart = new Date(prevEnd)
-    prevStart.setDate(prevStart.getDate() - days)
+    if (days <= 1) prevStart.setDate(prevStart.getDate() - 1)
+    else prevStart.setTime(prevEnd.getTime() - days * 86400000)
 
-    let prevLeadsQuery = veltzy()
-      .from('leads')
-      .select('ai_score')
-      .eq('company_id', companyId)
-      .gte('created_at', prevStart.toISOString())
-      .lt('created_at', prevEnd.toISOString())
-    if (pipelineId) prevLeadsQuery = prevLeadsQuery.eq('pipeline_id', pipelineId)
-    if (sellerProfileId) prevLeadsQuery = prevLeadsQuery.eq('assigned_to', sellerProfileId)
-    const { data: prevLeads } = await prevLeadsQuery
+    const prevLeads = await fetchAllRows<{ id: string; ai_score: number | null }>((from, to) => {
+      let q = veltzy()
+        .from('leads')
+        .select('id, ai_score')
+        .eq('company_id', companyId)
+        .gte('created_at', prevStart.toISOString())
+        .lt('created_at', prevEnd.toISOString())
+      if (sellerProfileId) q = q.eq('assigned_to', sellerProfileId)
+      return q.order('id').range(from, to)
+    })
 
     let prevDealsQuery = veltzy()
       .from('deals')
@@ -164,9 +446,10 @@ export const getDashboardKpis = async (companyId: string, days?: number, pipelin
       .lt('created_at', prevEnd.toISOString())
     if (pipelineId) prevDealsQuery = prevDealsQuery.eq('pipeline_id', pipelineId)
     if (sellerProfileId) prevDealsQuery = prevDealsQuery.eq('assigned_to', sellerProfileId)
-    const { data: prevDeals } = await prevDealsQuery
+    const { data: prevDeals, error: prevDealsError } = await prevDealsQuery
+    if (prevDealsError) throw prevDealsError
 
-    const pLeads = prevLeads ?? []
+    const pLeads = onlyInPipeline(prevLeads, leadIdsInPipeline)
     const pDeals = prevDeals ?? []
     const pClosed = pDeals.filter((d) => d.status === 'won')
     prevConversionRate = pDeals.length > 0 ? Math.round((pClosed.length / pDeals.length) * 100) : 0
@@ -193,25 +476,26 @@ export const getDashboardKpis = async (companyId: string, days?: number, pipelin
     prevConversionRate,
     prevAvgAiScore,
     prevDealsClosed,
+    trend,
   }
 }
 
 export const getLeadsBySource = async (companyId: string, days?: number, pipelineId?: string, sellerProfileId?: string): Promise<SourceMetrics[]> => {
-  let query = veltzy().from('leads').select('source_id').eq('company_id', companyId)
-  if (pipelineId) query = query.eq('pipeline_id', pipelineId)
-  if (sellerProfileId) query = query.eq('assigned_to', sellerProfileId)
-  if (days) {
-    const start = new Date()
-    start.setDate(start.getDate() - days)
-    query = query.gte('created_at', start.toISOString())
-  }
-  const { data: leads, error: leadsError } = await query
-  if (leadsError) throw leadsError
+  const leadIdsInPipeline = pipelineId ? await getLeadIdsInPipeline(companyId, pipelineId) : null
+
+  const startIso = days ? new Date(Date.now() - days * 86400000).toISOString() : null
+  const leads = await fetchAllRows<{ id: string; source_id: string | null }>((from, to) => {
+    let q = veltzy().from('leads').select('id, source_id').eq('company_id', companyId)
+    if (sellerProfileId) q = q.eq('assigned_to', sellerProfileId)
+    if (startIso) q = q.gte('created_at', startIso)
+    return q.order('id').range(from, to)
+  })
+
   const { data: sources, error: sourcesError } = await veltzy().from('lead_sources').select('id, name, color').eq('company_id', companyId)
   if (sourcesError) throw sourcesError
 
   const counts: Record<string, number> = {}
-  leads?.forEach((l) => { if (l.source_id) counts[l.source_id] = (counts[l.source_id] ?? 0) + 1 })
+  onlyInPipeline(leads, leadIdsInPipeline).forEach((l) => { if (l.source_id) counts[l.source_id] = (counts[l.source_id] ?? 0) + 1 })
 
   return (sources ?? []).map((s) => ({ source_id: s.id, name: s.name, color: s.color, count: counts[s.id] ?? 0 })).filter((s) => s.count > 0)
 }
@@ -254,12 +538,14 @@ export const getMonthlyComparison = async (companyId: string, days?: number, pip
   startDate.setMonth(startDate.getMonth() - monthsBack)
   const startIso = startDate.toISOString()
 
+  const leadIdsInPipeline = pipelineId ? await getLeadIdsInPipeline(companyId, pipelineId) : null
+
   // Leads per month (total incoming)
-  let leadsQuery = veltzy().from('leads').select('created_at').eq('company_id', companyId).gte('created_at', startIso)
-  if (pipelineId) leadsQuery = leadsQuery.eq('pipeline_id', pipelineId)
-  if (sellerProfileId) leadsQuery = leadsQuery.eq('assigned_to', sellerProfileId)
-  const { data: leads, error: leadsError } = await leadsQuery
-  if (leadsError) throw leadsError
+  const leads = await fetchAllRows<{ id: string; created_at: string }>((from, to) => {
+    let q = veltzy().from('leads').select('id, created_at').eq('company_id', companyId).gte('created_at', startIso)
+    if (sellerProfileId) q = q.eq('assigned_to', sellerProfileId)
+    return q.order('id').range(from, to)
+  })
 
   // Won deals per month
   let dealsQuery = veltzy().from('deals').select('created_at').eq('company_id', companyId).eq('status', 'won').gte('created_at', startIso)
@@ -270,7 +556,7 @@ export const getMonthlyComparison = async (companyId: string, days?: number, pip
 
   const months: Record<string, { leads: number; deals: number }> = {}
 
-  leads?.forEach((l) => {
+  onlyInPipeline(leads, leadIdsInPipeline).forEach((l) => {
     const d = new Date(l.created_at)
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
     if (!months[key]) months[key] = { leads: 0, deals: 0 }
@@ -303,12 +589,14 @@ export const getMonthlyComparisonGrid = async (companyId: string, months = 6, pi
   startDate.setMonth(startDate.getMonth() - months)
   const startIso = startDate.toISOString()
 
+  const leadIdsInPipeline = pipelineId ? await getLeadIdsInPipeline(companyId, pipelineId) : null
+
   // Leads per month
-  let leadsQuery = veltzy().from('leads').select('created_at').eq('company_id', companyId).gte('created_at', startIso)
-  if (pipelineId) leadsQuery = leadsQuery.eq('pipeline_id', pipelineId)
-  if (sellerProfileId) leadsQuery = leadsQuery.eq('assigned_to', sellerProfileId)
-  const { data: leads, error: leadsError } = await leadsQuery
-  if (leadsError) throw leadsError
+  const leads = await fetchAllRows<{ id: string; created_at: string }>((from, to) => {
+    let q = veltzy().from('leads').select('id, created_at').eq('company_id', companyId).gte('created_at', startIso)
+    if (sellerProfileId) q = q.eq('assigned_to', sellerProfileId)
+    return q.order('id').range(from, to)
+  })
 
   // Won deals per month with value
   let dealsQuery = veltzy().from('deals').select('status, value, created_at').eq('company_id', companyId).gte('created_at', startIso)
@@ -331,7 +619,7 @@ export const getMonthlyComparisonGrid = async (companyId: string, months = 6, pi
     buckets[key] = { leads: 0, deals: 0, value: 0 }
   })
 
-  leads?.forEach((l) => {
+  onlyInPipeline(leads, leadIdsInPipeline).forEach((l) => {
     const d = new Date(l.created_at)
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
     if (!buckets[key]) buckets[key] = { leads: 0, deals: 0, value: 0 }
@@ -350,8 +638,7 @@ export const getMonthlyComparisonGrid = async (companyId: string, months = 6, pi
   return allMonths.map((month) => {
     const data = buckets[month]
     const [y, m] = month.split('-')
-    const monthNames = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
-    const label = `${monthNames[Number(m) - 1]}/${y.slice(2)}`
+    const label = `${MONTH_NAMES_PT[Number(m) - 1]}/${y.slice(2)}`
     return {
       month: label,
       leads: data.leads,

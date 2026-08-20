@@ -23,8 +23,9 @@ export const useExportLeads = () => {
     if (!companyId) return []
 
     const [leads, deals] = await Promise.all([
+      // `leads` vem sem recorte de pipeline: a coluna saiu na Onda 4. O recorte
+      // e aplicado abaixo, a partir dos `deals`, que continuam filtrados.
       leadsService.getLeadsByCompany(companyId, {
-        pipelineId: pipelineId ?? undefined,
         assignedTo: isSeller ? profileId : undefined,
         limit: 0, // sem limite
       }),
@@ -46,15 +47,26 @@ export const useExportLeads = () => {
       const prev = latestAt.get(d.lead_id)
       if (!prev || d.created_at > prev) {
         latestAt.set(d.lead_id, d.created_at)
-        dealByLead.set(d.lead_id, { value: d.value, status: d.status })
+        dealByLead.set(d.lead_id, {
+          value: d.value,
+          status: d.status,
+          stage_name: d.pipeline_stages?.name ?? null,
+          pipeline_name: d.pipelines?.name ?? null,
+        })
       }
     }
 
-    return leads.map((lead) => ({
+    const rows = leads.map((lead) => ({
       ...lead,
       profiles: lead.assigned_to ? profileMap.get(lead.assigned_to) ?? null : null,
       deal: dealByLead.get(lead.id) ?? null,
     }))
+
+    // Recorte por pipeline: os `deals` acima ja vieram filtrados pelo mesmo
+    // `pipelineId`, entao ter entrada em `dealByLead` E ter negocio naquele
+    // funil. Sem `pipelineId`, exporta todos os contatos, inclusive os sem
+    // negocio nenhum.
+    return pipelineId ? rows.filter((r) => dealByLead.has(r.id)) : rows
   }
 
   const doExport = async (

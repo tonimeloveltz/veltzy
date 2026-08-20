@@ -64,14 +64,14 @@ Deno.serve(async (req) => {
           }
           const { data: stage } = await supabase.from('pipeline_stages').select('id').eq('pipeline_id', defaultPipeline?.id).order('position').limit(1).maybeSingle()
           const { data: source } = await supabase.from('lead_sources').select('id').eq('company_id', connection.company_id).eq('slug', 'instagram').maybeSingle()
-          // Negocio fica em deals; o espelho (trg_mirror_deal_to_lead) replica o
-          // stage para o lead. pipeline_id permanece (leads.pipeline_id NOT NULL).
+          // Negocio fica inteiro em deals, incluindo o pipeline: a coluna saiu
+          // de `leads` na Onda 4. O insert do deal logo abaixo ja leva o
+          // `defaultPipeline`.
           const { data: newLead } = await supabase.from('leads').insert({
             company_id: connection.company_id,
             phone: `ig_${senderId}`,
             instagram_id: senderId,
             name: senderName,
-            pipeline_id: defaultPipeline?.id,
             source_id: source?.id,
           }).select('id').single()
           lead = newLead

@@ -14,9 +14,9 @@ const lead = (over: Partial<LeadWithDetails>): LeadWithDetails =>
   ({
     id: 'l1', company_id: 'c', pipeline_id: 'p1', name: 'N', phone: '1',
     email: null, instagram_id: null, linkedin_id: null, source_id: null,
-    stage_id: 's1', status: 'new', temperature: 'warm', ai_score: 0,
+    temperature: 'warm', ai_score: 0,
     assigned_to: null, is_ai_active: false, is_queued: false,
-    conversation_status: 'read', tags: [], deal_value: null, observations: null,
+    conversation_status: 'read', tags: [], observations: null,
     avatar_url: null, ad_context: null, whatsapp_instance_name: null,
     company_name: null, transfer_summary: null, last_customer_message_at: null,
     sla_breached: false, first_response_at: null, instagram_handle: null,

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Plus, GripVertical, Loader2, StarOff } from 'lucide-react'
 import {
@@ -29,10 +29,10 @@ interface SortablePipelineRowProps {
   pipeline: Pipeline
   isSelected: boolean
   onSelect: (id: string) => void
-  leadCount?: number
+  dealCount?: number
 }
 
-const SortablePipelineRow = ({ pipeline, isSelected, onSelect, leadCount }: SortablePipelineRowProps) => {
+const SortablePipelineRow = ({ pipeline, isSelected, onSelect, dealCount }: SortablePipelineRowProps) => {
   const updatePipeline = useUpdatePipeline()
   const deletePipeline = useDeletePipeline()
   const setDefault = useSetDefaultPipeline()
@@ -85,7 +85,7 @@ const SortablePipelineRow = ({ pipeline, isSelected, onSelect, leadCount }: Sort
         className="h-7 flex-1 text-xs"
       />
       <span className="text-[10px] text-muted-foreground shrink-0">
-        {leadCount ?? 0} leads
+        {dealCount ?? 0} negócios
       </span>
       {pipeline.is_default ? (
         <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded font-medium shrink-0">
@@ -128,21 +128,32 @@ const PipelineListManager = ({ selectedPipelineId, onSelectPipeline }: PipelineL
   const companyId = useAuthStore((s) => s.company?.id)
   const { data: pipelines, isLoading } = usePipelines()
 
-  const { data: leadCounts } = useQuery({
-    queryKey: ['pipeline-lead-counts', companyId],
+  const pipelineIds = useMemo(() => (pipelines ?? []).map((p) => p.id), [pipelines])
+
+  // Conta NEGOCIOS por pipeline, nao contatos: o pipeline mora em `deals`.
+  //
+  // Um `count: 'exact', head: true` por pipeline conta no servidor. A versao
+  // anterior trazia todas as linhas e agrupava em JS, o que a deixava sujeita
+  // ao teto do PostgREST (`max_rows`, 1000): acima disso a contagem sairia
+  // errada e sem sintoma. Trocar a tabela sem trocar a tecnica levaria o
+  // defeito junto.
+  const { data: dealCounts } = useQuery({
+    queryKey: ['pipeline-deal-counts', companyId, pipelineIds],
     queryFn: async () => {
-      const { data, error } = await veltzy()
-        .from('leads')
-        .select('pipeline_id')
-        .eq('company_id', companyId!)
-      if (error) throw error
-      const counts: Record<string, number> = {}
-      data.forEach((row: { pipeline_id: string }) => {
-        counts[row.pipeline_id] = (counts[row.pipeline_id] ?? 0) + 1
-      })
-      return counts
+      const entries = await Promise.all(
+        pipelineIds.map(async (id) => {
+          const { count, error } = await veltzy()
+            .from('deals')
+            .select('id', { count: 'exact', head: true })
+            .eq('company_id', companyId!)
+            .eq('pipeline_id', id)
+          if (error) throw error
+          return [id, count ?? 0] as const
+        }),
+      )
+      return Object.fromEntries(entries) as Record<string, number>
     },
-    enabled: !!companyId,
+    enabled: !!companyId && pipelineIds.length > 0,
   })
   const createPipeline = useCreatePipeline()
   const reorderPipelines = useReorderPipelines()
@@ -192,7 +203,7 @@ const PipelineListManager = ({ selectedPipelineId, onSelectPipeline }: PipelineL
                 pipeline={p}
                 isSelected={p.id === selectedPipelineId}
                 onSelect={onSelectPipeline}
-                leadCount={leadCounts?.[p.id]}
+                dealCount={dealCounts?.[p.id]}
               />
             ))}
           </SortableContext>

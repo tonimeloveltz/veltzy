@@ -35,8 +35,10 @@
           });
           if (theme !== 'sand') {
             root.style.setProperty('--accent', isDark ? (h + ' ' + Math.round(s * 0.1) + '% 16%') : (h + ' ' + Math.round(s * 0.6) + '% 94%'));
-            root.style.setProperty('--accent-foreground', isDark ? (h + ' ' + s + '% 58%') : (h + ' ' + s + '% 32%'));
           }
+          // Fora do guard de propósito: o sand mantém o fundo de areia, mas a cor
+          // do texto no hover segue a marca igual aos outros temas.
+          root.style.setProperty('--accent-foreground', isDark ? (h + ' ' + s + '% 58%') : (h + ' ' + s + '% 32%'));
         }
       })();
     </script>

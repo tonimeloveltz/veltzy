@@ -236,7 +236,10 @@ Retorne apenas o JSON, sem texto adicional.`
     // =============================================
     // MODE: SDR scoring + auto-reply (chamado pelo zapi-webhook)
     // =============================================
-    const { leadId, companyId, messageContent, conversationHistory } = body
+    // `pipelineId` vem do chamador (lead-inbound-handler) desde a Onda 4: o
+    // pipeline saiu de `leads` e passou a ser informacao do negocio, resolvida
+    // uma vez por inbound.
+    const { leadId, companyId, messageContent, conversationHistory, pipelineId } = body
 
     // 1. Checar feature flag
     const { data: company } = await supabase
@@ -263,7 +266,7 @@ Retorne apenas o JSON, sem texto adicional.`
     // 4. Buscar dados do lead e prompt customizado
     const { data: lead } = await supabaseVeltzy
       .from('leads')
-      .select('name, phone, email, temperature, ai_score, tags, deal_value, pipeline_id')
+      .select('name, phone, email, temperature, ai_score, tags')
       .eq('id', leadId)
       .single()
 
@@ -355,7 +358,7 @@ Retorne apenas o JSON, sem texto adicional.`
       try {
         const { data: leadFull } = await supabaseVeltzy
           .from('leads')
-          .select('assigned_to, pipeline_id, name, phone')
+          .select('assigned_to, name, phone')
           .eq('id', leadId)
           .single()
 
@@ -367,12 +370,19 @@ Retorne apenas o JSON, sem texto adicional.`
             .eq('id', leadFull.assigned_to)
             .single()
 
-          // Buscar config do pipeline
-          const { data: pipeline } = await supabaseVeltzy
-            .from('pipelines')
-            .select('sdr_instance_name, sdr_transfer_message_template')
-            .eq('id', leadFull.pipeline_id)
-            .single()
+          // Buscar config do pipeline. Vem do payload agora (Onda 4).
+          // Sem pipeline, `pipeline` fica null e os dois usos abaixo caem no
+          // default: FALLBACK_TEMPLATE para o texto e instancia indefinida no
+          // envio, que o whatsapp-send resolve pela cadeia dele. Template de
+          // transferencia tem default; agent_profile nao teria, e por isso o
+          // sdr-engine recusa e este aqui nao.
+          const { data: pipeline } = pipelineId
+            ? await supabaseVeltzy
+              .from('pipelines')
+              .select('sdr_instance_name, sdr_transfer_message_template')
+              .eq('id', pipelineId)
+              .single()
+            : { data: null }
 
           // Enviar mensagem de transfer ao lead (pelo numero do SDR)
           const FALLBACK_TEMPLATE = 'Ola! A partir de agora voce sera atendido por {vendedor_nome}. Em breve ele entrara em contato.'

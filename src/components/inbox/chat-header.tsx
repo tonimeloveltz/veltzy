@@ -1,5 +1,8 @@
+import { useMemo } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { cn } from '@/lib/utils'
+import { buildActiveDealInfo } from '@/lib/active-deal-info'
+import { useDealsByLead } from '@/hooks/use-deals'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, Kanban, Phone, PanelRight } from 'lucide-react'
@@ -25,8 +28,19 @@ const ChatHeader = ({ lead }: ChatHeaderProps) => {
   const showInstanceBadge = whatsappStatus?.provider === 'evolution' || whatsappStatus?.provider === 'cloud_api'
   const avatarSrc = lead.avatar_url || undefined
 
-  const pipelineName = pipelines && pipelines.length > 1
-    ? pipelines.find((p) => p.id === lead.pipeline_id)?.name
+  // D9: o pipeline e do negocio, nao do contato. Usa a regra unica (R1) do
+  // `buildActiveDealInfo`: negocio ABERTO mais recente por `created_at`.
+  // Contato sem negocio aberto nao tem pipeline, e ai o badge some em vez de
+  // aparecer vazio, reaproveitando o mesmo caminho de "nao mostrar" que ja
+  // existe para empresa com um pipeline so.
+  const { data: leadDeals } = useDealsByLead(lead.id)
+  const activePipelineId = useMemo(
+    () => buildActiveDealInfo(leadDeals).pipelineByLeadId.get(lead.id) ?? null,
+    [leadDeals, lead.id],
+  )
+
+  const pipelineName = pipelines && pipelines.length > 1 && activePipelineId
+    ? pipelines.find((p) => p.id === activePipelineId)?.name
     : null
 
   return (

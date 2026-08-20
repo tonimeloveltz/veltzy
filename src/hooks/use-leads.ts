@@ -25,7 +25,6 @@ export const useLeads = () => {
     queryKey: ['leads', companyId, activePipelineId, filters.sourceId, filters.temperature, assignedToFilter, membersReady],
     queryFn: async () => {
       const leads = await leadsService.getLeadsByCompany(companyId!, {
-        pipelineId: activePipelineId!,
         sourceId: filters.sourceId,
         temperature: filters.temperature,
         assignedTo: assignedToFilter,

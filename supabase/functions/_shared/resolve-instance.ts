@@ -25,7 +25,7 @@ export async function resolveInstanceName(
   // 1. Instancia do lead (responde pelo numero que recebeu)
   const { data: lead } = await supabaseVeltzy
     .from('leads')
-    .select('whatsapp_instance_name, assigned_to, pipeline_id')
+    .select('whatsapp_instance_name, assigned_to')
     .eq('id', ctx.leadId)
     .single()
 
@@ -33,9 +33,13 @@ export async function resolveInstanceName(
     return lead.whatsapp_instance_name
   }
 
-  // 2. SDR mode: usa instancia do pipeline
+  // 2. SDR mode: usa instancia do pipeline.
+  // Sem fallback para o contato: a coluna saiu de `leads` na Onda 4, e o
+  // fallback ja era redundante. Quem chama em modo 'sdr' passa `pipelineId`
+  // explicito, e este ramo so roda depois de um inbound, que carimba
+  // `whatsapp_instance_name` e resolve na prioridade 1, antes de chegar aqui.
   if (ctx.mode === 'sdr') {
-    const pipelineId = ctx.pipelineId ?? lead?.pipeline_id
+    const pipelineId = ctx.pipelineId
     if (pipelineId) {
       const { data: pipeline } = await supabaseVeltzy
         .from('pipelines')

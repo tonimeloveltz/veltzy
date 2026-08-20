@@ -67,17 +67,15 @@ export async function resolveWhatsAppInstance(
 
 const LEAD_WITH_DETAILS_SELECT = `
   *,
-  lead_sources:source_id(*),
-  pipeline_stages:stage_id(*),
-  pipelines:pipeline_id(*)
+  lead_sources:source_id(*)
 `
 
+// Sem `pipelineId`: o pipeline saiu de `leads` na Onda 4 e nao ha coluna para
+// filtrar. Quem precisa de recorte por funil deriva de `deals`.
 interface LeadFilters {
-  stageId?: string
   sourceId?: string | null
   temperature?: string | null
   assignedTo?: string | null
-  pipelineId?: string
   search?: string
   limit?: number
   offset?: number
@@ -100,12 +98,6 @@ export const getLeadsByCompany = async (companyId: string, filters?: LeadFilters
     query = query.range(offset, offset + limit - 1)
   }
 
-  if (filters?.pipelineId) {
-    query = query.eq('pipeline_id', filters.pipelineId)
-  }
-  if (filters?.stageId) {
-    query = query.eq('stage_id', filters.stageId)
-  }
   if (filters?.sourceId) {
     query = query.eq('source_id', filters.sourceId)
   }
@@ -158,10 +150,10 @@ export const createLead = async (companyId: string, input: CreateLeadInput): Pro
     )
   }
 
-  // Campos de negocio (stage_id, deal_value, status) NAO sao mais gravados em
-  // leads: vao so para deals e o espelho (trg_mirror_deal_to_lead) replica de
-  // volta apos o insert do deal. pipeline_id permanece porque a coluna e NOT
-  // NULL e o espelho so roda depois (sera removido na Fase 4).
+  // Nenhum campo de negocio (pipeline_id, stage_id, deal_value, status) e
+  // gravado em `leads`: todos moram em `deals`. `input.pipeline_id` continua
+  // sendo aceito, mas so como contexto da chamada, para resolver a instancia de
+  // WhatsApp acima. Nao e persistido.
   const { data, error } = await veltzy()
     .from('leads')
     .insert({
@@ -171,7 +163,6 @@ export const createLead = async (companyId: string, input: CreateLeadInput): Pro
       email: normalized.email,
       company_name: normalized.company_name,
       source_id: normalized.source_id,
-      pipeline_id: normalized.pipeline_id,
       temperature: normalized.temperature,
       observations: normalized.observations,
       assigned_to: normalized.assigned_to,
@@ -237,18 +228,6 @@ export const bulkUpdateAssignedTo = async (companyId: string, leadIds: string[],
   }
 }
 
-export const bulkArchive = async (companyId: string, leadIds: string[]): Promise<void> => {
-  const batches = chunk(leadIds, BATCH_SIZE)
-  for (const batch of batches) {
-    const { error } = await veltzy()
-      .from('leads')
-      .update({ status: 'archived' as const })
-      .in('id', batch)
-      .eq('company_id', companyId)
-    if (error) throw error
-  }
-}
-
 export const bulkDelete = async (companyId: string, leadIds: string[], userId: string): Promise<void> => {
   const batches = chunk(leadIds, BATCH_SIZE)
   for (const batch of batches) {
@@ -272,26 +251,3 @@ export const bulkDelete = async (companyId: string, leadIds: string[], userId: s
     })
   if (logError) throw logError
 }
-
-export const bulkMoveToPipeline = async (companyId: string, leadIds: string[], targetPipelineId: string): Promise<void> => {
-  // Buscar primeiro stage do pipeline destino
-  const { data: firstStage, error: stageError } = await veltzy()
-    .from('pipeline_stages')
-    .select('id')
-    .eq('pipeline_id', targetPipelineId)
-    .order('position')
-    .limit(1)
-    .single()
-  if (stageError) throw stageError
-
-  const batches = chunk(leadIds, BATCH_SIZE)
-  for (const batch of batches) {
-    const { error } = await veltzy()
-      .from('leads')
-      .update({ pipeline_id: targetPipelineId, stage_id: firstStage.id })
-      .in('id', batch)
-      .eq('company_id', companyId)
-    if (error) throw error
-  }
-}
-

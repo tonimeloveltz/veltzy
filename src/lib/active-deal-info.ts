@@ -5,6 +5,8 @@ export interface ActiveDealInfo {
   activeLeadIds: Set<string>
   /** lead_id -> stage_id do deal ABERTO mais recente do lead. */
   stageByLeadId: Map<string, string>
+  /** lead_id -> pipeline_id do deal ABERTO mais recente do lead. */
+  pipelineByLeadId: Map<string, string>
 }
 
 /**
@@ -14,11 +16,19 @@ export interface ActiveDealInfo {
  * "Ativo" = tem deal com status 'open' (equivale a estagio nao-final, ja que o
  * status so vira won/lost em estagio final). Multi-deal: o stage usado e o do
  * deal aberto MAIS RECENTE (por created_at). Lead sem deal aberto fica de fora.
+ *
+ * `pipelineByLeadId` entrou na Onda 4, quando `leads.pipeline_id` saiu: esta e a
+ * regra unica de "qual negocio representa o contato", entao quem precisa do
+ * pipeline representativo usa daqui em vez de reimplementar o criterio. Cada
+ * mapa tem seu proprio controle de "mais recente" porque nem todo deal tem
+ * stage e pipeline preenchidos ao mesmo tempo.
  */
 export const buildActiveDealInfo = (deals: DealWithLead[] | undefined): ActiveDealInfo => {
   const activeLeadIds = new Set<string>()
   const stageByLeadId = new Map<string, string>()
+  const pipelineByLeadId = new Map<string, string>()
   const chosenAt = new Map<string, string>()
+  const pipelineChosenAt = new Map<string, string>()
 
   for (const d of deals ?? []) {
     if (d.status !== 'open' || !d.lead_id) continue
@@ -28,7 +38,12 @@ export const buildActiveDealInfo = (deals: DealWithLead[] | undefined): ActiveDe
       chosenAt.set(d.lead_id, d.created_at)
       stageByLeadId.set(d.lead_id, d.stage_id)
     }
+    const prevPipeline = pipelineChosenAt.get(d.lead_id)
+    if (d.pipeline_id && (!prevPipeline || d.created_at > prevPipeline)) {
+      pipelineChosenAt.set(d.lead_id, d.created_at)
+      pipelineByLeadId.set(d.lead_id, d.pipeline_id)
+    }
   }
 
-  return { activeLeadIds, stageByLeadId }
+  return { activeLeadIds, stageByLeadId, pipelineByLeadId }
 }

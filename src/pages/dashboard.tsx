@@ -3,7 +3,7 @@ import {
   AlertCircle, ArrowUp, ArrowDown, Building2, Clock, Calendar, CalendarDays, BarChart3,
   TrendingUp, Target, DollarSign, Users, Equal,
 } from 'lucide-react'
-import { ComposedChart, Line, Area, ResponsiveContainer } from 'recharts'
+import { ComposedChart, Line, Area, Tooltip, ResponsiveContainer } from 'recharts'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -22,8 +22,7 @@ import { MetricsLineChart } from '@/components/dashboard/metrics-line-chart'
 import { BottleneckDetector } from '@/components/dashboard/bottleneck-detector'
 import { ForecastCard } from '@/components/dashboard/forecast-card'
 import { CopilotCard } from '@/components/dashboard/copilot-card'
-
-const curveData = [5, 8, 15, 35, 60, 75, 60, 35, 15, 8, 5].map((v, i) => ({ x: i, y: v }))
+import type { KpiTrendPoint } from '@/services/dashboard.service'
 
 const periodOptions = [
   { label: 'Hoje', icon: Clock, days: 1 },
@@ -35,41 +34,117 @@ const periodOptions = [
 const fmt = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
 
-const DecorativeLine = () => (
-  <div className="h-[80px] mt-4 opacity-60">
-    <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
-      <ComposedChart data={curveData} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-        <defs>
-          <linearGradient id="kpiGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.5} />
-            <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0.05} />
-          </linearGradient>
-          <filter id="glow">
-            <feGaussianBlur stdDeviation="3" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-        </defs>
-        <Area
-          type="monotone"
-          dataKey="y"
-          fill="url(#kpiGradient)"
-          stroke="none"
-        />
-        <Line
-          type="monotone"
-          dataKey="y"
-          stroke="hsl(var(--primary))"
-          strokeWidth={2.5}
-          dot={false}
-          filter="url(#glow)"
-        />
-      </ComposedChart>
-    </ResponsiveContainer>
-  </div>
-)
+type TrendKey = 'conversionRate' | 'avgAiScore' | 'dealsClosed'
+
+const SparklineTooltip = ({ active, payload, format }: {
+  active?: boolean
+  payload?: Array<{ value: number | null; payload: KpiTrendPoint }>
+  format: (v: number) => string
+}) => {
+  const point = payload?.[0]
+  if (!active || !point) return null
+  return (
+    <div className="glass-card rounded-lg px-2.5 py-1.5 shadow-lg">
+      <p className="text-[10px] text-muted-foreground">{point.payload.label}</p>
+      <p className="text-xs font-semibold text-foreground">
+        {point.value === null ? 'Sem dados' : format(point.value)}
+      </p>
+    </div>
+  )
+}
+
+/**
+ * Mesma curva de antes, agora alimentada pelo periodo selecionado.
+ *
+ * Os pontos vem do mesmo `getDashboardKpis` que produz o numero grande do card,
+ * so que distribuidos no tempo, entao a curva sempre fecha com o numero.
+ * Faixa sem registro chega como `null` e nao como zero: `connectNulls` passa por
+ * cima do buraco em vez de desenhar um vale que nao aconteceu.
+ */
+const KpiSparkline = ({ data, dataKey, format }: {
+  data: KpiTrendPoint[] | undefined
+  dataKey: TrendKey
+  format: (v: number) => string
+}) => {
+  const points = data ?? []
+  // Apara as faixas nulas das DUAS PONTAS, por dataKey. `connectNulls` so
+  // atravessa buraco ENTRE dois valores: nulo na ponta nao tem o que ligar do
+  // lado de fora, entao a serie comecava (ou terminava) no meio da largura e a
+  // Area aparecia com um corte vertical. Acontece em "Total", onde a empresa tem
+  // contato num mes sem nenhum negocio e a taxa daquele mes vem nula.
+  //
+  // Nulo do MEIO continua nulo de proposito, atravessado pelo `connectNulls`.
+  // Trocar nulo por zero desenharia um vale que nao aconteceu, que e justamente
+  // o motivo de o nulo existir (ver `KpiTrendPoint` em dashboard.service.ts).
+  //
+  // Isso nao fere o invariante de soma da curva: faixa nula nao contribui com
+  // nada, entao aparar as pontas nao muda o que a curva soma. E recorte de
+  // exibicao, nao de dado, e por isso vive aqui e nao em `buildTrendBuckets`.
+  const first = points.findIndex((p) => p[dataKey] !== null)
+  const last = points.findLastIndex((p) => p[dataKey] !== null)
+  const series = first < 0 ? [] : points.slice(first, last + 1)
+  const hasValue = series.length > 0
+  // Uma faixa sozinha nao desenha linha: um segmento precisa de dois pontos, e
+  // com `dot={false}` o card fica em branco mesmo tendo dado (acontece em
+  // "Hoje", onde quase toda hora do dia costuma vir vazia, e de madrugada onde o
+  // dia inteiro cabe em uma faixa so). Nesse caso o ponto solitario vira bolinha
+  // para o card nao mentir.
+  const lonePoint = series.length === 1
+
+  if (!hasValue) {
+    return (
+      <div className="h-[80px] mt-4 flex items-end justify-center pb-3">
+        <span className="text-xs text-muted-foreground/70">Sem dados no período</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="h-[80px] mt-4 opacity-60">
+      <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+        {/* Margem >= raio do dot (r=3) nos quatro lados: sem ela a bolinha do
+            ponto solitario nasce colada na borda da area de plotagem e sai
+            cortada pela metade, no topo quando o valor bate no maximo do
+            dominio e nas laterais quando cai na primeira ou na ultima faixa. */}
+        <ComposedChart data={series} margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
+          <defs>
+            <linearGradient id={`kpiGradient-${dataKey}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.5} />
+              <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0.05} />
+            </linearGradient>
+            <filter id={`glow-${dataKey}`}>
+              <feGaussianBlur stdDeviation="3" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+          <Tooltip content={<SparklineTooltip format={format} />} cursor={false} />
+          <Area
+            type="monotone"
+            dataKey={dataKey}
+            connectNulls
+            fill={`url(#kpiGradient-${dataKey})`}
+            stroke="none"
+          />
+          <Line
+            type="monotone"
+            dataKey={dataKey}
+            connectNulls
+            stroke="hsl(var(--primary))"
+            strokeWidth={2.5}
+            dot={lonePoint ? { r: 3, fill: 'hsl(var(--primary))', stroke: 'none' } : false}
+            filter={`url(#glow-${dataKey})`}
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+const pct = (v: number) => `${v}%`
+const unit = (v: number) => String(v)
 
 const VariationBadge = ({ current, previous }: { current: number; previous: number }) => {
   const { percentage, isPositive, isNeutral } = calculatePeriodChange(current, previous)
@@ -215,7 +290,7 @@ const DashboardPage = () => {
                 {selectedDays && <VariationBadge current={kpis?.conversionRate ?? 0} previous={kpis?.prevConversionRate ?? 0} />}
               </div>
               <p className="text-sm text-muted-foreground mt-1">Leads convertidos em deals</p>
-              <DecorativeLine />
+              <KpiSparkline data={kpis?.trend} dataKey="conversionRate" format={pct} />
             </div>
 
             {/* Score Medio IA */}
@@ -233,7 +308,7 @@ const DashboardPage = () => {
                 {selectedDays && <VariationBadge current={kpis?.avgAiScore ?? 0} previous={kpis?.prevAvgAiScore ?? 0} />}
               </div>
               <p className="text-sm text-muted-foreground mt-1">Qualificação média dos leads</p>
-              <DecorativeLine />
+              <KpiSparkline data={kpis?.trend} dataKey="avgAiScore" format={pct} />
             </div>
 
             {/* Deals Fechados */}
@@ -251,7 +326,7 @@ const DashboardPage = () => {
                 {selectedDays && <VariationBadge current={kpis?.dealsClosed ?? 0} previous={kpis?.prevDealsClosed ?? 0} />}
               </div>
               <p className="text-sm text-muted-foreground mt-1">Negócios concluídos com sucesso</p>
-              <DecorativeLine />
+              <KpiSparkline data={kpis?.trend} dataKey="dealsClosed" format={unit} />
             </div>
 
             {/* LINHA 2 - Cards com breakdown */}
