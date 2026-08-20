@@ -12,6 +12,9 @@ import { LeadSourceBadge } from '@/components/pipeline/lead-source-badge'
 import { ImportLeadsModal } from '@/components/pipeline/import-leads-modal'
 import { NewContactModal } from '@/components/contacts/new-contact-modal'
 import { IdentityCell } from '@/components/shared/identity-cell'
+import { SortButton } from '@/components/shared/sort-button'
+import { useTableSort } from '@/hooks/use-table-sort'
+import { sortRows, type SortValue } from '@/lib/table-sort'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -25,6 +28,23 @@ import type { LeadTemperature } from '@/types/database'
 
 const fmt = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
+
+type ContactSortKey = 'contato' | 'canal' | 'negocios' | 'valor' | 'temperatura'
+
+// Temperatura ordena pela ESCALA, nunca pelo rotulo em alfabeto: com "Pegando
+// fogo" no meio, a ordem alfabetica mente. O posto segue a ordem do type
+// LeadTemperature.
+const temperatureRank: Record<LeadTemperature, number> = { cold: 0, warm: 1, hot: 2, fire: 3 }
+
+// Cada acessor devolve o que a CELULA mostra. Ordenar por um campo diferente do
+// que esta escrito na tela e bug, nao recurso.
+const contactSortAccessors: Record<ContactSortKey, (c: ContactRow) => SortValue> = {
+  contato: (c) => leadDisplayName(c.name, c.phone ?? ''),
+  canal: (c) => c.lead_sources?.name ?? c.whatsapp_instance_name ?? null,
+  negocios: (c) => c.dealCount,
+  valor: (c) => c.ltv,
+  temperatura: (c) => temperatureRank[c.temperature] ?? null,
+}
 
 const thClass = 'pb-3 px-2 first:pl-0 last:pr-0 text-xs font-medium text-muted-foreground'
 
@@ -60,6 +80,15 @@ const ContatosPage = () => {
       return true
     })
   }, [contacts, search, sourceId, temperature])
+
+  const { sort, toggle } = useTableSort<ContactSortKey>()
+
+  // A ordenacao entra DEPOIS do filtro e alimenta so o <tbody>. `sort` nulo e a
+  // ordem padrao que veio da query.
+  const sortedRows = useMemo(
+    () => (sort ? sortRows(rows, contactSortAccessors[sort.key], sort.direction) : rows),
+    [rows, sort],
+  )
 
   return (
     <div className="min-h-full p-4 sm:p-6">
@@ -143,12 +172,36 @@ const ContatosPage = () => {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border/30">
-                  <th className={cn(thClass, 'text-left w-[30%]')}>Contato</th>
-                  <th className={cn(thClass, 'text-left w-[18%]')}>Canal</th>
-                  <th className={cn(thClass, 'text-left w-[10%]')}>Negocios</th>
-                  <th className={cn(thClass, 'text-left w-[13%]')}>Valor total</th>
-                  <th className={cn(thClass, 'text-left w-[12%]')}>Temperatura</th>
-                  <th className={cn(thClass, 'text-left w-[13%]')}>Responsavel</th>
+                  <th className={cn(thClass, 'text-left w-[25%]')}>
+                    <span className="inline-flex items-center gap-1">
+                      Contato
+                      <SortButton columnKey="contato" label="Contato" sort={sort} onToggle={toggle} />
+                    </span>
+                  </th>
+                  <th className={cn(thClass, 'text-left w-[18%]')}>
+                    <span className="inline-flex items-center gap-1">
+                      Canal
+                      <SortButton columnKey="canal" label="Canal" sort={sort} onToggle={toggle} />
+                    </span>
+                  </th>
+                  <th className={cn(thClass, 'text-left w-[10%]')}>
+                    <span className="inline-flex items-center gap-1">
+                      Negocios
+                      <SortButton columnKey="negocios" label="Negocios" sort={sort} onToggle={toggle} />
+                    </span>
+                  </th>
+                  <th className={cn(thClass, 'text-left w-[13%]')}>
+                    <span className="inline-flex items-center gap-1">
+                      Valor total
+                      <SortButton columnKey="valor" label="Valor total" sort={sort} onToggle={toggle} />
+                    </span>
+                  </th>
+                  <th className={cn(thClass, 'text-left w-[12%]')}>
+                    <span className="inline-flex items-center gap-1">
+                      Temperatura
+                      <SortButton columnKey="temperatura" label="Temperatura" sort={sort} onToggle={toggle} />
+                    </span>
+                  </th>
                   <th className={cn(thClass, 'text-left w-[4%]')}>Chat</th>
                 </tr>
               </thead>
@@ -173,7 +226,7 @@ const ContatosPage = () => {
                   </tr>
                 )}
 
-                {!isLoading && !isError && rows.map((c) => {
+                {!isLoading && !isError && sortedRows.map((c) => {
                   const temp = leadTemperatureConfig[c.temperature]
                   return (
                     <tr
@@ -222,11 +275,6 @@ const ContatosPage = () => {
                             {temp.label}
                           </span>
                         )}
-                      </td>
-
-                      {/* Responsavel */}
-                      <td className={cn(tdClass, 'text-xs')}>
-                        {c.profiles?.name ?? <span className="text-muted-foreground/40">Sem responsavel</span>}
                       </td>
 
                       {/* Chat */}

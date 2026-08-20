@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ArrowRightLeft, Archive, Trash2, Download, X, FolderInput } from 'lucide-react'
+import { ArrowRightLeft, Archive, ArchiveRestore, Trash2, Download, X, FolderInput } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -7,6 +7,7 @@ import {
 import { BulkTransferModal } from './bulk-transfer-modal'
 import { BulkMovePipelineModal } from './bulk-move-pipeline-modal'
 import { BulkArchiveDialog } from './bulk-archive-dialog'
+import { BulkUnarchiveDialog } from './bulk-unarchive-dialog'
 import { BulkDeleteDialog } from './bulk-delete-dialog'
 import { useBulkExport } from '@/hooks/use-bulk-leads'
 import type { ExportLeadRow } from '@/lib/export-leads'
@@ -24,6 +25,7 @@ export const BulkActionBar = ({ selectedIds, leads, onClear, userRole, mode = 'l
   const [transferOpen, setTransferOpen] = useState(false)
   const [movePipelineOpen, setMovePipelineOpen] = useState(false)
   const [archiveOpen, setArchiveOpen] = useState(false)
+  const [unarchiveOpen, setUnarchiveOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const { exportCsv, exportPdf, exportXlsx } = useBulkExport()
 
@@ -33,10 +35,20 @@ export const BulkActionBar = ({ selectedIds, leads, onClear, userRole, mode = 'l
 
   const canTransfer = userRole === 'admin' || userRole === 'manager' || userRole === 'super_admin'
   const canDelete = userRole === 'admin' || userRole === 'super_admin'
+  // So admin/manager enxergam o toggle "Mostrar arquivados" na tela de
+  // Negocios, entao a acao nao deve existir para seller nem por outro caminho.
+  const canUnarchive = userRole === 'admin' || userRole === 'manager' || userRole === 'super_admin'
 
-  // Nao faz sentido arquivar itens ja arquivados: esconde o botao quando toda a
-  // selecao ja esta arquivada (ex.: filtro "Mostrar arquivados" ativo).
-  const allArchived = selectedLeads.length > 0 && selectedLeads.every((l) => l.deal?.status === 'archived')
+  const archivedSelected = selectedLeads.filter((l) => l.deal?.status === 'archived')
+  // `hasSelection` nao e redundante: selectedLeads e o cruzamento de selectedIds
+  // com leads, e fica vazio se a selecao sobreviver a uma troca de filtro
+  // (desligar "Mostrar arquivados" com linhas arquivadas selecionadas).
+  const hasSelection = selectedLeads.length > 0
+  // Selecao mista (arquivados + nao arquivados) esconde as DUAS acoes: nao da
+  // para prever o que "Arquivar" faria com o que ja esta arquivado, nem o que
+  // "Desarquivar" faria com o que esta ativo.
+  const showArchive = hasSelection && archivedSelected.length === 0
+  const showUnarchive = hasSelection && archivedSelected.length === selectedLeads.length
 
   return (
     <>
@@ -79,10 +91,17 @@ export const BulkActionBar = ({ selectedIds, leads, onClear, userRole, mode = 'l
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {!allArchived && (
+          {showArchive && (
             <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setArchiveOpen(true)}>
               <Archive className="h-4 w-4" />
               Arquivar
+            </Button>
+          )}
+
+          {showUnarchive && canUnarchive && (
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setUnarchiveOpen(true)}>
+              <ArchiveRestore className="h-4 w-4" />
+              Desarquivar
             </Button>
           )}
 
@@ -118,6 +137,17 @@ export const BulkActionBar = ({ selectedIds, leads, onClear, userRole, mode = 'l
         open={archiveOpen}
         onClose={() => setArchiveOpen(false)}
         leadIds={selectedArray}
+        onSuccess={onClear}
+        mode={mode}
+      />
+
+      {/* Recebe a lista ja verificada, e nao selectedArray: quando o botao esta
+          visivel as duas sao iguais, mas isso evita mandar id de linha que
+          sumiu do filtro. */}
+      <BulkUnarchiveDialog
+        open={unarchiveOpen}
+        onClose={() => setUnarchiveOpen(false)}
+        dealIds={archivedSelected.map((l) => l.id)}
         onSuccess={onClear}
         mode={mode}
       />
