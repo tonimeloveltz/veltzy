@@ -231,6 +231,177 @@ export const bulkArchive = async (companyId: string, dealIds: string[]): Promise
   }
 }
 
+export interface BulkUnarchiveResult {
+  restored: number
+  skippedConflict: number
+}
+
+interface UnarchiveCandidate {
+  id: string
+  lead_id: string | null
+  pipeline_id: string | null
+  stage_id: string | null
+}
+
+interface StageOutcome {
+  is_final: boolean
+  is_positive: boolean | null
+}
+
+/**
+ * Universo do conflito, nao lista de destinos. `pending_assignment` deixou de ser
+ * status de DESTINO do desarquivamento, mas um `pending_assignment` preexistente
+ * (criado pelo inbound) segue ocupando a chave (lead, pipeline) no indice unico
+ * `idx_deals_unique_active_per_pipeline`. Estreitar isto para so `open` traz de
+ * volta o 23505 que a checagem de conflito existe para evitar.
+ */
+const ACTIVE_DEAL_STATUSES: DealStatus[] = ['open', 'pending_assignment']
+
+const activeKey = (leadId: string, pipelineId: string) => `${leadId}::${pipelineId}`
+
+/**
+ * Status de volta ao desarquivar. Nao existe coluna guardando o status anterior,
+ * entao ele e DERIVADO so da etapa. `is_positive` nulo cai em `lost`, igual ao IF
+ * do plpgsql do trigger `set_deal_status_on_stage_change` (migration 062).
+ *
+ * `assigned_to` nao entra na regra: desarquivar nunca devolve o negocio para
+ * `pending_assignment`, entao nao coloca card na coluna "Sem dono" do kanban.
+ * Sem responsavel volta como `open` mesmo, com o campo em branco.
+ */
+const resolveUnarchivedStatus = (candidate: UnarchiveCandidate, stages: Map<string, StageOutcome>): DealStatus => {
+  const stage = candidate.stage_id ? stages.get(candidate.stage_id) : undefined
+  if (stage?.is_final) return stage.is_positive ? 'won' : 'lost'
+  return 'open'
+}
+
+/**
+ * Contraparte de `bulkArchive`. Devolve quantos voltaram e quantos foram pulados
+ * por ja existir negocio ativo do mesmo contato no mesmo pipeline
+ * (`idx_deals_unique_active_per_pipeline`, migration 065). O conflito e previsto
+ * ANTES do UPDATE de proposito: capturar o 23505 depois derrubaria o lote
+ * inteiro por causa de uma linha.
+ */
+export const bulkUnarchive = async (companyId: string, dealIds: string[]): Promise<BulkUnarchiveResult> => {
+  const empty: BulkUnarchiveResult = { restored: 0, skippedConflict: 0 }
+  if (dealIds.length === 0) return empty
+
+  // 1. Candidatos. O filtro por `archived` torna a funcao idempotente: id que
+  // nao esta arquivado e simplesmente ignorado.
+  const candidates: UnarchiveCandidate[] = []
+  for (const batch of chunk(dealIds, BATCH_SIZE)) {
+    const { data, error } = await veltzy()
+      .from('deals')
+      .select('id, lead_id, pipeline_id, stage_id')
+      .in('id', batch)
+      .eq('company_id', companyId)
+      .eq('status', 'archived')
+    if (error) throw error
+    candidates.push(...((data ?? []) as UnarchiveCandidate[]))
+  }
+  if (candidates.length === 0) return empty
+
+  // 2. Etapas dos candidatos, para derivar o status de volta.
+  const stageIds = [...new Set(candidates.map((c) => c.stage_id).filter((id): id is string => Boolean(id)))]
+  const stages = new Map<string, StageOutcome>()
+  for (const batch of chunk(stageIds, BATCH_SIZE)) {
+    const { data, error } = await veltzy()
+      .from('pipeline_stages')
+      .select('id, is_final, is_positive')
+      .in('id', batch)
+      .eq('company_id', companyId)
+    if (error) throw error
+    for (const stage of (data ?? []) as (StageOutcome & { id: string })[]) {
+      stages.set(stage.id, { is_final: stage.is_final, is_positive: stage.is_positive })
+    }
+  }
+
+  // 3. Status de destino de cada candidato.
+  const planned = candidates.map((candidate) => ({ candidate, status: resolveUnarchivedStatus(candidate, stages) }))
+
+  // 4. Chaves lead+pipeline que JA estao ativas. So quem volta como
+  // open/pending_assignment entra no indice parcial; won/lost nunca conflita, e
+  // pipeline_id nulo tambem nao (o indice trata NULL como distinto).
+  const needsCheck = planned.filter(
+    (p) => ACTIVE_DEAL_STATUSES.includes(p.status) && p.candidate.lead_id && p.candidate.pipeline_id,
+  )
+
+  const activeKeys = new Set<string>()
+  const leadsByPipeline = new Map<string, Set<string>>()
+  for (const { candidate } of needsCheck) {
+    const pipelineId = candidate.pipeline_id as string
+    const leads = leadsByPipeline.get(pipelineId) ?? new Set<string>()
+    leads.add(candidate.lead_id as string)
+    leadsByPipeline.set(pipelineId, leads)
+  }
+
+  // Uma consulta por pipeline e por lote de leads. O indice unico garante no
+  // maximo 1 deal ativo por (lead, pipeline), entao cada resposta tem no maximo
+  // BATCH_SIZE linhas e nunca esbarra no limite de linhas do PostgREST, que
+  // truncaria em silencio e faria um conflito passar batido.
+  for (const [pipelineId, leadIds] of leadsByPipeline) {
+    for (const batch of chunk([...leadIds], BATCH_SIZE)) {
+      const { data, error } = await veltzy()
+        .from('deals')
+        .select('lead_id, pipeline_id')
+        .eq('company_id', companyId)
+        .eq('pipeline_id', pipelineId)
+        .in('lead_id', batch)
+        .in('status', ACTIVE_DEAL_STATUSES)
+      if (error) throw error
+      for (const row of (data ?? []) as { lead_id: string | null; pipeline_id: string | null }[]) {
+        if (row.lead_id && row.pipeline_id) activeKeys.add(activeKey(row.lead_id, row.pipeline_id))
+      }
+    }
+  }
+
+  // 5. Separar aprovados por status de destino, pulando os conflitos.
+  const idsByStatus = new Map<DealStatus, string[]>()
+  let skippedConflict = 0
+
+  for (const { candidate, status } of planned) {
+    if (ACTIVE_DEAL_STATUSES.includes(status) && candidate.lead_id && candidate.pipeline_id) {
+      const key = activeKey(candidate.lead_id, candidate.pipeline_id)
+      if (activeKeys.has(key)) {
+        skippedConflict += 1
+        continue
+      }
+      // Reservar a chave resolve o conflito DENTRO do proprio lote: dois
+      // arquivados do mesmo contato no mesmo pipeline, so o primeiro volta.
+      activeKeys.add(key)
+    }
+    const ids = idsByStatus.get(status) ?? []
+    ids.push(candidate.id)
+    idsByStatus.set(status, ids)
+  }
+
+  // 6. Gravar por grupo de status.
+  let restored = 0
+  for (const [status, ids] of idsByStatus) {
+    // `closed_at` zera so ao voltar para ativo, igual ao caso "Reabriu" do
+    // trigger 062. won/lost preservam a data de fechamento que ja tinham.
+    const patch = ACTIVE_DEAL_STATUSES.includes(status) ? { status, closed_at: null } : { status }
+    for (const batch of chunk(ids, BATCH_SIZE)) {
+      // O `.select('id')` nao e decorativo: `restored` vai para o toast, entao
+      // precisa contar o que o banco ACEITOU. Update barrado por RLS nao levanta
+      // erro, afeta zero linha e volta calado; contar `batch.length` anunciaria
+      // um numero que nao aconteceu.
+      const { data, error } = await veltzy()
+        .from('deals')
+        // `stage_id` fica de fora de proposito: mexer nele dispara o trigger
+        // set_deal_status_on_stage_change (062), que sobrescreveria o status
+        // calculado aqui.
+        .update(patch)
+        .in('id', batch)
+        .eq('company_id', companyId)
+        .select('id')
+      if (error) throw error
+      restored += data?.length ?? 0
+    }
+  }
+
+  return { restored, skippedConflict }
+}
+
 export const bulkDelete = async (companyId: string, dealIds: string[], userId: string): Promise<void> => {
   const batches = chunk(dealIds, BATCH_SIZE)
   for (const batch of batches) {

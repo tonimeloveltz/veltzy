@@ -27,7 +27,7 @@ import { EditLeadModal } from '@/components/pipeline/edit-lead-modal'
 import { ImportLeadsModal } from '@/components/pipeline/import-leads-modal'
 import { BulkActionBar } from '@/components/deals/bulk-action-bar'
 import { exportToCsv, exportToPdf, exportToXlsx } from '@/lib/export-leads'
-import { dealStatusConfig, leadTemperatureConfig } from '@/lib/lead-config'
+import { dealStatusConfig } from '@/lib/lead-config'
 import type { DealStatus } from '@/types/database'
 import { useLeadDetail } from '@/hooks/use-lead-detail'
 import { useDebouncedValue } from '@/hooks/use-debounced-value'
@@ -356,7 +356,6 @@ const DealsPage = () => {
                   <th className={cn(thClass, 'text-left w-[10%]')}>Valor</th>
                   <th className={cn(thClass, 'text-left w-[15%]')}>Pipeline · etapa</th>
                   <th className={cn(thClass, 'text-left w-[9%]')}>Status</th>
-                  <th className={cn(thClass, 'text-left w-[11%]')}>Temperatura</th>
                   <th className={cn(thClass, 'text-left w-[12%]')}>Responsavel</th>
                   <th className={cn(thClass, 'text-left w-[10%]')}>Data</th>
                   <th className={cn(thClass, 'text-left w-[4%]')}>Chat</th>
@@ -367,7 +366,6 @@ const DealsPage = () => {
                   const lead = deal.leads
                   const stage = deal.stage_id ? stageMap.get(deal.stage_id) : null
                   const pipeline = deal.pipeline_id ? pipelineMap.get(deal.pipeline_id) : null
-                  const temp = lead ? leadTemperatureConfig[lead.temperature] : null
                   const assignedName = (deal.profiles as { name?: string } | null)?.name
                   const isSelected = selectedIds.has(deal.id)
                   const status = dealStatusConfig[deal.status]
@@ -438,16 +436,6 @@ const DealsPage = () => {
                         <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', status.className)}>
                           {status.label}
                         </span>
-                      </td>
-
-                      {/* Temperatura (compacta) */}
-                      <td className={tdClass}>
-                        {temp && (
-                          <span className="inline-flex items-center gap-1 text-[10px]" title={temp.label}>
-                            <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', temp.dotColor)} />
-                            {temp.label}
-                          </span>
-                        )}
                       </td>
 
                       {/* Responsavel */}

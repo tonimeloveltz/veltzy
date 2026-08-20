@@ -143,12 +143,11 @@ const ContatosPage = () => {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border/30">
-                  <th className={cn(thClass, 'text-left w-[30%]')}>Contato</th>
+                  <th className={cn(thClass, 'text-left w-[25%]')}>Contato</th>
                   <th className={cn(thClass, 'text-left w-[18%]')}>Canal</th>
                   <th className={cn(thClass, 'text-left w-[10%]')}>Negocios</th>
                   <th className={cn(thClass, 'text-left w-[13%]')}>Valor total</th>
                   <th className={cn(thClass, 'text-left w-[12%]')}>Temperatura</th>
-                  <th className={cn(thClass, 'text-left w-[13%]')}>Responsavel</th>
                   <th className={cn(thClass, 'text-left w-[4%]')}>Chat</th>
                 </tr>
               </thead>
@@ -222,11 +221,6 @@ const ContatosPage = () => {
                             {temp.label}
                           </span>
                         )}
-                      </td>
-
-                      {/* Responsavel */}
-                      <td className={cn(tdClass, 'text-xs')}>
-                        {c.profiles?.name ?? <span className="text-muted-foreground/40">Sem responsavel</span>}
                       </td>
 
                       {/* Chat */}
