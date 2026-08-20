@@ -13,6 +13,7 @@ import { useAccessiblePipelines } from '@/hooks/use-pipeline-access'
 import { useRoles } from '@/hooks/use-roles'
 import { PipelineFilter } from '@/components/shared/pipeline-filter'
 import { IdentityCell } from '@/components/shared/identity-cell'
+import { SortButton } from '@/components/shared/sort-button'
 import { Breakdown } from '@/components/shared/breakdown'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -28,9 +29,11 @@ import { ImportLeadsModal } from '@/components/pipeline/import-leads-modal'
 import { BulkActionBar } from '@/components/deals/bulk-action-bar'
 import { exportToCsv, exportToPdf, exportToXlsx } from '@/lib/export-leads'
 import { dealStatusConfig } from '@/lib/lead-config'
-import type { DealStatus } from '@/types/database'
+import type { DealStatus, DealWithLead } from '@/types/database'
 import { useLeadDetail } from '@/hooks/use-lead-detail'
 import { useDebouncedValue } from '@/hooks/use-debounced-value'
+import { useTableSort } from '@/hooks/use-table-sort'
+import { sortRows, type SortValue } from '@/lib/table-sort'
 
 const periodOptions = [
   { label: 'Hoje', icon: Clock, days: 1 },
@@ -55,6 +58,27 @@ const dealValueColor: Record<DealStatus, string> = {
 const thClass = 'pb-3 px-2 first:pl-0 last:pr-0 text-xs font-medium text-muted-foreground'
 
 const tdClass = 'py-3 px-2 first:pl-0 last:pr-0 text-left'
+
+type DealSortKey = 'negocio' | 'valor' | 'pipeline' | 'status' | 'responsavel' | 'data'
+
+// Posto do mais ativo ao mais frio, nao alfabetico nem na ordem do type.
+// `Record<DealStatus, number>` de proposito: status novo faz o compilador cobrar
+// a posicao dele aqui.
+const dealStatusRank: Record<DealStatus, number> = {
+  pending_assignment: 0,
+  open: 1,
+  won: 2,
+  lost: 3,
+  archived: 4,
+}
+
+// Espelha a celula da coluna Data: won/lost com closed_at mostram "fech. <data>",
+// o resto mostra created_at. Existe um equivalente em dashboard.service.ts, mas
+// ele e privado e serve ao recorte do dashboard: service nao entra em pagina.
+const dealRefDate = (deal: DealWithLead): number => {
+  const raw = (deal.status === 'won' || deal.status === 'lost') && deal.closed_at ? deal.closed_at : deal.created_at
+  return new Date(raw).getTime()
+}
 
 const DealsPage = () => {
   const navigate = useNavigate()
@@ -121,6 +145,38 @@ const DealsPage = () => {
   const avgTicket = closedDeals.length > 0 ? closedValue / closedDeals.length : 0
 
   const stageMap = useMemo(() => new Map((stages ?? []).map((s) => [s.id, s])), [stages])
+
+  const { sort, toggle } = useTableSort<DealSortKey>()
+
+  // Cada acessor devolve o que a CELULA mostra. Moram aqui, e nao no escopo do
+  // modulo, porque dependem dos maps de pipeline e etapa da tela.
+  const dealSortAccessors = useMemo<Record<DealSortKey, (deal: DealWithLead) => SortValue>>(
+    () => ({
+      negocio: (deal) => deal.name?.trim() || leadDisplayName(deal.leads?.name, deal.leads?.phone ?? ''),
+      valor: (deal) => deal.value,
+      pipeline: (deal) => {
+        const pipeline = deal.pipeline_id ? pipelineMap.get(deal.pipeline_id) : null
+        if (!pipeline) return null
+        const stage = deal.stage_id ? stageMap.get(deal.stage_id) : null
+        // Composto: nome do pipeline e depois a POSICAO da etapa no funil.
+        // Ordenar etapa em alfabeto embaralharia o funil ("Fechado" antes de
+        // "Novo Lead"). O `numeric: true` do localeCompare faz a posicao 2 vir
+        // antes da 10 sem padding.
+        return `${pipeline.name} ${stage?.position ?? ''}`
+      },
+      status: (deal) => dealStatusRank[deal.status] ?? null,
+      responsavel: (deal) => (deal.profiles as { name?: string } | null)?.name ?? null,
+      data: dealRefDate,
+    }),
+    [pipelineMap, stageMap],
+  )
+
+  // Ordena DEPOIS dos filtros e alimenta so o <tbody>. Os KPIs do topo leem
+  // `deals`, e a selecao em massa e um Set de id: nenhum dos dois muda ao ordenar.
+  const sortedDeals = useMemo(
+    () => (sort ? sortRows(visibleDeals, dealSortAccessors[sort.key], sort.direction) : visibleDeals),
+    [visibleDeals, sort, dealSortAccessors],
+  )
 
   const cardBase = 'bg-card border border-border/30 rounded-2xl p-5'
 
@@ -352,17 +408,47 @@ const DealsPage = () => {
                       onCheckedChange={toggleSelectAll}
                     />
                   </th>
-                  <th className={cn(thClass, 'text-left w-[26%]')}>Negocio</th>
-                  <th className={cn(thClass, 'text-left w-[10%]')}>Valor</th>
-                  <th className={cn(thClass, 'text-left w-[15%]')}>Pipeline · etapa</th>
-                  <th className={cn(thClass, 'text-left w-[9%]')}>Status</th>
-                  <th className={cn(thClass, 'text-left w-[12%]')}>Responsavel</th>
-                  <th className={cn(thClass, 'text-left w-[10%]')}>Data</th>
+                  <th className={cn(thClass, 'text-left w-[26%]')}>
+                    <span className="inline-flex items-center gap-1">
+                      Negocio
+                      <SortButton columnKey="negocio" label="Negocio" sort={sort} onToggle={toggle} />
+                    </span>
+                  </th>
+                  <th className={cn(thClass, 'text-left w-[10%]')}>
+                    <span className="inline-flex items-center gap-1">
+                      Valor
+                      <SortButton columnKey="valor" label="Valor" sort={sort} onToggle={toggle} />
+                    </span>
+                  </th>
+                  <th className={cn(thClass, 'text-left w-[15%]')}>
+                    <span className="inline-flex items-center gap-1">
+                      Pipeline · etapa
+                      <SortButton columnKey="pipeline" label="Pipeline · etapa" sort={sort} onToggle={toggle} />
+                    </span>
+                  </th>
+                  <th className={cn(thClass, 'text-left w-[9%]')}>
+                    <span className="inline-flex items-center gap-1">
+                      Status
+                      <SortButton columnKey="status" label="Status" sort={sort} onToggle={toggle} />
+                    </span>
+                  </th>
+                  <th className={cn(thClass, 'text-left w-[12%]')}>
+                    <span className="inline-flex items-center gap-1">
+                      Responsavel
+                      <SortButton columnKey="responsavel" label="Responsavel" sort={sort} onToggle={toggle} />
+                    </span>
+                  </th>
+                  <th className={cn(thClass, 'text-left w-[10%]')}>
+                    <span className="inline-flex items-center gap-1">
+                      Data
+                      <SortButton columnKey="data" label="Data" sort={sort} onToggle={toggle} />
+                    </span>
+                  </th>
                   <th className={cn(thClass, 'text-left w-[4%]')}>Chat</th>
                 </tr>
               </thead>
               <tbody>
-                {visibleDeals.map((deal) => {
+                {sortedDeals.map((deal) => {
                   const lead = deal.leads
                   const stage = deal.stage_id ? stageMap.get(deal.stage_id) : null
                   const pipeline = deal.pipeline_id ? pipelineMap.get(deal.pipeline_id) : null
