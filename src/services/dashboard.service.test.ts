@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { buildTrendBuckets, fetchAllRows, onlyInPipeline, periodStartMs } from './dashboard.service'
+import { buildTrendBuckets, fetchAllRows, onlyInPipeline } from './dashboard.service'
+import { periodStartMs } from '@/lib/period-range'
 
 interface Row {
   id: string
@@ -96,37 +97,6 @@ describe('onlyInPipeline', () => {
   })
 })
 
-describe('periodStartMs', () => {
-  /**
-   * Ponto unico de verdade da janela do periodo. E ele que amarra o numero
-   * grande do card a curva: o recorte dos contatos, o dos negocios e as faixas
-   * do sparkline saem todos daqui. Se um deles recalcular a janela por conta
-   * propria, registro da borda entra no numero e some da curva em silencio.
-   */
-  it('"Hoje" comeca a meia-noite LOCAL do dia corrente, nao 24h atras', () => {
-    const at1530 = new Date(2026, 7, 17, 15, 30).getTime()
-
-    const start = periodStartMs(1, at1530)
-
-    expect(start).toBe(new Date(2026, 7, 17, 0, 0, 0, 0).getTime())
-    // As 15h30 a janela tem 15h30, nao 24h: e essa a mudanca de semantica.
-    expect(at1530 - (start as number)).toBe(15.5 * 3600000)
-  })
-
-  it('"Semana" e "Mes" continuam janela deslizante', () => {
-    const now = new Date(2026, 7, 17, 15, 30).getTime()
-
-    expect(periodStartMs(7, now)).toBe(now - 7 * 86400000)
-    expect(periodStartMs(30, now)).toBe(now - 30 * 86400000)
-  })
-
-  it('"Total" nao tem inicio: devolve null e nao uma data qualquer', () => {
-    // `null` e o que faz o filtro deixar tudo passar. Devolver 0 ou `now`
-    // esconderia a empresa inteira ou mostraria ela toda por acidente.
-    expect(periodStartMs(undefined, Date.now())).toBeNull()
-  })
-})
-
 describe('buildTrendBuckets', () => {
   const now = new Date('2026-08-17T15:30:00-03:00').getTime()
 
@@ -189,18 +159,38 @@ describe('buildTrendBuckets', () => {
     expect(periodStartMs(1, at0900)).toBeGreaterThan(ontem22h)
   })
 
-  it('divide 7 e 30 dias em uma faixa por dia', () => {
-    const week = buildTrendBuckets(7, now, now)
-    const month = buildTrendBuckets(30, now, now)
+  it('divide "Semana" e "Mes" em uma faixa por dia DECORRIDO do calendario', () => {
+    // 17/08/2026 e segunda: a semana corrente comecou domingo 16 (2 dias
+    // decorridos) e o mes corrente no dia 1 (17 dias). Nao sao 7 e 30 faixas:
+    // faixa futura vazia desenharia a curva morrendo no meio do card.
+    const at1530 = new Date(2026, 7, 17, 15, 30).getTime()
 
-    expect(week).toHaveLength(7)
-    expect(month).toHaveLength(30)
-    expectPartitionsWindow(week, now - 7 * 86400000)
-    expectPartitionsWindow(month, now - 30 * 86400000)
+    const week = buildTrendBuckets(7, at1530, at1530)
+    const month = buildTrendBuckets(30, at1530, at1530)
+
+    expect(week.map((b) => b.label)).toEqual(['16/08', '17/08'])
+    expect(month).toHaveLength(17)
+    expect(month[0].label).toBe('01/08')
+    expect(month[month.length - 1].label).toBe('17/08')
+    expectPartitionsWindow(week, localMidnight(2026, 7, 16))
+    expectPartitionsWindow(month, localMidnight(2026, 7, 1))
     expect(week[1].start - week[0].start).toBe(86400000)
   })
 
-  it('agrupa periodos longos em no maximo 30 faixas sem deixar buraco', () => {
+  it('"Mes" nao alcanca o mes passado: fechado dia 31 fica fora de toda faixa', () => {
+    // O par do recorte do KPI. Se as faixas voltassem a ser deslizantes de 30
+    // dias enquanto o filtro passou a ser calendario (ou o contrario), este
+    // registro entraria em um dos dois e nao no outro, e a curva pararia de
+    // fechar com o numero grande do card.
+    const dia3 = new Date(2026, 7, 3, 12, 0).getTime()
+    const mesPassado = new Date(2026, 6, 31, 22, 0).getTime()
+
+    const buckets = buildTrendBuckets(30, dia3, dia3)
+
+    expect(buckets.some((b) => mesPassado >= b.start && mesPassado < b.end)).toBe(false)
+  })
+
+  it('agrupa janela deslizante longa em no maximo 30 faixas sem deixar buraco', () => {
     const buckets = buildTrendBuckets(90, now, now)
 
     expect(buckets).toHaveLength(30)

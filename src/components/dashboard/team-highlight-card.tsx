@@ -3,15 +3,17 @@ import { Users } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
+import { periodStartMs } from '@/lib/period-range'
 import { useDashboardDeals } from '@/hooks/use-deals'
 import { useTeamMembers } from '@/hooks/use-team'
 import type { DealWithLead } from '@/types/database'
 
+// Mesma janela do seletor do dashboard (hoje / semana corrente / mes corrente):
+// vem de `periodStartMs` para o card nao contar um recorte diferente do dos KPIs.
 const filterByPeriod = (deals: DealWithLead[], days: number | undefined) => {
-  if (!days) return deals
-  const cutoff = new Date()
-  cutoff.setDate(cutoff.getDate() - days)
-  return deals.filter((d) => new Date(d.created_at) >= cutoff)
+  const start = periodStartMs(days, Date.now())
+  if (start === null) return deals
+  return deals.filter((d) => new Date(d.created_at).getTime() >= start)
 }
 
 const getInitials = (name: string) =>
