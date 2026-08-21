@@ -32,20 +32,40 @@ describe('filterByPeriod (pagina Negocios)', () => {
       deal({ id: 'a', status: 'open', created_at: '2020-01-01T00:00:00Z', closed_at: null }),
       deal({ id: 'b', status: 'pending_assignment', created_at: '2020-01-01T00:00:00Z', closed_at: null }),
     ]
-    // periodo "Mes" (30 dias): cutoff 2026-05-16
+    // periodo "Mes": cutoff 2026-06-01
     const result = filterByPeriod(deals, 30)
     expect(result.map((d) => d.id).sort()).toEqual(['a', 'b'])
   })
 
   it('fechados (won/lost) entram so se closed_at cair no range', () => {
     const deals = [
-      deal({ id: 'dentro-won', status: 'won', closed_at: '2026-06-10T00:00:00Z' }),
-      deal({ id: 'dentro-lost', status: 'lost', closed_at: '2026-06-01T00:00:00Z' }),
-      deal({ id: 'fora-won', status: 'won', closed_at: '2026-01-01T00:00:00Z' }),
+      deal({ id: 'dentro-won', status: 'won', closed_at: '2026-06-10T12:00:00Z' }),
+      deal({ id: 'dentro-lost', status: 'lost', closed_at: '2026-06-05T12:00:00Z' }),
+      deal({ id: 'fora-won', status: 'won', closed_at: '2026-01-01T12:00:00Z' }),
       deal({ id: 'sem-data', status: 'lost', closed_at: null }),
     ]
     const result = filterByPeriod(deals, 30).map((d) => d.id).sort()
     expect(result).toEqual(['dentro-lost', 'dentro-won'])
+  })
+
+  it('"Mes" e o mes CORRENTE: fechado do mes passado fica de fora mesmo dentro de 30 dias', () => {
+    // A mudanca de semantica. Em 15/06, 20/05 esta a 26 dias e entrava na janela
+    // deslizante antiga; agora nao entra, porque o rotulo diz "Mes".
+    const deals = [
+      deal({ id: 'maio', status: 'won', closed_at: '2026-05-20T12:00:00Z' }),
+      deal({ id: 'junho', status: 'won', closed_at: '2026-06-02T12:00:00Z' }),
+    ]
+    expect(filterByPeriod(deals, 30).map((d) => d.id)).toEqual(['junho'])
+  })
+
+  it('"Semana" e a semana corrente, a partir de domingo', () => {
+    // 15/06/2026 e segunda: a semana comecou domingo 14. O fechado na
+    // sexta-feira anterior (12) fica de fora, ainda que a 3 dias.
+    const deals = [
+      deal({ id: 'sexta-passada', status: 'won', closed_at: '2026-06-12T12:00:00Z' }),
+      deal({ id: 'domingo', status: 'won', closed_at: '2026-06-14T12:00:00Z' }),
+    ]
+    expect(filterByPeriod(deals, 7).map((d) => d.id)).toEqual(['domingo'])
   })
 
   it('arquivados entram sempre, mesmo sem closed_at e com created_at antigo', () => {
