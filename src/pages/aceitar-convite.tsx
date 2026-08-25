@@ -159,11 +159,11 @@ const AceitarConvitePage = () => {
   const validateToken = async (t: string) => {
     console.log('[Convite] Validando token:', t)
 
-    const { data, error } = await supabase
-      .from('invitations')
-      .select('*')
-      .eq('token', t)
-      .single()
+    // Leitura por token via RPC SECURITY DEFINER: a tabela invitations nao e
+    // mais legivel direto (fix C1). A RPC retorna no maximo 1 linha.
+    const { data: rows, error } = await supabase
+      .rpc('get_invitation_by_token', { p_token: t })
+    const data = rows?.[0] ?? null
 
     console.log('[Convite] Resultado validateToken:', { data, error })
 
@@ -231,7 +231,6 @@ const AceitarConvitePage = () => {
 
       const { data: rpcResult, error: rpcError } = await supabase.rpc('accept_invitation', {
         p_invitation_id: invite.id,
-        p_user_id: currentUser.id,
       })
 
       if (rpcError) throw rpcError
@@ -292,7 +291,6 @@ const AceitarConvitePage = () => {
 
       const { data: rpcResult, error: rpcError } = await supabase.rpc('accept_invitation', {
         p_invitation_id: invite.id,
-        p_user_id: data.user.id,
       })
 
       if (rpcError) throw rpcError
@@ -334,39 +332,37 @@ const AceitarConvitePage = () => {
         if (updateError) throw updateError
         userId = currentSession.user.id
       } else {
-        // Usuário não autenticado — criar conta via signUp
-        const { data, error } = await supabase.auth.signUp({
-          email: invite.email,
-          password: values.password,
-          options: {
-            data: { name: values.full_name },
-          },
-        })
-        if (error) throw error
-        if (!data.user) throw new Error('Erro ao criar conta')
+        // Conta nova: a Edge Function accept-invite cria a conta JA CONFIRMADA
+        // (o link do convite ja provou a posse do email), evitando o segundo
+        // email de confirmação. Gateada pelo token do convite.
+        const { data: fnResult, error: fnError } = await supabase.functions.invoke(
+          'accept-invite',
+          { body: { token: invite.token, password: values.password, name: values.full_name } },
+        )
 
-        userId = data.user.id
-
-        // Se não retornou sessão, precisa confirmar email
-        if (!data.session) {
-          // Aceita convite mesmo sem sessão
-          await supabase.rpc('accept_invitation', {
-            p_invitation_id: invite.id,
-            p_user_id: userId,
-            p_name: values.full_name,
-          })
-          localStorage.removeItem('pending_invite_token')
-          sessionStorage.removeItem('accepting_invite')
-          setState('accepted')
-          toast.success('Conta criada e convite aceito! Confirme seu email para entrar.')
+        // account_exists: já há conta com esse email — manda para o login.
+        const fnErrCode = (fnResult as { error?: string } | null)?.error
+        if (fnErrCode === 'account_exists') {
+          toast.info('Você já tem uma conta. Entre para aceitar o convite.')
+          setState('needs_login')
           return
         }
+        if (fnError || fnErrCode) {
+          throw new Error(fnErrCode ?? 'Erro ao criar conta')
+        }
+
+        // Conta criada e confirmada: loga na hora (sem segundo email).
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+          email: invite.email,
+          password: values.password,
+        })
+        if (signInError || !signInData.user) throw signInError ?? new Error('Erro ao entrar')
+        userId = signInData.user.id
       }
 
-      // Aceitar convite via RPC
+      // Aceitar convite via RPC (identidade vem da sessão; email conferido no banco)
       const { data: rpcResult, error: rpcError } = await supabase.rpc('accept_invitation', {
         p_invitation_id: invite.id,
-        p_user_id: userId,
         p_name: values.full_name,
       })
 
