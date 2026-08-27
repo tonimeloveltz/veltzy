@@ -23,17 +23,60 @@ Deno.serve(async (req) => {
     const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(url, key, { db: { schema: 'veltzy' } })
     const supabasePublic = createClient(url, key, { db: { schema: 'public' } })
+    const supabaseAuth = createClient(url, key)
+
+    // C3: identidade sempre do token, nunca do body. Sem Authorization, nada roda.
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+    const token = authHeader.replace('Bearer ', '')
+    const isServiceRole = token === key
 
     const body = await req.json()
 
     // --- SALES PULSE MODE ---
     if (body.action === 'sales-pulse') {
-      const { company_id, user_profile_id, role, user_name } = body
-      if (!company_id) {
-        return new Response(JSON.stringify({ error: 'company_id required' }), {
-          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      // C3: sales-pulse e sempre chamada de usuario logado (use-sales-pulse.ts).
+      // O company_id/role/profile do body sao ignorados — derivados do JWT.
+      if (isServiceRole) {
+        return new Response(JSON.stringify({ error: 'sales-pulse requires user token' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
+      const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token)
+      if (authError || !user) {
+        return new Response(JSON.stringify({ error: 'Invalid token' }), {
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      const { data: profile } = await supabasePublic
+        .from('profiles')
+        .select('id, company_id, name')
+        .eq('user_id', user.id)
+        .single()
+      if (!profile?.company_id) {
+        return new Response(JSON.stringify({ error: 'No company' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      // role autoritativo: derivado de user_roles, nunca do body. Um seller que
+      // forjasse role='admin' veria a empresa toda em vez do proprio funil.
+      const { data: roleRows } = await supabasePublic
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+      const roles = (roleRows ?? []).map((r: { role: string }) => r.role)
+      const isPrivileged = roles.some((r) => ['admin', 'manager', 'super_admin'].includes(r))
+
+      const company_id = profile.company_id
+      const user_profile_id = profile.id
+      const user_name = profile.name
+      const role = isPrivileged ? 'manager' : 'seller'
 
       const now = new Date()
       const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString()
@@ -202,6 +245,16 @@ Seja especifico: cite nomes, valores e prazos reais. Maximo 3 alertas e 3 acoes.
       })
     }
     // --- END SALES PULSE ---
+
+    // C3: o modo batch gera notificacoes varrendo empresas (run_all_companies)
+    // ou uma empresa arbitraria do body. E job de servico (cron) — nao ha
+    // caller de usuario no codigo. So aceita service role; JWT de usuario nao
+    // pode disparar geracao de notificacao para tenant nenhum.
+    if (!isServiceRole) {
+      return new Response(JSON.stringify({ error: 'Forbidden' }), {
+        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
 
     const runAll = body.run_all_companies === true
 
