@@ -306,6 +306,8 @@ Nao ha mais objecao de infra: o cofre esta la, o wrapper esta escrito, o padrao 
 O que sobra: qualquer usuario logado, de qualquer tenant, faz `select company_id from tenant_role_permissions` e recebe a **lista completa de empresas da plataforma**. Continua sendo a peca que alimenta C3 e C6 (que precisam de um `company_id` valido), so que a partir de uma conta em vez de anonimamente.
 **Correcao:** `revoke select ... from anon` (limpar o GRANT morto) e trocar a policy por `using (company_id = get_current_company_id() or is_super_admin())`.
 
+**ADENDO (2026-08-27) — segundo defeito na mesma tabela, nao catalogado acima.** A outra policy, `tenant_role_perms_admin` (`baseline:7233`, nasce em `042:22-29`), e `FOR ALL TO authenticated` com `USING (EXISTS ... role IN ('super_admin','admin'))` e **sem `WITH CHECK`**. Confirmado no staging via `pg_policies`: `cmd = ALL`, `with_check = NULL`. Como o `qual` nao referencia `company_id`, e o Postgres reusa o `USING` como check na ausencia de `WITH CHECK`, qualquer admin de tenant faz UPSERT de override para **qualquer** `company_id` — escrita cross-tenant, mais grave que a leitura do M1. **Correcao:** escrita passa a `is_super_admin()` (o Hub, unico produtor legitimo, roda gated em super_admin — `hub/src/App.tsx:30`; no Veltzy nao ha caminho de escrita) com `WITH CHECK` explicito. Os dois defeitos sao fechados juntos em `hub/.../20260827120000_fix_m1_tenant_role_permissions.sql`.
+
 ### M2. `fix-lead-names`: script descartavel em producao com tenant hardcoded
 `supabase/functions/fix-lead-names/index.ts:19` — `const companyId = 'd20f7d62-974b-40c4-8f0b-bb8207513554'`. Sem auth, `verify_jwt = false`, e reescreve nomes de leads desse cliente a cada chamada. Deveria ser removido do deploy.
 
