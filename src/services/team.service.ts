@@ -57,22 +57,10 @@ export const inviteMember = async (companyId: string, email: string, role: AppRo
   if (error) throw error
   await logAuditEvent('invite_sent', { email, role, invite_id: data.id }, companyId)
 
-  // Enviar email de convite via Edge Function
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('name')
-    .eq('user_id', invitedBy)
-    .single()
-
+  // Envia so o invite_id: a Edge Function le email/role/token/company_name da
+  // linha de convite no banco e confere que ela e da empresa do admin (C5).
   const { error: emailError } = await supabase.functions.invoke('send-invite-email', {
-    body: {
-      invite_id: data.id,
-      email,
-      role,
-      company_name: company?.name,
-      token: data.token,
-      invited_by_name: profile?.name,
-    },
+    body: { invite_id: data.id },
   })
 
   if (emailError) {

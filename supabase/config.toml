@@ -394,7 +394,7 @@ verify_jwt = false
 verify_jwt = true
 
 [functions.send-invite-email]
-verify_jwt = false
+verify_jwt = true
 
 # --- Cron/scheduled (sem JWT, executadas por cron trigger) ---
 [functions.check-sla]
