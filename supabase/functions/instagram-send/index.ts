@@ -9,10 +9,33 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
-    const { leadId, content, companyId } = await req.json()
-    const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { db: { schema: 'veltzy' } })
+    const url = Deno.env.get('SUPABASE_URL')!
+    const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const supabase = createClient(url, key, { db: { schema: 'veltzy' } })
+    const supabaseAuth = createClient(url, key)
+    const supabasePublic = createClient(url, key)
 
-    const { data: lead } = await supabase.from('leads').select('instagram_id').eq('id', leadId).single()
+    // C4: company vem sempre do JWT, nunca do body. Unica origem e o front
+    // (messages.service.ts), sempre com token de usuario — sem ramo service role.
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+    const token = authHeader.replace('Bearer ', '')
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token)
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: 'Invalid token' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+    const { data: profile } = await supabasePublic.from('profiles').select('company_id').eq('user_id', user.id).single()
+    if (!profile?.company_id) {
+      return new Response(JSON.stringify({ error: 'No company' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+    const companyId = profile.company_id
+
+    const { leadId, content } = await req.json()
+
+    // lead escopado por empresa: nao da para referenciar lead de outro tenant.
+    const { data: lead } = await supabase.from('leads').select('instagram_id').eq('id', leadId).eq('company_id', companyId).single()
     if (!lead?.instagram_id) return new Response(JSON.stringify({ error: 'No Instagram ID' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
     const { data: connection } = await supabase.from('instagram_connections').select('access_token, page_id').eq('company_id', companyId).single()
