@@ -223,6 +223,8 @@ Some-se a isso que `messageContent` vai direto para o prompt do modelo: e um can
 
 **Correcao:** esta funcao e chamada por `lead-inbound-handler` (server-side). Proteger com segredo compartilhado, como `evolution-inbound` ja faz (`evolution-inbound/index.ts:43-53`).
 
+**ADENDO (2026-08-27) — corrigido, com auth dual.** Ha dois callers, nao um: o `lead-inbound-handler` (service key) e o `AgentSandbox` do front (JWT de usuario, `sandbox: true`). O fix aplica o padrao `whatsapp-send`: service key → tenant do body; JWT → `companyId` do perfil, e exige `sandbox: true` (token de usuario nao dirige o loop real). A query do lead passou a escopar `.eq('company_id', companyId)` — antes buscava por `id` sem tenant. **Follow-up pendente:** `src/pages/sdr-ia.tsx:28` usa um `testLeadId` hardcoded (`376d8927-...`); com o escopo por empresa, o sandbox so funciona para o tenant dono desse lead e retorna 404 para os demais. Trocar por uma busca do primeiro lead da empresa logada. Nao bloqueia o C6 — e higiene do playground.
+
 ---
 
 ## 🟠 ALTO
