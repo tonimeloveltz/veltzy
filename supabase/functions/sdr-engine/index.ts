@@ -32,22 +32,64 @@ Deno.serve(async (req) => {
   const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   const supabase = createClient(supabaseUrl, supabaseKey, { db: { schema: 'veltzy' } })
   const supabasePublic = createClient(supabaseUrl, supabaseKey)
+  const supabaseAuth = createClient(supabaseUrl, supabaseKey)
 
   try {
-    const body = await req.json()
-    const { leadId, companyId, messageContent, pipelineId, instanceName, sandbox } = body
+    // C6: auth dual. O caminho real (lead-inbound-handler) chega com a service
+    // key como Bearer; o sandbox do front chega com JWT de usuario. Sem um dos
+    // dois, nada roda — antes um POST anonimo dirigia o agent loop de qualquer
+    // tenant (escrita em leads, escalonamento, custo de IA da vitima).
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+      return jsonResponse({ ok: false, error: 'Unauthorized' }, 401)
+    }
+    const token = authHeader.replace('Bearer ', '')
+    const isServiceRole = token === supabaseKey
 
-    if (!leadId || !companyId || !messageContent) {
-      return jsonResponse({ ok: false, error: 'leadId, companyId e messageContent obrigatorios' }, 400)
+    const body = await req.json()
+    const { leadId, companyId: bodyCompanyId, messageContent, pipelineId, instanceName, sandbox } = body
+
+    if (!leadId || !messageContent) {
+      return jsonResponse({ ok: false, error: 'leadId e messageContent obrigatorios' }, 400)
     }
 
     const isSandbox = sandbox === true
 
-    // 1. Carregar lead
+    // company vem do body so na chamada de servico (o inbound ja resolveu o
+    // tenant). Com JWT de usuario, vem sempre do perfil — nunca do payload.
+    let companyId: string
+    if (isServiceRole) {
+      if (!bodyCompanyId) {
+        return jsonResponse({ ok: false, error: 'companyId obrigatorio' }, 400)
+      }
+      companyId = bodyCompanyId
+    } else {
+      // JWT de usuario: exclusivo do sandbox. Dirigir o loop real (persistido,
+      // com efeito colateral) so pela service key.
+      if (!isSandbox) {
+        return jsonResponse({ ok: false, error: 'Forbidden' }, 403)
+      }
+      const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token)
+      if (authError || !user) {
+        return jsonResponse({ ok: false, error: 'Invalid token' }, 401)
+      }
+      const { data: profile } = await supabasePublic
+        .from('profiles')
+        .select('company_id')
+        .eq('user_id', user.id)
+        .single()
+      if (!profile?.company_id) {
+        return jsonResponse({ ok: false, error: 'No company' }, 403)
+      }
+      companyId = profile.company_id
+    }
+
+    // 1. Carregar lead (escopado a empresa: nao referencia lead de outro tenant)
     const { data: lead } = await supabase
       .from('leads')
       .select('id, name, phone, email, observations, tags, ai_score, temperature, is_ai_active, assigned_to, whatsapp_instance_name')
       .eq('id', leadId)
+      .eq('company_id', companyId)
       .single()
 
     if (!lead) {

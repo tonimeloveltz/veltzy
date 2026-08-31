@@ -1,17 +1,18 @@
 import { supabase, veltzy } from '@/lib/supabase'
+import { periodStartMs, periodStartIso, previousPeriodRange } from '@/lib/period-range'
 import type { ConversionMetrics, SourceMetrics, StageMetrics, SellerMetrics, MonthlyData } from '@/types/database'
 
+// Janela do periodo em ISO, do jeito que as queries pedem. A semantica (mes
+// corrente, semana corrente, hoje) vive em `@/lib/period-range`.
 const getPeriodDates = (days: number) => {
-  const end = new Date()
-  const start = new Date()
-  start.setDate(start.getDate() - days)
-  const prevStart = new Date(start)
-  prevStart.setDate(prevStart.getDate() - days)
+  const now = Date.now()
+  const start = periodStartMs(days, now) ?? now
+  const prev = previousPeriodRange(days, now)
   return {
-    start: start.toISOString(),
-    end: end.toISOString(),
-    prevStart: prevStart.toISOString(),
-    prevEnd: start.toISOString(),
+    start: new Date(start).toISOString(),
+    end: new Date(now).toISOString(),
+    prevStart: new Date(prev?.start ?? start).toISOString(),
+    prevEnd: new Date(prev?.end ?? start).toISOString(),
   }
 }
 
@@ -188,32 +189,6 @@ interface TrendBucket {
 
 const pad2 = (n: number) => String(n).padStart(2, '0')
 
-/**
- * Inicio da janela do periodo selecionado, em ms. `null` = "Total", sem recorte.
- *
- * PONTO UNICO DE VERDADE da janela: o recorte dos contatos, o recorte dos
- * negocios e as faixas da curva (`buildTrendBuckets`) derivam TODOS daqui, de
- * proposito. Se um deles calculasse a janela por conta propria, um registro
- * poderia entrar no numero grande do card e cair fora de toda faixa
- * (`indexOfBucket` devolve -1 e descarta em silencio): o numero e a curva
- * passariam a discordar sem erro nenhum aparecer.
- *
- * "Hoje" (days === 1) e CALENDARIO, nao janela deslizante: comeca a meia-noite
- * LOCAL do dia corrente. As 09h ele olha 9 horas, nao 24, e o negocio fechado
- * ontem as 22h fica de fora, que e o comportamento pedido. O service roda no
- * browser da usuaria, entao "local" e America/Sao_Paulo na pratica.
- *
- * "Semana" e "Mes" continuam janela deslizante (`agora - days`).
- */
-export const periodStartMs = (days: number | undefined, now: number): number | null => {
-  if (days === undefined) return null
-  if (days <= 1) {
-    const midnight = new Date(now)
-    midnight.setHours(0, 0, 0, 0)
-    return midnight.getTime()
-  }
-  return now - days * 86400000
-}
 
 /**
  * Fatia o periodo selecionado em faixas que o cobrem por INTEIRO, sem sobra e
@@ -221,10 +196,10 @@ export const periodStartMs = (days: number | undefined, now: number): number | n
  * cada registro do periodo cai em exatamente uma faixa, entao a soma dos pontos
  * e o total exibido.
  *
- * A janela vem de `periodStartMs`, a MESMA usada pelo recorte dos KPIs: para
- * "Semana" e "Mes" e deslizante (`agora - days`), para "Hoje" e o calendario a
- * partir da meia-noite local. Calcular a janela aqui de novo abriria a porta
- * para faixas e filtro divergirem.
+ * A janela vem de `periodStartMs`, a MESMA usada pelo recorte dos KPIs: os
+ * presets do seletor sao de calendario (hoje, semana corrente, mes corrente).
+ * Calcular a janela aqui de novo abriria a porta para faixas e filtro
+ * divergirem.
  *
  * Sem periodo ("Total"), o recorte e por mes de calendario a partir do registro
  * mais antigo, porque a janela e a vida inteira da empresa.
@@ -261,8 +236,21 @@ export const buildTrendBuckets = (days: number | undefined, now: number, earlies
       const start = windowStart + i * width
       buckets.push({ start, end: start + width, label: `${pad2(new Date(start).getHours())}h` })
     }
+  } else if (days <= 31) {
+    // "Semana" e "Mes" = uma faixa por dia DECORRIDO do calendario, do inicio da
+    // janela ate hoje. Sao dias de calendario (nao blocos de 86400000ms) para o
+    // rotulo bater com a data mesmo na virada do horario de verao, e sao so os
+    // decorridos: faixa futura vazia desenharia a curva morrendo no meio do card.
+    const cursor = new Date(windowStart)
+    while (cursor.getTime() <= now) {
+      const start = cursor.getTime()
+      const next = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + 1).getTime()
+      buckets.push({ start, end: next, label: `${pad2(cursor.getDate())}/${pad2(cursor.getMonth() + 1)}` })
+      cursor.setTime(next)
+    }
   } else {
-    // Um ponto por dia ate 30 dias; acima disso agrupa para a curva nao virar ruido.
+    // Janela deslizante longa (nao vem do seletor): agrupa em no maximo 30
+    // faixas para a curva nao virar ruido.
     const slots = Math.min(days, 30)
     const width = (days * 86400000) / slots
     for (let i = 0; i < slots; i++) {
@@ -331,13 +319,13 @@ export const getDashboardKpis = async (companyId: string, days?: number, pipelin
   // negocios (`inPeriod`) e as faixas da curva (`buildTrendBuckets`) usam este
   // mesmo inicio. Ver `periodStartMs` para por que os tres tem que andar juntos.
   const windowStart = periodStartMs(days, now)
-  const periodStartIso = windowStart === null ? null : new Date(windowStart).toISOString()
+  const windowStartIso = windowStart === null ? null : new Date(windowStart).toISOString()
 
   // Leads query for ai_score + total count
   const leads = await fetchAllRows<{ id: string; ai_score: number | null; created_at: string }>((from, to) => {
     let q = veltzy().from('leads').select('id, ai_score, created_at').eq('company_id', companyId)
     if (sellerProfileId) q = q.eq('assigned_to', sellerProfileId)
-    if (periodStartIso) q = q.gte('created_at', periodStartIso)
+    if (windowStartIso) q = q.gte('created_at', windowStartIso)
     return q.order('id').range(from, to)
   })
 
@@ -351,9 +339,9 @@ export const getDashboardKpis = async (companyId: string, days?: number, pipelin
   // - archived: created_at
   // - Sem periodo (Total): mostra tudo
   const inPeriod = (dateStr: string | null) => {
-    if (!periodStartIso) return true
+    if (!windowStartIso) return true
     if (!dateStr) return false
-    return dateStr >= periodStartIso
+    return dateStr >= windowStartIso
   }
 
   const open = allDeals.filter((d) => d.status === 'open' && inPeriod(dealRefDate(d)))
@@ -419,13 +407,12 @@ export const getDashboardKpis = async (companyId: string, days?: number, pipelin
   let prevDealsClosed = 0
   if (days) {
     // Periodo anterior com a MESMA semantica do atual, senao a variacao compara
-    // recortes diferentes: para "Hoje" (calendario) o anterior e ONTEM por
-    // inteiro, [00h de ontem, 00h de hoje); para os demais e a janela deslizante
-    // imediatamente anterior. `windowStart` nao e nulo aqui porque `days` existe.
-    const prevEnd = new Date(windowStart ?? now)
-    const prevStart = new Date(prevEnd)
-    if (days <= 1) prevStart.setDate(prevStart.getDate() - 1)
-    else prevStart.setTime(prevEnd.getTime() - days * 86400000)
+    // recortes diferentes. Ver `previousPeriodRange`: "Hoje" compara com ontem
+    // inteiro, "Semana" e "Mes" com o trecho equivalente do periodo anterior.
+    // Nao e nulo aqui porque `days` existe.
+    const prev = previousPeriodRange(days, now)!
+    const prevStart = new Date(prev.start)
+    const prevEnd = new Date(prev.end)
 
     const prevLeads = await fetchAllRows<{ id: string; ai_score: number | null }>((from, to) => {
       let q = veltzy()
@@ -483,7 +470,7 @@ export const getDashboardKpis = async (companyId: string, days?: number, pipelin
 export const getLeadsBySource = async (companyId: string, days?: number, pipelineId?: string, sellerProfileId?: string): Promise<SourceMetrics[]> => {
   const leadIdsInPipeline = pipelineId ? await getLeadIdsInPipeline(companyId, pipelineId) : null
 
-  const startIso = days ? new Date(Date.now() - days * 86400000).toISOString() : null
+  const startIso = periodStartIso(days)
   const leads = await fetchAllRows<{ id: string; source_id: string | null }>((from, to) => {
     let q = veltzy().from('leads').select('id, source_id').eq('company_id', companyId)
     if (sellerProfileId) q = q.eq('assigned_to', sellerProfileId)
@@ -509,11 +496,8 @@ export const getPipelineOverview = async (companyId: string, days?: number, pipe
   let dealsQuery = veltzy().from('deals').select('stage_id, value').eq('company_id', companyId).in('status', ['open', 'pending_assignment'])
   if (pipelineId) dealsQuery = dealsQuery.eq('pipeline_id', pipelineId)
   if (sellerProfileId) dealsQuery = dealsQuery.eq('assigned_to', sellerProfileId)
-  if (days) {
-    const start = new Date()
-    start.setDate(start.getDate() - days)
-    dealsQuery = dealsQuery.gte('created_at', start.toISOString())
-  }
+  const startIso = periodStartIso(days)
+  if (startIso) dealsQuery = dealsQuery.gte('created_at', startIso)
   const { data: deals, error: dealsError } = await dealsQuery
   if (dealsError) throw dealsError
 
@@ -722,20 +706,14 @@ export const getSellerPerformance = async (companyId: string, days?: number, pip
   let dealsQuery = veltzy().from('deals').select('assigned_to, status, value').eq('company_id', companyId)
   if (pipelineId) dealsQuery = dealsQuery.eq('pipeline_id', pipelineId)
   if (sellerProfileId) dealsQuery = dealsQuery.eq('assigned_to', sellerProfileId)
-  if (days) {
-    const start = new Date()
-    start.setDate(start.getDate() - days)
-    dealsQuery = dealsQuery.gte('created_at', start.toISOString())
-  }
+  const startIso = periodStartIso(days)
+  if (startIso) dealsQuery = dealsQuery.gte('created_at', startIso)
   const { data: deals, error: dealsError } = await dealsQuery
   if (dealsError) throw dealsError
 
-  const startDate = days ? new Date() : undefined
-  if (startDate && days) startDate.setDate(startDate.getDate() - days)
-
   const { data: responseTimes, error: rpcError } = await supabase.rpc('get_seller_avg_response_times', {
     _company_id: companyId,
-    ...(startDate ? { _start_date: startDate.toISOString() } : {}),
+    ...(startIso ? { _start_date: startIso } : {}),
   })
   if (rpcError) {
     console.warn('[Dashboard] Falha ao buscar tempos de resposta:', rpcError.message)

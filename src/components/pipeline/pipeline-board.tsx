@@ -2,11 +2,13 @@ import { useState, useMemo, useCallback, useEffect } from 'react'
 import {
   DndContext,
   DragOverlay,
-  closestCorners,
+  pointerWithin,
+  rectIntersection,
   MouseSensor,
   TouchSensor,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragStartEvent,
   type DragEndEvent,
 } from '@dnd-kit/core'
@@ -35,6 +37,11 @@ import type { DealWithLead } from '@/types/database'
 
 function isProposalStage(slug: string) {
   return slug.includes('proposta') || slug.includes('proposal')
+}
+
+const pointerFirstCollision: CollisionDetection = (args) => {
+  const pointerCollisions = pointerWithin(args)
+  return pointerCollisions.length > 0 ? pointerCollisions : rectIntersection(args)
 }
 
 const PipelineBoard = () => {
@@ -278,7 +285,7 @@ const PipelineBoard = () => {
 
       <DndContext
         sensors={sensors}
-        collisionDetection={closestCorners}
+        collisionDetection={pointerFirstCollision}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >

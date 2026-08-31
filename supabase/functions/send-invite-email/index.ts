@@ -5,18 +5,92 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// C5: escape de HTML. Toda variavel interpolada no corpo do email passa por aqui
+// como defesa em profundidade — o vetor primario ja e fechado derivando os
+// valores do banco em vez do body, mas nunca interpolar texto cru em HTML.
+const escapeHtml = (v: unknown): string =>
+  String(v ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
-    const { invite_id, email, role, company_name, token, invited_by_name } = await req.json()
+    const url = Deno.env.get('SUPABASE_URL')!
+    const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const supabaseAuth = createClient(url, key)
+    const supabasePublic = createClient(url, key)
 
-    if (!email || !token) {
-      return new Response(
-        JSON.stringify({ error: 'email and token are required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-      )
+    // C5: so um admin autenticado dispara o email, e o payload nao e confiavel.
+    // O body traz apenas invite_id; email/role/token/company_name/quem convidou
+    // sao lidos da linha de convite no banco, apos conferir que ela pertence a
+    // empresa do admin. Fecha o relay aberto e a injecao de HTML de uma vez.
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
+    const jwt = authHeader.replace('Bearer ', '')
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(jwt)
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: 'Invalid token' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+
+    const { data: profile } = await supabasePublic
+      .from('profiles')
+      .select('company_id, name')
+      .eq('user_id', user.id)
+      .single()
+    if (!profile?.company_id) {
+      return new Response(JSON.stringify({ error: 'No company' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+
+    const { data: roleRows } = await supabasePublic
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+    const isAdmin = (roleRows ?? []).some(
+      (r: { role: string }) => r.role === 'admin' || r.role === 'super_admin',
+    )
+    if (!isAdmin) {
+      return new Response(JSON.stringify({ error: 'Forbidden' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+
+    const { invite_id } = await req.json()
+    if (!invite_id) {
+      return new Response(JSON.stringify({ error: 'invite_id is required' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+
+    // Convite lido do banco e escopado a empresa do admin: nao da para enviar
+    // convite de outra empresa nem controlar destinatario/texto pelo payload.
+    const { data: invite } = await supabasePublic
+      .from('invitations')
+      .select('email, role, token, company_name, company_id, status')
+      .eq('id', invite_id)
+      .eq('company_id', profile.company_id)
+      .single()
+    if (!invite) {
+      return new Response(JSON.stringify({ error: 'Invite not found' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+    if (invite.status !== 'pending') {
+      return new Response(JSON.stringify({ error: 'Invite is not pending' }),
+        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+
+    const email = invite.email
+    const role = invite.role
+    const token = invite.token
+    const company_name = invite.company_name
+    const invited_by_name = profile.name
 
     const brevoKey = Deno.env.get('BREVO_API_KEY')
     if (!brevoKey) {
@@ -28,14 +102,18 @@ Deno.serve(async (req) => {
     }
 
     const appUrl = Deno.env.get('APP_URL') ?? 'https://app.veltzy.com'
-    const acceptLink = `${appUrl}/aceitar-convite?token=${token}`
+    const acceptLink = `${appUrl}/aceitar-convite?token=${encodeURIComponent(token)}`
+    const acceptLinkAttr = escapeHtml(acceptLink)
 
     const roleLabels: Record<string, string> = {
       seller: 'Vendedor',
       manager: 'Gestor',
       admin: 'Administrador',
     }
-    const roleLabel = roleLabels[role] ?? role
+    const roleLabelRaw = roleLabels[role] ?? role
+    const roleLabel = escapeHtml(roleLabelRaw)
+    const companyNameSafe = escapeHtml(company_name ?? 'uma empresa')
+    const invitedBySafe = invited_by_name ? escapeHtml(invited_by_name) : ''
 
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
@@ -47,12 +125,12 @@ Deno.serve(async (req) => {
         <h2 style="color: #333;">Voce foi convidado!</h2>
 
         <p style="color: #555; line-height: 1.6;">
-          ${invited_by_name ? `<strong>${invited_by_name}</strong> convidou voce` : 'Voce foi convidado'}
-          para fazer parte de <strong>${company_name ?? 'uma empresa'}</strong> no Veltzy como <strong>${roleLabel}</strong>.
+          ${invitedBySafe ? `<strong>${invitedBySafe}</strong> convidou voce` : 'Voce foi convidado'}
+          para fazer parte de <strong>${companyNameSafe}</strong> no Veltzy como <strong>${roleLabel}</strong>.
         </p>
 
         <div style="text-align: center; margin: 30px 0;">
-          <a href="${acceptLink}"
+          <a href="${acceptLinkAttr}"
              style="display: inline-block; background-color: #ec4899; color: white;
                     padding: 14px 32px; border-radius: 8px; text-decoration: none;
                     font-weight: bold; font-size: 16px;">
@@ -66,7 +144,7 @@ Deno.serve(async (req) => {
 
         <p style="color: #888; font-size: 12px; margin-top: 8px;">
           Ou copie e cole este link no navegador:<br/>
-          <a href="${acceptLink}" style="color: #ec4899; word-break: break-all;">${acceptLink}</a>
+          <a href="${acceptLinkAttr}" style="color: #ec4899; word-break: break-all;">${acceptLinkAttr}</a>
         </p>
 
         <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
@@ -85,7 +163,7 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         sender: { name: 'Veltzy', email: 'noreply@veltzy.com' },
         to: [{ email }],
-        subject: `Convite para ${company_name ?? 'Veltzy'} - ${roleLabel}`,
+        subject: `Convite para ${company_name ?? 'Veltzy'} - ${roleLabelRaw}`,
         htmlContent,
       }),
     })
