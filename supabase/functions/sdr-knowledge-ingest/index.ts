@@ -22,16 +22,57 @@ Deno.serve(async (req) => {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
   const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   const supabase = createClient(supabaseUrl, supabaseKey, { db: { schema: 'veltzy' } })
+  const supabaseAuth = createClient(supabaseUrl, supabaseKey)
+  const supabasePublic = createClient(supabaseUrl, supabaseKey)
 
   let agentProfileId: string | null = null
 
   try {
+    // A1: exige JWT de usuario. company vem do perfil, nunca do body.
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+      return jsonResponse({ ok: false, error: 'Unauthorized' }, 401)
+    }
+    const token = authHeader.replace('Bearer ', '')
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token)
+    if (authError || !user) {
+      return jsonResponse({ ok: false, error: 'Invalid token' }, 401)
+    }
+    const { data: authProfile } = await supabasePublic
+      .from('profiles')
+      .select('company_id')
+      .eq('user_id', user.id)
+      .single()
+    if (!authProfile?.company_id) {
+      return jsonResponse({ ok: false, error: 'No company' }, 403)
+    }
+    const companyId = authProfile.company_id
+
     const body = await req.json()
-    const { agentProfileId: apId, companyId, fileName, fileUrl, fileMimeType } = body
+    // A1 (SSRF): recebe o PATH no bucket, nao uma URL. Sem fetch de URL arbitraria.
+    const { agentProfileId: apId, filePath, fileName, fileMimeType } = body
     agentProfileId = apId
 
-    if (!agentProfileId || !companyId || !fileName || !fileUrl || !fileMimeType) {
-      return jsonResponse({ ok: false, error: 'agentProfileId, companyId, fileName, fileUrl e fileMimeType obrigatorios' }, 400)
+    if (!agentProfileId || !filePath || !fileName || !fileMimeType) {
+      return jsonResponse({ ok: false, error: 'agentProfileId, filePath, fileName e fileMimeType obrigatorios' }, 400)
+    }
+
+    // path tem que morar na pasta da propria empresa (mesma regra da RLS do
+    // bucket: (storage.foldername(name))[1] = company_id). Bloqueia traversal.
+    if (filePath.includes('..') || !filePath.startsWith(`${companyId}/`)) {
+      return jsonResponse({ ok: false, error: 'filePath invalido' }, 403)
+    }
+
+    // agent_profile tem que ser da empresa do usuario, senao nao ha o que
+    // processar (e evita sobrescrever o status/knowledge de outro tenant).
+    const { data: targetProfile } = await supabase
+      .from('agent_profiles')
+      .select('id')
+      .eq('id', agentProfileId)
+      .eq('company_id', companyId)
+      .single()
+    if (!targetProfile) {
+      return jsonResponse({ ok: false, error: 'Agent profile nao encontrado' }, 404)
     }
 
     // 1. Marcar status = processing
@@ -39,15 +80,19 @@ Deno.serve(async (req) => {
       .from('agent_profiles')
       .update({ knowledge_base_status: 'processing' })
       .eq('id', agentProfileId)
+      .eq('company_id', companyId)
 
     console.log(`[sdr-knowledge-ingest] Processing ${fileName} for profile ${agentProfileId}`)
 
-    // 2. Baixar arquivo
-    const fileResponse = await fetch(fileUrl)
-    if (!fileResponse.ok) {
-      throw new Error(`Falha ao baixar arquivo: ${fileResponse.status} ${fileResponse.statusText}`)
+    // 2. Baixar arquivo direto do Storage (service role, bucket privado). O path
+    // ja foi validado como pertencente a empresa — nao ha URL externa envolvida.
+    const { data: fileBlob, error: downloadError } = await supabase.storage
+      .from('agent-knowledge')
+      .download(filePath)
+    if (downloadError || !fileBlob) {
+      throw new Error(`Falha ao baixar arquivo: ${downloadError?.message ?? 'nao encontrado'}`)
     }
-    const fileBuffer = await fileResponse.arrayBuffer()
+    const fileBuffer = await fileBlob.arrayBuffer()
 
     // 3. Extrair texto
     const rawText = await extractText(fileBuffer, fileMimeType, fileName)
@@ -108,7 +153,7 @@ Deno.serve(async (req) => {
       agent_profile_id: agentProfileId,
       company_id: companyId,
       source_file_name: fileName,
-      source_file_url: fileUrl,
+      source_file_url: filePath,
       chunk_index: chunk.index,
       content: chunk.content,
       embedding: `[${allEmbeddings[idx].join(',')}]`,

@@ -45,16 +45,8 @@ export const useKnowledgeUpload = (agentProfileId: string | undefined) => {
 
       if (uploadError) throw new Error(`Upload falhou: ${uploadError.message}`)
 
-      // 2. Obter URL assinada para a Edge Function
-      const { data: signedData, error: signError } = await supabase.storage
-        .from('agent-knowledge')
-        .createSignedUrl(path, 3600) // 1h
-
-      if (signError || !signedData?.signedUrl) {
-        throw new Error('Falha ao gerar URL assinada')
-      }
-
-      // 3. Disparar processamento
+      // 2. Disparar processamento. A Edge Function baixa pelo path (dentro do
+      // bucket agent-knowledge), entao nao ha signed URL nem URL externa.
       setState((s) => ({ ...s, isUploading: false, isProcessing: true, progress: 'processing' }))
 
       const { data: sessionData } = await supabase.auth.getSession()
@@ -68,9 +60,8 @@ export const useKnowledgeUpload = (agentProfileId: string | undefined) => {
         },
         body: JSON.stringify({
           agentProfileId,
-          companyId,
           fileName: safeName,
-          fileUrl: signedData.signedUrl,
+          filePath: path,
           fileMimeType: file.type,
         }),
       })
