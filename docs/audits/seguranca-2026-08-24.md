@@ -297,6 +297,8 @@ A ultima e a mais grave e a mais recente: nasceu em `_archive/20260629000001_clo
 
 Nao ha mais objecao de infra: o cofre esta la, o wrapper esta escrito, o padrao esta provado em producao. Falta portar quatro tabelas.
 
+**ADENDO (2026-08-27) — 1 de 4 portada (cloud_api_credentials), no staging.** Feita a mais grave/exposta primeiro, em 3 fases sensiveis a ordem de deploy: (1) `hub/.../20260827140000_..._phase1.sql` copia cada `access_token` para o Vault (chave `cloud_api_credentials.access_token.<id>`, reusando `ai_secret_upsert`) e tira o `NOT NULL`; (2) deploy de `cloud-api-send-message` (le via `lerSegredo`) e `cloud-api-onboard` (grava via `guardarSegredo`), com helper novo `_shared/vault-secret.ts`; (3) `hub/.../20260827150000_..._phase3.sql` dropa a coluna. Verificado no staging: tabela vazia la (0 credenciais), Fase 3 trivialmente segura; o front so le `company_id/status` (channels.service.ts:36), nao quebra. **Em producao a migracao de dados e real** (tokens WABA existentes) — a promocao pelo Toni deve rodar o mesmo gate (verifica-a7-fase2.sql: cada token com token na coluna tem segredo no Vault ANTES de aplicar a Fase 3) e um teste de envio entre a Fase 2 e a Fase 3. **Faltam 3 tabelas** com o padrao agora provado: `veltzy.whatsapp_configs` (instance_token, client_token), `veltzy.instagram_connections` (access_token), `veltzy.payment_configs` (api_key, api_secret, webhook_secret).
+
 ### A8. Sem headers de seguranca no deploy
 **Arquivo:** `vercel.json` — so tem `Cache-Control`. Faltam `Content-Security-Policy`, `X-Frame-Options`/`frame-ancestors`, `Strict-Transport-Security`, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`. Sem `frame-ancestors`, o CRM pode ser embutido em iframe de terceiro (clickjacking).
 
