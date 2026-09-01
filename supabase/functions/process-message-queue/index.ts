@@ -4,14 +4,12 @@ import { getWhatsAppConfig, getActiveProvider } from '../_shared/whatsapp-config
 import { createProvider } from '../_shared/whatsapp-factory.ts'
 import type { WhatsAppConfig } from '../_shared/whatsapp-provider.ts'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-cron-secret',
-}
+import { getCorsHeaders } from '../_shared/cors.ts'
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req)
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }

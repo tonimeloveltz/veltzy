@@ -6,15 +6,15 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { extractText } from './extractor.ts'
 import { chunkText } from './chunker.ts'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { getCorsHeaders } from '../_shared/cors.ts'
 
 const EMBEDDING_BATCH_SIZE = 10
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req)
+  const jsonResponse = (data: unknown, status = 200): Response =>
+    new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -209,9 +209,3 @@ Deno.serve(async (req) => {
   }
 })
 
-function jsonResponse(data: unknown, status = 200): Response {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  })
-}

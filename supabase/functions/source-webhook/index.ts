@@ -2,16 +2,13 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { handleInboundMessage } from '../_shared/lead-inbound-handler.ts'
 import { normalizePhoneBR } from '../_shared/phone.ts'
 import { mapPayload, type WebhookPreset } from '../_shared/webhook-payload-mapper.ts'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
-
-const json = (body: Record<string, unknown>, status = 200) =>
-  new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+import { getCorsHeaders } from '../_shared/cors.ts'
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req)
+  const json = (body: Record<string, unknown>, status = 200) =>
+    new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!

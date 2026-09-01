@@ -10,18 +10,16 @@ import { downloadAndPersistCloudApiMedia } from '../_shared/cloud-api-media.ts'
 // GET hub.challenge + verificacao HMAC + messages[] + smb_message_echoes +
 // history + smb_app_state_sync (log) + message_template_status_update (bloco d).
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-hub-signature-256',
-}
-
-const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  })
+import { getCorsHeaders } from '../_shared/cors.ts'
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req)
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   // --- GET: verificacao do endpoint pela Meta (hub.challenge) ---
