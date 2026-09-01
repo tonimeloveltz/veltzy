@@ -1,12 +1,10 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+import { getCorsHeaders } from '../_shared/cors.ts'
+
 const TIMEOUT_MS = 30_000
 const PRODUCT = 'veltzy'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
 
 // Precos por modelo — verificados abril 2026
 const MODEL_PRICES: Record<string, { input: number; output: number }> = {
@@ -167,6 +165,7 @@ async function checkTenantLimits(
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req)
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }

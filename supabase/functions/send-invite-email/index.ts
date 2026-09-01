@@ -1,9 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { getCorsHeaders } from '../_shared/cors.ts'
 
 // C5: escape de HTML. Toda variavel interpolada no corpo do email passa por aqui
 // como defesa em profundidade — o vetor primario ja e fechado derivando os
@@ -17,6 +14,7 @@ const escapeHtml = (v: unknown): string =>
     .replaceAll("'", '&#39;')
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req)
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {

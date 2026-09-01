@@ -15,15 +15,15 @@ import { qualifyLeadTool } from './tools/qualify-lead.ts'
 import { updateLeadFieldTool } from './tools/update-lead-field.ts'
 import { escalateToHumanTool } from './tools/escalate-to-human.ts'
 import { queryBusinessKnowledgeTool } from './tools/query-business-knowledge.ts'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { getCorsHeaders } from '../_shared/cors.ts'
 
 const ALL_TOOLS = [qualifyLeadTool, updateLeadFieldTool, escalateToHumanTool, queryBusinessKnowledgeTool]
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req)
+  const jsonResponse = (data: unknown, status = 200): Response =>
+    new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -215,13 +215,6 @@ Deno.serve(async (req) => {
 })
 
 // --- Helpers ---
-
-function jsonResponse(data: unknown, status = 200): Response {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  })
-}
 
 async function resolveInstance(
   supabase: ReturnType<typeof createClient>,

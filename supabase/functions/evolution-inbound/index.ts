@@ -2,10 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { handleInboundMessage } from '../_shared/lead-inbound-handler.ts'
 import { normalizePhoneBR } from '../_shared/phone.ts'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-hub-secret',
-}
+import { getCorsHeaders } from '../_shared/cors.ts'
 
 interface EvolutionInboundPayload {
   company_id: string
@@ -35,6 +32,7 @@ interface EvolutionInboundPayload {
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req)
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }

@@ -1,11 +1,10 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { verifyMetaSignature } from '../_shared/meta-signature.ts'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { getCorsHeaders } from '../_shared/cors.ts'
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req)
   if (req.method === 'GET') {
     const url = new URL(req.url)
     const mode = url.searchParams.get('hub.mode')
@@ -20,7 +19,16 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
-    const payload = await req.json()
+    // A4: a Meta assina cada POST com HMAC-SHA256 do corpo cru (x-hub-signature-256).
+    // Ler o corpo CRU antes de qualquer parse, senao o HMAC nao bate. Sem app
+    // secret configurado, recusa (fail-closed) — nao processa webhook nao provado.
+    const rawBody = await req.text()
+    const appSecret = Deno.env.get('INSTAGRAM_APP_SECRET') ?? Deno.env.get('META_APP_SECRET')
+    if (!appSecret || !(await verifyMetaSignature(rawBody, req.headers.get('x-hub-signature-256'), appSecret))) {
+      return new Response(JSON.stringify({ error: 'Invalid signature' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+
+    const payload = JSON.parse(rawBody)
     const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { db: { schema: 'veltzy' } })
 
     for (const entry of payload.entry ?? []) {
