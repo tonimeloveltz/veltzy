@@ -110,12 +110,6 @@ const AuthPage = () => {
             ) : (
               <div className="space-y-4">
                 <LoginForm onForgotPassword={() => setShowForgotPassword(true)} />
-                <p className="text-center text-sm text-muted-foreground">
-                  Nao tem conta?{' '}
-                  <Link to="/auth/cadastro" className="text-primary hover:underline font-medium">
-                    Criar conta
-                  </Link>
-                </p>
               </div>
             )}
           </CardContent>
