@@ -16,8 +16,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { useRoles } from '@/hooks/use-roles'
 import { useWhatsAppNumbers, useDisconnectNumber, useDeleteNumber } from '@/hooks/use-whatsapp-numbers'
+import { useWhatsAppCategories } from '@/hooks/use-whatsapp-categories'
 import type { WhatsAppNumberItem, WhatsAppProviderKind } from '@/services/whatsapp-numbers.service'
-import { ConnectNumberDialog } from './connect-number-dialog'
+import { ConnectNumberDialog, type ConnectChoice } from './connect-number-dialog'
 import { OfficialManageDialog } from './official-manage-dialog'
 import { WhatsAppConnectDialog } from './whatsapp-connect-dialog'
 import { WahaConnectDialog } from './waha-connect-dialog'
@@ -110,19 +111,76 @@ const NumberRow = ({
   )
 }
 
+// Providers na ordem de exibicao + mapeamento categoria->provider (item 1).
+const PROVIDER_META: {
+  key: WhatsAppProviderKind
+  label: string
+  connect: ConnectChoice
+  categoryKey: 'official' | 'qr_code' | 'waha'
+}[] = [
+  { key: 'cloud_api', label: 'WhatsApp API Oficial', connect: 'official', categoryKey: 'official' },
+  { key: 'evolution', label: 'Evolution', connect: 'evolution', categoryKey: 'qr_code' },
+  { key: 'waha', label: 'WAHA', connect: 'waha', categoryKey: 'waha' },
+]
+
+// Linha de estado vazio: provider LIBERADO no Hub mas sem numero conectado ainda.
+const EmptyProviderRow = ({
+  label,
+  provider,
+  isAdmin,
+  onConnect,
+}: {
+  label: string
+  provider: WhatsAppProviderKind
+  isAdmin: boolean
+  onConnect: () => void
+}) => (
+  <div className="flex flex-col gap-2 rounded-lg border border-dashed p-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex items-center gap-3">
+      <div className="h-2.5 w-2.5 shrink-0 rounded-full bg-muted-foreground/30" />
+      <div className="flex items-center gap-2">
+        <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium', providerBadge[provider])}>
+          {label}
+        </span>
+        <span className="text-xs text-muted-foreground">Disponivel - conecte um numero</span>
+      </div>
+    </div>
+    {isAdmin && (
+      <Button variant="outline" size="sm" className="h-8 pl-5 sm:pl-3" onClick={onConnect}>
+        <Plus className="mr-1 h-3.5 w-3.5" />
+        Conectar
+      </Button>
+    )}
+  </div>
+)
+
 export const WhatsAppNumbersList = () => {
   const { isAdmin } = useRoles()
   const { data: numbers, isLoading } = useWhatsAppNumbers()
+  const { data: categories } = useWhatsAppCategories()
   const disconnectMutation = useDisconnectNumber()
   const deleteMutation = useDeleteNumber()
 
   const [connectOpen, setConnectOpen] = useState(false)
+  const [connectInitial, setConnectInitial] = useState<ConnectChoice | undefined>(undefined)
   const [officialManageOpen, setOfficialManageOpen] = useState(false)
   const [disconnectTarget, setDisconnectTarget] = useState<WhatsAppNumberItem | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<WhatsAppNumberItem | null>(null)
   const [reconnectTarget, setReconnectTarget] = useState<WhatsAppNumberItem | null>(null)
 
   const count = numbers?.length ?? 0
+
+  // Providers LIBERADOS no Hub que ainda nao tem numero -> linha de estado vazio.
+  // (Nunca escondemos numero real que ja exista, mesmo de provider nao-liberado.)
+  const emptyEnabledProviders = PROVIDER_META.filter(
+    (p) => categories?.[p.categoryKey] && !(numbers ?? []).some((n) => n.provider === p.key),
+  )
+
+  const openConnect = (initial?: ConnectChoice) => {
+    setConnectInitial(initial)
+    setConnectOpen(true)
+  }
+  const hasAnyRow = (numbers?.length ?? 0) > 0 || emptyEnabledProviders.length > 0
 
   return (
     <>
@@ -141,7 +199,7 @@ export const WhatsAppNumbersList = () => {
               </div>
             </div>
             {isAdmin && (
-              <Button size="sm" onClick={() => setConnectOpen(true)}>
+              <Button size="sm" onClick={() => openConnect()}>
                 <Plus className="mr-1 h-4 w-4" />
                 Conectar numero
               </Button>
@@ -154,9 +212,9 @@ export const WhatsAppNumbersList = () => {
               <Skeleton className="h-16 w-full" />
               <Skeleton className="h-16 w-full" />
             </div>
-          ) : numbers && numbers.length > 0 ? (
+          ) : hasAnyRow ? (
             <div className="space-y-2">
-              {numbers.map((item) => (
+              {(numbers ?? []).map((item) => (
                 <NumberRow
                   key={`${item.provider}:${item.ref}`}
                   item={item}
@@ -167,16 +225,29 @@ export const WhatsAppNumbersList = () => {
                   onManageOfficial={() => setOfficialManageOpen(true)}
                 />
               ))}
+              {emptyEnabledProviders.map((p) => (
+                <EmptyProviderRow
+                  key={p.key}
+                  label={p.label}
+                  provider={p.key}
+                  isAdmin={isAdmin}
+                  onConnect={() => openConnect(p.connect)}
+                />
+              ))}
             </div>
           ) : (
             <p className="py-6 text-center text-sm text-muted-foreground">
-              Nenhum numero conectado. Clique em "Conectar numero" para comecar.
+              Nenhum canal de WhatsApp liberado. Fale com o suporte.
             </p>
           )}
         </CardContent>
       </Card>
 
-      <ConnectNumberDialog open={connectOpen} onOpenChange={setConnectOpen} />
+      <ConnectNumberDialog
+        open={connectOpen}
+        onOpenChange={setConnectOpen}
+        initialProvider={connectInitial}
+      />
       <OfficialManageDialog open={officialManageOpen} onOpenChange={setOfficialManageOpen} />
 
       {/* Reconectar: Evolution reusa o dialog existente (mode reconnect); WAHA via PATCH. */}

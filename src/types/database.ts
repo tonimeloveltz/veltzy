@@ -21,6 +21,8 @@ export interface CompanyFeatures {
 export interface WhatsAppCategories {
   official: boolean
   qr_code: boolean
+  /** WAHA como categoria propria (rollout gradual; default OFF ate o Hub liberar). */
+  waha: boolean
 }
 
 export interface Company {
