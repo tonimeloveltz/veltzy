@@ -25,10 +25,6 @@ export const useAuth = () => {
     }
   }
 
-  const signUp = async (email: string, password: string, name: string) => {
-    await authService.signUp(email, password, name)
-  }
-
   const signOut = async () => {
     const companyId = store.activeCompanyId
     await logAuditEvent('logout', {}, companyId ?? undefined)
@@ -65,7 +61,6 @@ export const useAuth = () => {
     isAuthenticated: !!store.user,
     hasCompany: !!store.company,
     signIn,
-    signUp,
     signOut,
     hasRole,
     hasPermission,

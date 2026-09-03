@@ -11,7 +11,6 @@ import { PageLoadingSkeleton } from '@/components/shared/page-loading-skeleton'
 import { ErrorBoundary } from '@/components/shared/error-boundary'
 
 const AuthPage = lazy(() => import('@/pages/auth'))
-const AuthCadastroPage = lazy(() => import('@/pages/auth-cadastro'))
 const DashboardPage = lazy(() => import('@/pages/dashboard'))
 const UpdatePasswordPage = lazy(() => import('@/pages/update-password'))
 const PipelinePage = lazy(() => import('@/pages/pipeline'))
@@ -62,7 +61,6 @@ const App = () => {
           <Suspense fallback={<PageLoadingSkeleton />}>
             <Routes>
               <Route path="/auth" element={<AuthPage />} />
-              <Route path="/auth/cadastro" element={<AuthCadastroPage />} />
               <Route path="/aceitar-convite" element={<AceitarConvitePage />} />
               <Route path="/acesso-negado" element={<AcessoNegadoPage />} />
 
