@@ -10,6 +10,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Skeleton } from '@/components/ui/skeleton'
 import { PaymentIntegrations } from '@/components/admin/payment-integrations'
 import { WhatsAppConnectChoice } from '@/components/admin/whatsapp-connect-choice'
+import { WhatsAppNumbersList } from '@/components/admin/whatsapp-numbers-list'
 import { useLeadSources } from '@/hooks/use-lead-sources'
 import { usePipelines } from '@/hooks/use-pipelines'
 import {
@@ -313,6 +314,7 @@ const IntegrationsTab = () => {
       </TabsList>
 
       <TabsContent value="channels" className="mt-4 space-y-4">
+        {!whatsappManaging && <WhatsAppNumbersList />}
         <WhatsAppConnectChoice onManagingChange={setWhatsappManaging} />
         {!whatsappManaging && (
           <>
