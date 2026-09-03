@@ -80,6 +80,20 @@ Deno.serve(async (req) => {
       )
     }
 
+    // 2.1 Guard defensivo de telefone: o NOWEB usa LID addressing e pode mandar
+    //     from=@lid (nao-telefone) ou vazio em status@broadcast/grupos. Normalizado,
+    //     um numero BR real fica com 12-13 digitos (55 + 10/11). Fora dessa janela
+    //     (vazio, @lid com 15 digitos, etc) e lixo -> NAO cria lead. O fix da
+    //     normalizacao real (remoteJidAlt) e no waha-webhook-receiver do Hub.
+    const normalizedPhone = normalizePhoneBR(payload.phone)
+    if (!normalizedPhone || normalizedPhone.length < 10 || normalizedPhone.length > 13) {
+      console.warn(`[waha-inbound] Telefone invalido apos normalizacao (raw='${payload.phone}', norm='${normalizedPhone}') — pulando, sem criar lead`)
+      return new Response(
+        JSON.stringify({ ok: true, skipped: true, reason: 'invalid_phone' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      )
+    }
+
     // 3. Normalizar tipos especiais (mesma logica do evolution-inbound)
     let { content } = payload
     let messageType = payload.message_type as string
@@ -108,7 +122,7 @@ Deno.serve(async (req) => {
       supabaseUrl: url,
       supabaseKey: key,
       companyId: payload.company_id,
-      phone: normalizePhoneBR(payload.phone),
+      phone: normalizedPhone,
       senderName: payload.sender_name ?? null,
       content,
       messageType,
