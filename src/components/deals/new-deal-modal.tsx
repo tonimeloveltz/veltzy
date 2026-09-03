@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { CurrencyInput } from '@/components/ui/currency-input'
 import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
@@ -33,8 +34,12 @@ const schema = z.object({
   stage_id: z.string().uuid('Selecione uma etapa'),
   value: z.number().nonnegative().optional().or(z.nan().transform(() => undefined)),
   assigned_to: z.string().optional(),
+  is_closed: z.boolean(),
   closed_date: z.string().optional(),
   observations: z.string().optional(),
+}).refine((v) => !v.is_closed || !!v.closed_date, {
+  path: ['closed_date'],
+  message: 'Informe a data de fechamento',
 })
 
 type FormValues = z.infer<typeof schema>
@@ -69,18 +74,47 @@ const NewDealModal = ({ open, onClose, defaultPipelineId, defaultStageId, locked
   const [newContactOpen, setNewContactOpen] = useState(false)
   const [selectedContact, setSelectedContact] = useState<SelectedContact | null>(null)
 
-  const { register, handleSubmit, control, reset, watch, setValue, setError, formState: { errors } } = useForm<FormValues>({
+  const { register, handleSubmit, control, reset, watch, setValue, setError, clearErrors, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { lead_id: '', name: '', value: 0, assigned_to: NO_OWNER, observations: '' },
+    defaultValues: { lead_id: '', name: '', value: 0, assigned_to: NO_OWNER, is_closed: false, observations: '' },
   })
 
   const selectedPipelineId = watch('pipeline_id')
   const selectedStageId = watch('stage_id')
   const { data: stages } = usePipelineStages(selectedPipelineId || null)
 
+  const isClosed = watch('is_closed')
+  const closedDate = watch('closed_date')
+
   const selectedStage = stages?.find((s) => s.id === selectedStageId)
   const isFinalStage = !!selectedStage?.is_final
-  const isWonStage = isFinalStage && selectedStage?.is_positive === true
+
+  // Etapas de fechamento do pipeline (is_final: "Fechado (Ganho)" e "Perdido")
+  // e a primeira etapa aberta. O checkbox reposiciona o card entre as duas
+  // pontas e limita a lista do select, mas nao trava o select.
+  const closedStages = stages?.filter((s) => s.is_final) ?? []
+  const wonStageId = closedStages.find((s) => s.is_positive === true)?.id ?? ''
+  const defaultClosedStageId = wonStageId || closedStages[0]?.id || ''
+  const firstOpenStageId = stages?.find((s) => !s.is_final)?.id ?? stages?.[0]?.id ?? ''
+
+  // Marcado, o select oferece so as etapas de fechamento. Pipeline sem nenhuma
+  // etapa final cai de volta na lista inteira: melhor um select coerente do que
+  // um vazio que impede criar o negocio.
+  const stageOptions = isClosed && closedStages.length > 0 ? closedStages : (stages ?? [])
+
+  // Marcar o checkbox leva o negocio para a coluna de fechamento; desmarcar
+  // traz de volta para a primeira etapa aberta, para nao deixar um negocio
+  // aberto parado na coluna "Fechado (Ganho)".
+  const handleClosedToggle = (checked: boolean) => {
+    setValue('is_closed', checked)
+    if (checked) {
+      if (!closedDate) setValue('closed_date', todayStr)
+      if (defaultClosedStageId && !isFinalStage) setValue('stage_id', defaultClosedStageId, { shouldValidate: true })
+    } else {
+      clearErrors('closed_date')
+      if (isFinalStage && firstOpenStageId) setValue('stage_id', firstOpenStageId, { shouldValidate: true })
+    }
+  }
 
   // Reset ao abrir, com pipeline default/primeiro acessivel.
   useEffect(() => {
@@ -94,18 +128,27 @@ const NewDealModal = ({ open, onClose, defaultPipelineId, defaultStageId, locked
         name: lockedLeadId && lockedLeadName ? `Negocio - ${lockedLeadName}` : '',
         pipeline_id: resolvedPipelineId,
         stage_id: defaultStageId ?? '',
-        value: 0, assigned_to: NO_OWNER, closed_date: todayStr, observations: '',
+        value: 0, assigned_to: NO_OWNER, is_closed: false, closed_date: todayStr, observations: '',
       })
     }
   }, [open, pipelines, reset, todayStr, defaultPipelineId, defaultStageId, lockedLeadId, lockedLeadName])
 
-  // Quando pipeline muda, seleciona a primeira etapa.
+  // Quando pipeline muda, seleciona a primeira etapa - ou a coluna de
+  // fechamento do novo pipeline, se o negocio ja esta marcado como fechado.
   useEffect(() => {
     if (stages && stages.length > 0) {
       const exists = stages.some((s) => s.id === selectedStageId)
-      if (!exists) setValue('stage_id', stages[0].id)
+      if (!exists) setValue('stage_id', isClosed && defaultClosedStageId ? defaultClosedStageId : stages[0].id)
     }
-  }, [stages, selectedStageId, setValue])
+  }, [stages, selectedStageId, setValue, isClosed, defaultClosedStageId])
+
+  // Etapa final implica negocio fechado. Mantem coerente o fluxo antigo (criar
+  // direto na coluna "Fechado (Ganho)", inclusive via `defaultStageId` do
+  // board) com o checkbox novo. Mao unica de proposito: escolher uma etapa
+  // aberta NAO desmarca o checkbox, quem controla isso e `handleClosedToggle`.
+  useEffect(() => {
+    if (isFinalStage) setValue('is_closed', true)
+  }, [isFinalStage, setValue])
 
   const filteredContacts = useMemo(() => {
     const q = contactSearch.trim().toLowerCase()
@@ -133,8 +176,10 @@ const NewDealModal = ({ open, onClose, defaultPipelineId, defaultStageId, locked
     const stage = stages?.find((s) => s.id === values.stage_id)
     let status: DealStatus = 'open'
     let closed_at: string | null = null
-    if (stage?.is_final) {
-      status = stage.is_positive ? 'won' : 'lost'
+    if (values.is_closed) {
+      // Etapa final negativa registra perda; qualquer outra etapa (aberta ou
+      // "Fechado (Ganho)") registra ganho, que e o caso do checkbox.
+      status = stage?.is_final && stage.is_positive === false ? 'lost' : 'won'
       const date = values.closed_date || todayStr
       if (date > todayStr) {
         setError('closed_date', { message: 'A data de fechamento nao pode ser futura' })
@@ -273,7 +318,7 @@ const NewDealModal = ({ open, onClose, defaultPipelineId, defaultStageId, locked
                   <Select value={field.value} onValueChange={field.onChange}>
                     <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                     <SelectContent>
-                      {stages?.map((s) => (
+                      {stageOptions.map((s) => (
                         <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                       ))}
                     </SelectContent>
@@ -321,16 +366,33 @@ const NewDealModal = ({ open, onClose, defaultPipelineId, defaultStageId, locked
             </div>
           </div>
 
-          {/* Data de fechamento (so etapa final) */}
-          {isFinalStage && (
+          {/* Negocio ja fechado */}
+          <label
+            htmlFor="deal-is-closed"
+            className={cn(
+              'flex cursor-pointer items-start gap-3 rounded-md border p-3 transition-colors',
+              isClosed ? 'border-primary bg-primary/5' : 'border-input'
+            )}
+          >
+            <Checkbox
+              id="deal-is-closed"
+              checked={isClosed}
+              onCheckedChange={(v) => handleClosedToggle(v === true)}
+              className="mt-0.5"
+            />
+            <span className="text-sm leading-snug">
+              <span className="font-medium">Negócio fechado</span>{' '}
+              <span className="text-muted-foreground">
+                Marque se a oportunidade já foi ganha e registre a data.
+              </span>
+            </span>
+          </label>
+
+          {/* Data de fechamento (so quando o negocio ja nasce fechado) */}
+          {isClosed && (
             <div className="space-y-2">
-              <Label htmlFor="deal-closed-date">
-                Data do fechamento {isWonStage ? '(ganho)' : '(perdido)'}
-              </Label>
+              <Label htmlFor="deal-closed-date">Data de fechamento *</Label>
               <Input id="deal-closed-date" type="date" max={todayStr} {...register('closed_date')} />
-              <p className="text-xs text-muted-foreground">
-                Para lancar um fechamento passado, ajuste a data real.
-              </p>
               {errors.closed_date && <p className="text-xs text-destructive">{errors.closed_date.message}</p>}
             </div>
           )}

@@ -20,6 +20,18 @@ const LeadsBySourceChart = ({ days, pipelineId }: { days?: number; pipelineId?: 
   const { data } = useLeadsBySource(days, pipelineId)
   const total = data?.reduce((sum, s) => sum + s.count, 0) ?? 0
 
+
+  if (data?.length === 0) {
+    return (
+      <div className="bg-card border border-border/30 rounded-2xl p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <h3 className="text-sm font-semibold">Leads por Origem</h3>
+        </div>
+        <p className="text-xs text-muted-foreground text-center py-6">Nenhum lead cadastrado no periodo</p>
+      </div>
+    )
+  }
+
   return (
     <div className="glass-card rounded-xl p-5">
       <h3 className="text-sm font-semibold mb-4">Leads por Origem</h3>
