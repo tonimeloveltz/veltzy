@@ -5,7 +5,6 @@ import { z } from 'zod'
 import { Loader2, ChevronsUpDown, Search, Plus, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { leadDisplayName } from '@/lib/phone'
-import { isClosedInCurrentMonth } from '@/lib/current-month'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog'
