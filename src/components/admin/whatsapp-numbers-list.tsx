@@ -40,6 +40,7 @@ const statusConfig = {
 const NumberRow = ({
   item,
   isAdmin,
+  categoryOff,
   onDisconnect,
   onReconnect,
   onDelete,
@@ -47,6 +48,9 @@ const NumberRow = ({
 }: {
   item: WhatsAppNumberItem
   isAdmin: boolean
+  /** true = a categoria desse provider esta desligada no Hub, mas o numero existe
+   *  (nunca escondemos numero vivo). Mostra um selinho discreto pra tirar a estranheza. */
+  categoryOff: boolean
   onDisconnect: (item: WhatsAppNumberItem) => void
   onReconnect: (item: WhatsAppNumberItem) => void
   onDelete: (item: WhatsAppNumberItem) => void
@@ -67,6 +71,11 @@ const NumberRow = ({
             <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium', providerBadge[item.provider])}>
               {item.providerLabel}
             </span>
+            {categoryOff && (
+              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                Categoria desativada
+              </span>
+            )}
           </div>
           <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
             <GitBranch className="h-3 w-3" />
@@ -180,6 +189,13 @@ export const WhatsAppNumbersList = () => {
     setConnectInitial(initial)
     setConnectOpen(true)
   }
+
+  // Categoria do provider explicitamente OFF no Hub (para o selinho de numero vivo
+  // de canal desativado). Undefined/loading -> nao marca.
+  const isCategoryOff = (provider: WhatsAppProviderKind) => {
+    const meta = PROVIDER_META.find((p) => p.key === provider)
+    return !!meta && categories?.[meta.categoryKey] === false
+  }
   const hasAnyRow = (numbers?.length ?? 0) > 0 || emptyEnabledProviders.length > 0
 
   return (
@@ -219,6 +235,7 @@ export const WhatsAppNumbersList = () => {
                   key={`${item.provider}:${item.ref}`}
                   item={item}
                   isAdmin={isAdmin}
+                  categoryOff={isCategoryOff(item.provider)}
                   onDisconnect={setDisconnectTarget}
                   onReconnect={setReconnectTarget}
                   onDelete={setDeleteTarget}
