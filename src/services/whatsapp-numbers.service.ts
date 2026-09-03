@@ -85,3 +85,31 @@ export async function disconnectNumber(provider: WhatsAppProviderKind, ref: stri
     throw new Error(err.error ?? 'Erro ao desconectar numero')
   }
 }
+
+/** Reinicia a sessao WAHA (proxy PATCH action=reconnect) e devolve o QR pra reparear. */
+export async function reconnectWahaSession(sessionName: string): Promise<{ qr_code_base64: string | null; status: string }> {
+  const res = await fetch(MANAGE_URL, {
+    method: 'PATCH',
+    headers: await getAuthHeaders(),
+    body: JSON.stringify({ provider: 'waha', action: 'reconnect', session_name: sessionName }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.error ?? 'Erro ao reconectar sessao WAHA')
+  }
+  return res.json()
+}
+
+/** Deleta um numero desconectado por provider (Evolution/WAHA). Proxy exige status != connected. */
+export async function deleteNumber(provider: WhatsAppProviderKind, ref: string): Promise<void> {
+  const idField = provider === 'waha' ? 'session_name' : 'instance_name'
+  const res = await fetch(MANAGE_URL, {
+    method: 'DELETE',
+    headers: await getAuthHeaders(),
+    body: JSON.stringify({ provider, [idField]: ref }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.error ?? 'Erro ao deletar numero')
+  }
+}

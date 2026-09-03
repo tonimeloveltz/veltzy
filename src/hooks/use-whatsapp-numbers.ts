@@ -4,6 +4,7 @@ import { useAuthStore } from '@/stores/auth.store'
 import {
   listWhatsAppNumbers,
   disconnectNumber,
+  deleteNumber,
   createWahaSession,
   getWahaSession,
   type WhatsAppProviderKind,
@@ -48,6 +49,22 @@ export function useDisconnectNumber() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['whatsapp-numbers'] })
       toast.success('Numero desconectado')
+    },
+    onError: (err: Error) => {
+      toast.error(err.message)
+    },
+  })
+}
+
+export function useDeleteNumber() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ provider, ref }: { provider: WhatsAppProviderKind; ref: string }) =>
+      deleteNumber(provider, ref),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-numbers'] })
+      toast.success('Numero removido')
     },
     onError: (err: Error) => {
       toast.error(err.message)

@@ -12,18 +12,21 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useCreateWahaSession, useWahaSessionStatus } from '@/hooks/use-whatsapp-numbers'
+import { reconnectWahaSession } from '@/services/whatsapp-numbers.service'
 
 type DialogState = 'idle' | 'loading' | 'qr_pending' | 'connected' | 'error' | 'expired'
 
 interface WahaConnectDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** Quando presente, o dialog reconecta essa sessao (PATCH) em vez de criar uma nova. */
+  reconnectSession?: string
 }
 
 // Janela do QR curta (licao do E2E: parear rapido). 2 min e o teto pratico.
 const QR_TIMEOUT_MS = 120_000
 
-export const WahaConnectDialog = ({ open, onOpenChange }: WahaConnectDialogProps) => {
+export const WahaConnectDialog = ({ open, onOpenChange, reconnectSession }: WahaConnectDialogProps) => {
   const queryClient = useQueryClient()
   const [state, setState] = useState<DialogState>('idle')
   const [displayName, setDisplayName] = useState('')
@@ -72,6 +75,24 @@ export const WahaConnectDialog = ({ open, onOpenChange }: WahaConnectDialogProps
     }
   }, [open])
 
+  // Auto-iniciar reconexao ao abrir (PATCH reconnect + polling do QR/status).
+  useEffect(() => {
+    if (open && reconnectSession && state === 'idle') {
+      setState('loading')
+      reconnectWahaSession(reconnectSession)
+        .then((r) => {
+          setSessionName(reconnectSession)
+          setQrBase64(r.qr_code_base64)
+          setState('qr_pending')
+        })
+        .catch((err) => {
+          setErrorMessage(err instanceof Error ? err.message : 'Erro ao reconectar')
+          setState('error')
+        })
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, reconnectSession])
+
   const handleCreate = useCallback(async () => {
     setState('loading')
     try {
@@ -92,7 +113,7 @@ export const WahaConnectDialog = ({ open, onOpenChange }: WahaConnectDialogProps
           <DialogTitle>Conectar WhatsApp (QR Code)</DialogTitle>
         </DialogHeader>
 
-        {state === 'idle' && (
+        {state === 'idle' && !reconnectSession && (
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="waha-display-name">Nome de exibicao (opcional)</Label>
