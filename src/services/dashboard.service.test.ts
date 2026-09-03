@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildTrendBuckets, fetchAllRows, onlyInPipeline } from './dashboard.service'
+import { buildTrendBuckets, dealRefDate, fetchAllRows, onlyInPipeline } from './dashboard.service'
 import { periodStartMs } from '@/lib/period-range'
 
 interface Row {
@@ -214,5 +214,35 @@ describe('buildTrendBuckets', () => {
 
     expect(buckets.length).toBeGreaterThanOrEqual(1)
     expect(buckets[buckets.length - 1].end).toBe(Number.POSITIVE_INFINITY)
+  })
+})
+
+describe('dealRefDate', () => {
+  // O criterio unico de recorte do dashboard. Se ele divergir entre duas
+  // metricas, o mesmo negocio aparece em meses diferentes em duas telas.
+  const criado = '2026-09-03T12:00:00.000Z'
+  const fechado = '2026-07-15T15:00:00.000Z'
+
+  it('ganho conta pela data em que FECHOU, nao pela de criacao', () => {
+    // O caso do checkbox "Negocio fechado" com data retroativa: lancado em
+    // setembro, fechado em julho, tem que pesar em julho.
+    expect(dealRefDate({ status: 'won', created_at: criado, closed_at: fechado })).toBe(fechado)
+  })
+
+  it('perdido tambem conta pelo fechamento', () => {
+    expect(dealRefDate({ status: 'lost', created_at: criado, closed_at: fechado })).toBe(fechado)
+  })
+
+  it('aberto conta pela entrada no funil, mesmo com closed_at sujo', () => {
+    expect(dealRefDate({ status: 'open', created_at: criado, closed_at: fechado })).toBe(criado)
+    expect(dealRefDate({ status: 'pending_assignment', created_at: criado, closed_at: null })).toBe(criado)
+  })
+
+  it('arquivado conta pela criacao: arquivar nao grava closed_at', () => {
+    expect(dealRefDate({ status: 'archived', created_at: criado, closed_at: null })).toBe(criado)
+  })
+
+  it('ganho legado sem closed_at cai para created_at em vez de sumir da metrica', () => {
+    expect(dealRefDate({ status: 'won', created_at: criado, closed_at: null })).toBe(criado)
   })
 })
