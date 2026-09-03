@@ -13,6 +13,9 @@ export interface WhatsAppNumberItem {
   status: WhatsAppNumberStatus
   /** session_name (waha) | instance_name (evolution) | phone_number_id (cloud_api) */
   ref: string
+  /** identificador de roteamento (match_value de Origem->instancia): instance_name |
+   *  session_name | instance_label (cloud_api). null = numero nao linkavel a funil. */
+  routingId: string | null
   /** nome do funil roteado por Origem->instancia; null = vai pro padrao */
   funnelName: string | null
 }
