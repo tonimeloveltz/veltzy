@@ -39,6 +39,39 @@ export async function listWhatsAppNumbers(): Promise<WhatsAppNumberItem[]> {
   return body.numbers ?? []
 }
 
+export interface WahaSessionResult {
+  session_name: string
+  qr_code_base64: string | null
+  status: string
+}
+
+/** Cria a sessao WAHA (via proxy provider=waha -> waha-instance-manage do Hub). Retorna QR. */
+export async function createWahaSession(displayName?: string): Promise<WahaSessionResult> {
+  const res = await fetch(MANAGE_URL, {
+    method: 'POST',
+    headers: await getAuthHeaders(),
+    body: JSON.stringify({ provider: 'waha', display_name: displayName || undefined }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.error ?? 'Erro ao criar sessao WAHA')
+  }
+  return res.json() as Promise<WahaSessionResult>
+}
+
+/** Le QR + status da sessao WAHA (polling durante a conexao). */
+export async function getWahaSession(sessionName: string): Promise<{ qr_code_base64: string | null; status: string }> {
+  const res = await fetch(`${MANAGE_URL}?provider=waha&session_name=${encodeURIComponent(sessionName)}`, {
+    method: 'GET',
+    headers: await getAuthHeaders(),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.error ?? 'Erro ao consultar sessao WAHA')
+  }
+  return res.json()
+}
+
 /** Desconecta um numero por provider (Evolution/WAHA). Cloud API nao usa este fluxo. */
 export async function disconnectNumber(provider: WhatsAppProviderKind, ref: string): Promise<void> {
   const idField = provider === 'waha' ? 'session_name' : 'instance_name'

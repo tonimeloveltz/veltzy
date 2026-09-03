@@ -4,6 +4,8 @@ import { useAuthStore } from '@/stores/auth.store'
 import {
   listWhatsAppNumbers,
   disconnectNumber,
+  createWahaSession,
+  getWahaSession,
   type WhatsAppProviderKind,
 } from '@/services/whatsapp-numbers.service'
 
@@ -15,6 +17,25 @@ export function useWhatsAppNumbers() {
     queryFn: listWhatsAppNumbers,
     enabled: !!companyId,
     staleTime: 30_000,
+  })
+}
+
+export function useCreateWahaSession() {
+  return useMutation({
+    mutationFn: (displayName?: string) => createWahaSession(displayName),
+    onError: (err: Error) => {
+      toast.error(err.message)
+    },
+  })
+}
+
+/** Polling do status da sessao WAHA durante a conexao (a cada 3s enquanto habilitado). */
+export function useWahaSessionStatus(sessionName: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: ['waha-session-status', sessionName],
+    queryFn: () => getWahaSession(sessionName!),
+    enabled: !!sessionName && enabled,
+    refetchInterval: 3_000,
   })
 }
 

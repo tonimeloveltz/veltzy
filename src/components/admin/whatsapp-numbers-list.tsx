@@ -17,7 +17,8 @@ import { cn } from '@/lib/utils'
 import { useRoles } from '@/hooks/use-roles'
 import { useWhatsAppNumbers, useDisconnectNumber } from '@/hooks/use-whatsapp-numbers'
 import type { WhatsAppNumberItem, WhatsAppProviderKind } from '@/services/whatsapp-numbers.service'
-import { WhatsAppConnectDialog } from './whatsapp-connect-dialog'
+import { ConnectNumberDialog } from './connect-number-dialog'
+import { OfficialManageDialog } from './official-manage-dialog'
 
 const providerBadge: Record<WhatsAppProviderKind, string> = {
   cloud_api: 'bg-emerald-500/10 text-emerald-600',
@@ -37,10 +38,12 @@ const NumberRow = ({
   item,
   isAdmin,
   onDisconnect,
+  onManageOfficial,
 }: {
   item: WhatsAppNumberItem
   isAdmin: boolean
   onDisconnect: (item: WhatsAppNumberItem) => void
+  onManageOfficial: () => void
 }) => {
   const status = statusConfig[item.status] ?? statusConfig.disconnected
   const isOfficial = item.provider === 'cloud_api'
@@ -52,7 +55,7 @@ const NumberRow = ({
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <p className="truncate text-sm font-medium">
-              {item.displayNumber ?? 'Aguardando conexao'}
+              {item.displayNumber ?? (item.status === 'connected' ? 'Numero conectado' : 'Aguardando conexao')}
             </p>
             <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium', providerBadge[item.provider])}>
               {item.providerLabel}
@@ -69,11 +72,9 @@ const NumberRow = ({
         <span className="text-xs text-muted-foreground">{status.label}</span>
         {isAdmin && (
           isOfficial ? (
-            <Button variant="outline" size="sm" className="h-8" asChild>
-              <a href="#cloud-api">
-                <Settings2 className="mr-1 h-3.5 w-3.5" />
-                Gerenciar
-              </a>
+            <Button variant="outline" size="sm" className="h-8" onClick={onManageOfficial}>
+              <Settings2 className="mr-1 h-3.5 w-3.5" />
+              Gerenciar
             </Button>
           ) : item.status === 'connected' ? (
             <Button variant="outline" size="sm" className="h-8" onClick={() => onDisconnect(item)}>
@@ -98,6 +99,7 @@ export const WhatsAppNumbersList = () => {
   const disconnectMutation = useDisconnectNumber()
 
   const [connectOpen, setConnectOpen] = useState(false)
+  const [officialManageOpen, setOfficialManageOpen] = useState(false)
   const [disconnectTarget, setDisconnectTarget] = useState<WhatsAppNumberItem | null>(null)
 
   const count = numbers?.length ?? 0
@@ -140,6 +142,7 @@ export const WhatsAppNumbersList = () => {
                   item={item}
                   isAdmin={isAdmin}
                   onDisconnect={setDisconnectTarget}
+                  onManageOfficial={() => setOfficialManageOpen(true)}
                 />
               ))}
             </div>
@@ -151,7 +154,8 @@ export const WhatsAppNumbersList = () => {
         </CardContent>
       </Card>
 
-      <WhatsAppConnectDialog open={connectOpen} onOpenChange={setConnectOpen} mode="create" />
+      <ConnectNumberDialog open={connectOpen} onOpenChange={setConnectOpen} />
+      <OfficialManageDialog open={officialManageOpen} onOpenChange={setOfficialManageOpen} />
 
       <AlertDialog
         open={!!disconnectTarget}
