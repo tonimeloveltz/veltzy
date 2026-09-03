@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { MessageCircle, Plus, Unplug, QrCode, Settings2, GitBranch } from 'lucide-react'
+import { MessageCircle, Plus, Unplug, RefreshCw, Trash2, Settings2, GitBranch } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
@@ -15,10 +15,12 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { useRoles } from '@/hooks/use-roles'
-import { useWhatsAppNumbers, useDisconnectNumber } from '@/hooks/use-whatsapp-numbers'
+import { useWhatsAppNumbers, useDisconnectNumber, useDeleteNumber } from '@/hooks/use-whatsapp-numbers'
 import type { WhatsAppNumberItem, WhatsAppProviderKind } from '@/services/whatsapp-numbers.service'
 import { ConnectNumberDialog } from './connect-number-dialog'
 import { OfficialManageDialog } from './official-manage-dialog'
+import { WhatsAppConnectDialog } from './whatsapp-connect-dialog'
+import { WahaConnectDialog } from './waha-connect-dialog'
 
 const providerBadge: Record<WhatsAppProviderKind, string> = {
   cloud_api: 'bg-emerald-500/10 text-emerald-600',
@@ -38,11 +40,15 @@ const NumberRow = ({
   item,
   isAdmin,
   onDisconnect,
+  onReconnect,
+  onDelete,
   onManageOfficial,
 }: {
   item: WhatsAppNumberItem
   isAdmin: boolean
   onDisconnect: (item: WhatsAppNumberItem) => void
+  onReconnect: (item: WhatsAppNumberItem) => void
+  onDelete: (item: WhatsAppNumberItem) => void
   onManageOfficial: () => void
 }) => {
   const status = statusConfig[item.status] ?? statusConfig.disconnected
@@ -82,10 +88,21 @@ const NumberRow = ({
               Desconectar
             </Button>
           ) : (
-            <Button variant="outline" size="sm" className="h-8" disabled title="Gerencie a conexao no painel">
-              <QrCode className="mr-1 h-3.5 w-3.5" />
-              Ler QR Code
-            </Button>
+            <>
+              <Button variant="outline" size="sm" className="h-8" onClick={() => onReconnect(item)}>
+                <RefreshCw className="mr-1 h-3.5 w-3.5" />
+                Reconectar
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-destructive"
+                title="Remover numero"
+                onClick={() => onDelete(item)}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </>
           )
         )}
       </div>
@@ -97,10 +114,13 @@ export const WhatsAppNumbersList = () => {
   const { isAdmin } = useRoles()
   const { data: numbers, isLoading } = useWhatsAppNumbers()
   const disconnectMutation = useDisconnectNumber()
+  const deleteMutation = useDeleteNumber()
 
   const [connectOpen, setConnectOpen] = useState(false)
   const [officialManageOpen, setOfficialManageOpen] = useState(false)
   const [disconnectTarget, setDisconnectTarget] = useState<WhatsAppNumberItem | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<WhatsAppNumberItem | null>(null)
+  const [reconnectTarget, setReconnectTarget] = useState<WhatsAppNumberItem | null>(null)
 
   const count = numbers?.length ?? 0
 
@@ -142,6 +162,8 @@ export const WhatsAppNumbersList = () => {
                   item={item}
                   isAdmin={isAdmin}
                   onDisconnect={setDisconnectTarget}
+                  onReconnect={setReconnectTarget}
+                  onDelete={setDeleteTarget}
                   onManageOfficial={() => setOfficialManageOpen(true)}
                 />
               ))}
@@ -156,6 +178,48 @@ export const WhatsAppNumbersList = () => {
 
       <ConnectNumberDialog open={connectOpen} onOpenChange={setConnectOpen} />
       <OfficialManageDialog open={officialManageOpen} onOpenChange={setOfficialManageOpen} />
+
+      {/* Reconectar: Evolution reusa o dialog existente (mode reconnect); WAHA via PATCH. */}
+      <WhatsAppConnectDialog
+        open={reconnectTarget?.provider === 'evolution'}
+        onOpenChange={(o) => { if (!o) setReconnectTarget(null) }}
+        mode="reconnect"
+        instanceName={reconnectTarget?.provider === 'evolution' ? reconnectTarget.ref : undefined}
+      />
+      <WahaConnectDialog
+        open={reconnectTarget?.provider === 'waha'}
+        onOpenChange={(o) => { if (!o) setReconnectTarget(null) }}
+        reconnectSession={reconnectTarget?.provider === 'waha' ? reconnectTarget.ref : undefined}
+      />
+
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover numero?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget?.displayNumber ?? 'Este numero'} sera removido permanentemente. Esta acao
+              e irreversivel.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (deleteTarget) {
+                  deleteMutation.mutate({ provider: deleteTarget.provider, ref: deleteTarget.ref })
+                  setDeleteTarget(null)
+                }
+              }}
+            >
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog
         open={!!disconnectTarget}
