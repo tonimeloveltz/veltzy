@@ -21,6 +21,9 @@ interface WhatsAppNumberItem {
   status: NumberStatus
   /** identificador de gerencia: session_name (waha) | instance_name (evolution) | phone_number_id (cloud_api) */
   ref: string
+  /** identificador de ROTEAMENTO (match_value de pipeline_routing_rules match_type='instance'):
+   *  instance_name (evolution) | session_name (waha) | instance_label (cloud_api). null = nao linkavel. */
+  routingId: string | null
   /** nome do funil roteado por Origem->instancia (pipeline_routing_rules match_type='instance'); null = vai pro padrao */
   funnelName: string | null
 }
@@ -145,6 +148,7 @@ Deno.serve(async (req: Request) => {
         displayNumber: n.display_number ?? null,
         status: n.status === 'active' ? 'connected' : 'disconnected',
         ref: n.phone_number_id,
+        routingId: n.instance_label ?? null,
         funnelName: n.instance_label ? funnelByInstance.get(n.instance_label) ?? null : null,
       })
     }
@@ -161,6 +165,7 @@ Deno.serve(async (req: Request) => {
         displayNumber: n.phone_number ?? null,
         status: normalizeInstanceStatus(n.status),
         ref: n.instance_name,
+        routingId: n.instance_name,
         funnelName: funnelByInstance.get(n.instance_name) ?? null,
       })
     }
@@ -177,6 +182,7 @@ Deno.serve(async (req: Request) => {
         displayNumber: n.phone_number ?? null,
         status: normalizeInstanceStatus(n.status),
         ref: n.session_name,
+        routingId: n.session_name,
         funnelName: funnelByInstance.get(n.session_name) ?? null,
       })
     }
