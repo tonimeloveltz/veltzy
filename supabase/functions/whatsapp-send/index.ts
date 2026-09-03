@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
     // Buscar lead
     const { data: lead } = await supabase
       .from('leads')
-      .select('phone, whatsapp_instance_name, assigned_to, company_id, cloud_api_number_id')
+      .select('phone, whatsapp_instance_name, assigned_to, company_id, cloud_api_number_id, whatsapp_provider')
       .eq('id', payload.leadId)
       .single()
 
@@ -102,8 +102,11 @@ Deno.serve(async (req) => {
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
-    // --- Roteamento por provider ---
-    const activeProvider = await getActiveProvider(supabasePublic, companyId)
+    // --- Roteamento por provider (multi-provider V2) ---
+    // Deriva o provider POR-LEAD (carimbado no inbound). Fallback para o provider
+    // ativo da empresa cobre leads antigos (pre-multi-provider, whatsapp_provider NULL).
+    const activeProvider = (lead.whatsapp_provider as 'zapi' | 'evolution' | 'cloud_api' | 'waha' | null)
+      ?? await getActiveProvider(supabasePublic, companyId)
     const msgType = (payload.messageType ?? 'text') as 'text' | 'image' | 'audio' | 'video' | 'document'
 
     let instanceName: string | null = null
@@ -112,7 +115,10 @@ Deno.serve(async (req) => {
     let source: 'whatsapp' | 'manual' = 'whatsapp'
     let externalId: string | null = null
 
-    if (activeProvider === 'evolution') {
+    if (activeProvider === 'evolution' || activeProvider === 'waha') {
+      // Evolution e WAHA resolvem o mesmo identificador (whatsapp_instance_name /
+      // default do vendedor / sdr_instance_name via resolveInstanceName): a
+      // instancia (Evolution) ou a sessao (WAHA) sao o mesmo nome de numero.
       // Override explicito do payload (admin/manager)
       instanceName = payload.instanceName ?? null
 
@@ -155,20 +161,21 @@ Deno.serve(async (req) => {
         }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
       }
 
-      // Enviar via Evolution Hub
+      // Enviar via Hub (Evolution ou WAHA). O provider distingue o nome do campo:
+      // Evolution usa instanceName; WAHA usa sessionName (mesmo valor resolvido).
       try {
-        const provider = createProvider('evolution')
+        const provider = createProvider(activeProvider)
         await provider.sendMessage({} as import('../_shared/whatsapp-provider.ts').WhatsAppConfig, {
           phone: lead.phone,
           content: payload.content,
           type: msgType,
           mediaUrl: payload.fileUrl,
           fileName: payload.fileName,
-          instanceName,
+          ...(activeProvider === 'waha' ? { sessionName: instanceName } : { instanceName }),
           companyId,
         })
       } catch (err) {
-        console.error('[whatsapp-send] Evolution send failed:', err)
+        console.error(`[whatsapp-send] ${activeProvider} send failed:`, err)
         deliveryStatus = 'failed'
         deliveryError = err instanceof Error ? err.message : String(err)
       }
