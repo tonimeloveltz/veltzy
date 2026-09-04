@@ -1,11 +1,13 @@
 import { supabase } from '@/lib/supabase'
 import type { WhatsAppCategories } from '@/types/database'
 
-const DEFAULT_CATEGORIES: WhatsAppCategories = { official: true, qr_code: true }
+// official/qr_code default ON (compat com tenants atuais); waha default OFF
+// (rollout gradual — so aparece quando o Hub liga a chave).
+const DEFAULT_CATEGORIES: WhatsAppCategories = { official: true, qr_code: true, waha: false }
 
 /**
  * Le a allowlist de categorias WhatsApp da empresa (read-only).
- * Defensivo: null ou chave ausente -> ON (coerente com o default do Hub).
+ * Defensivo: chave ausente -> default (official/qr_code ON, waha OFF).
  * O Veltzy NUNCA escreve esta coluna.
  */
 export const getWhatsAppCategories = async (companyId: string): Promise<WhatsAppCategories> => {
@@ -20,5 +22,6 @@ export const getWhatsAppCategories = async (companyId: string): Promise<WhatsApp
   return {
     official: raw?.official ?? DEFAULT_CATEGORIES.official,
     qr_code: raw?.qr_code ?? DEFAULT_CATEGORIES.qr_code,
+    waha: raw?.waha ?? DEFAULT_CATEGORIES.waha,
   }
 }
