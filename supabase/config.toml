@@ -415,9 +415,6 @@ verify_jwt = false
 [functions.send-task-reminders]
 verify_jwt = false
 
-[functions.fix-lead-names]
-verify_jwt = false
-
 # --- Frontend autenticado (verify_jwt=true, validam JWT do usuario) ---
 [functions.whatsapp-send]
 verify_jwt = true
