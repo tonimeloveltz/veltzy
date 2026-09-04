@@ -371,6 +371,9 @@ verify_jwt = false
 [functions.evolution-inbound]
 verify_jwt = false
 
+[functions.waha-inbound]
+verify_jwt = false
+
 [functions.cloud-api-inbound]
 verify_jwt = false
 
@@ -420,6 +423,11 @@ verify_jwt = false
 verify_jwt = true
 
 [functions.whatsapp-instance-manage]
+verify_jwt = false
+
+# Agregador da tela "Numeros de WhatsApp": valida JWT do usuario manualmente
+# (admin/super_admin) e le os 3 providers com service_role, filtrando company.
+[functions.whatsapp-numbers-list]
 verify_jwt = false
 
 # Valida JWT do usuario manualmente (admin/super_admin) e repassa ao Hub via m2m.
