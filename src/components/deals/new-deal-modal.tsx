@@ -366,36 +366,36 @@ const NewDealModal = ({ open, onClose, defaultPipelineId, defaultStageId, locked
             </div>
           </div>
 
-          {/* Negocio ja fechado */}
-          <label
-            htmlFor="deal-is-closed"
+          {/* Negocio ja fechado (+ data de fechamento quando marcado) */}
+          <div
             className={cn(
-              'flex cursor-pointer items-start gap-3 rounded-md border p-3 transition-colors',
+              'rounded-md border p-3 transition-colors',
               isClosed ? 'border-primary bg-primary/5' : 'border-input'
             )}
           >
-            <Checkbox
-              id="deal-is-closed"
-              checked={isClosed}
-              onCheckedChange={(v) => handleClosedToggle(v === true)}
-              className="mt-0.5"
-            />
-            <span className="text-sm leading-snug">
-              <span className="font-medium">Negócio fechado</span>{' '}
-              <span className="text-muted-foreground">
-                Marque se a oportunidade já foi ganha e registre a data.
-              </span>
-            </span>
-          </label>
+            <label htmlFor="deal-is-closed" className="flex cursor-pointer items-start gap-3">
+              <Checkbox
+                id="deal-is-closed"
+                checked={isClosed}
+                onCheckedChange={(v) => handleClosedToggle(v === true)}
+                className="mt-0.5"
+              />
+              <div className="text-sm leading-snug">
+                <p className="font-medium">Negócio fechado</p>
+                <p className="text-muted-foreground">
+                  Marque se a oportunidade já foi ganha.
+                </p>
+              </div>
+            </label>
 
-          {/* Data de fechamento (so quando o negocio ja nasce fechado) */}
-          {isClosed && (
-            <div className="space-y-2">
-              <Label htmlFor="deal-closed-date">Data de fechamento *</Label>
-              <Input id="deal-closed-date" type="date" max={todayStr} {...register('closed_date')} />
-              {errors.closed_date && <p className="text-xs text-destructive">{errors.closed_date.message}</p>}
-            </div>
-          )}
+            {isClosed && (
+              <div className="mt-3 space-y-2 pl-7">
+                <Label htmlFor="deal-closed-date">Data de fechamento *</Label>
+                <Input id="deal-closed-date" type="date" max={todayStr} {...register('closed_date')} />
+                {errors.closed_date && <p className="text-xs text-destructive">{errors.closed_date.message}</p>}
+              </div>
+            )}
+          </div>
 
           {/* Anotacoes do negocio (opcional) */}
           <div className="space-y-2">
