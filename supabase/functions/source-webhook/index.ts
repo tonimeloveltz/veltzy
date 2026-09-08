@@ -2,10 +2,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { handleInboundMessage } from '../_shared/lead-inbound-handler.ts'
 import { normalizePhoneBR } from '../_shared/phone.ts'
 import { mapPayload, type WebhookPreset } from '../_shared/webhook-payload-mapper.ts'
-import { getCorsHeaders } from '../_shared/cors.ts'
+import { getPublicCorsHeaders } from '../_shared/cors.ts'
 
 Deno.serve(async (req) => {
-  const corsHeaders = getCorsHeaders(req)
+  const corsHeaders = getPublicCorsHeaders(req)
   const json = (body: Record<string, unknown>, status = 200) =>
     new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
