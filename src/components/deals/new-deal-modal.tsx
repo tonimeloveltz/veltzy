@@ -390,7 +390,7 @@ const NewDealModal = ({ open, onClose, defaultPipelineId, defaultStageId, locked
 
             {isClosed && (
               <div className="mt-3 space-y-2 pl-7">
-                <Label htmlFor="deal-closed-date">Data de fechamento *</Label>
+                <Label htmlFor="deal-closed-date">Data de fechamento</Label>
                 <Input id="deal-closed-date" type="date" max={todayStr} {...register('closed_date')} />
                 {errors.closed_date && <p className="text-xs text-destructive">{errors.closed_date.message}</p>}
               </div>
