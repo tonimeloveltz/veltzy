@@ -22,3 +22,19 @@ export function getCorsHeaders(req: Request) {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-cron-secret, x-hub-secret, x-hub-signature-256, z-api-token',
   }
 }
+
+// CORS para endpoints PUBLICOS de ingestao autenticados por token (ex: source-webhook,
+// autenticado por Bearer webhook_token por source_integration). A seguranca e o TOKEN,
+// nao a origem: restringir CORS por origem aqui nao protege nada e so trava o cliente
+// legitimo que posta lead pelo browser. Por isso refletimos a origem do chamador
+// (fallback '*' quando nao vem Origin). NAO usar em functions do app: essas continuam
+// no getCorsHeaders com allowlist fixa.
+export function getPublicCorsHeaders(req: Request) {
+  const origin = req.headers.get('Origin')
+  return {
+    'Access-Control-Allow-Origin': origin ?? '*',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    // Mesmo superset de headers do getCorsHeaders.
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-cron-secret, x-hub-secret, x-hub-signature-256, z-api-token',
+  }
+}
