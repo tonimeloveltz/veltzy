@@ -21,6 +21,10 @@ export interface InboundParams {
    *  leads.cloud_api_number_id para o outbound responder pelo número certo.
    *  null para Evolution/Z-API. */
   cloudApiNumberId?: string | null
+  /** Provider WhatsApp da conversa (evolution|cloud_api|waha|zapi). Gravado em
+   *  leads.whatsapp_provider no create e backfill quando NULL num lead existente.
+   *  O outbound (whatsapp-send) le isso para responder pelo provider certo. */
+  whatsappProvider?: string | null
   adContext: Record<string, unknown> | null
   /** Se true, tenta buscar foto de perfil via WhatsApp provider */
   fetchAvatar?: {
@@ -99,7 +103,7 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
   // 1. Buscar lead existente
   let { data: lead } = await supabase
     .from('leads')
-    .select('id, assigned_to, avatar_url, name, whatsapp_instance_name, cloud_api_number_id')
+    .select('id, assigned_to, avatar_url, name, whatsapp_instance_name, cloud_api_number_id, whatsapp_provider')
     .eq('company_id', params.companyId)
     .eq('phone', params.phone)
     .maybeSingle()
@@ -122,6 +126,16 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
   if (lead && params.cloudApiNumberId && lead.cloud_api_number_id !== params.cloudApiNumberId) {
     await supabase.from('leads')
       .update({ cloud_api_number_id: params.cloudApiNumberId })
+      .eq('id', lead.id)
+  }
+
+  // Backfill do provider da conversa (multi-provider V2): so quando o lead
+  // existente ainda esta NULL (leads antigos, pre-multi-provider). Nao
+  // sobrescreve um provider ja carimbado — a conversa fica presa ao provider
+  // pelo qual comecou (o outbound responde por ele).
+  if (lead && params.whatsappProvider && lead.whatsapp_provider == null) {
+    await supabase.from('leads')
+      .update({ whatsapp_provider: params.whatsappProvider })
       .eq('id', lead.id)
   }
 
@@ -376,7 +390,7 @@ async function createLead(
   params: InboundParams,
   resolved: ResolvedPipeline,
   sourceId: string | null,
-): Promise<{ id: string; assigned_to: string | null; avatar_url: string | null; name: string | null; whatsapp_instance_name: string | null; cloud_api_number_id: string | null } | null> {
+): Promise<{ id: string; assigned_to: string | null; avatar_url: string | null; name: string | null; whatsapp_instance_name: string | null; cloud_api_number_id: string | null; whatsapp_provider: string | null } | null> {
   // Pipeline e source_id ja resolvidos UMA vez no handler (RF6): sem calculo proprio aqui.
   // `resolved.pipelineId` nao e mais gravado no contato (Onda 4): ele vai para o
   // negocio, em createDealForLead.
@@ -461,8 +475,9 @@ async function createLead(
       ad_context: params.adContext,
       whatsapp_instance_name: params.instanceName,
       cloud_api_number_id: params.cloudApiNumberId ?? null,
+      whatsapp_provider: params.whatsappProvider ?? null,
     })
-    .select('id, assigned_to, avatar_url, name, whatsapp_instance_name, cloud_api_number_id')
+    .select('id, assigned_to, avatar_url, name, whatsapp_instance_name, cloud_api_number_id, whatsapp_provider')
     .single()
 
   return newLead

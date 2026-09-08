@@ -27,6 +27,18 @@ function getAdminClient() {
   )
 }
 
+// Roteamento por provider. Default 'evolution' preserva o comportamento antigo
+// (callers existentes nao passam provider). WAHA roteia pro waha-instance-manage
+// do Hub e valida ownership em waha_instances por session_name.
+const PROVIDER_CONFIG: Record<string, { hubFn: string; table: string; idField: string }> = {
+  evolution: { hubFn: 'evolution-instance-manage', table: 'evolution_instances', idField: 'instance_name' },
+  waha: { hubFn: 'waha-instance-manage', table: 'waha_instances', idField: 'session_name' },
+}
+
+function getProviderConfig(provider?: string) {
+  return PROVIDER_CONFIG[provider ?? 'evolution'] ?? PROVIDER_CONFIG.evolution
+}
+
 interface AuthResult {
   userId: string
   companyId: string
@@ -98,13 +110,15 @@ async function authenticateAndAuthorize(
 
 async function validateInstanceOwnership(
   supabaseAdmin: ReturnType<typeof createClient>,
-  instanceName: string,
+  table: string,
+  idField: string,
+  idValue: string,
   companyId: string
 ): Promise<{ status: string } | Response> {
   const { data: instance } = await supabaseAdmin
-    .from('evolution_instances')
+    .from(table)
     .select('company_id, status')
-    .eq('instance_name', instanceName)
+    .eq(idField, idValue)
     .single()
 
   if (!instance) {
@@ -125,11 +139,12 @@ async function validateInstanceOwnership(
 }
 
 async function callHub(
+  hubFn: string,
   method: string,
   path: string,
   body?: Record<string, unknown>
 ): Promise<Response> {
-  const url = `${HUB_URL}/functions/v1/evolution-instance-manage${path}`
+  const url = `${HUB_URL}/functions/v1/${hubFn}${path}`
   const res = await fetch(url, {
     method,
     headers: {
@@ -171,9 +186,10 @@ Deno.serve(async (req: Request) => {
     // POST: criar instancia
     // -----------------------------------------------------------------------
     if (req.method === 'POST') {
-      const { display_name } = await req.json()
+      const { display_name, provider } = await req.json()
+      const cfg = getProviderConfig(provider)
 
-      const hubRes = await callHub('POST', '', {
+      const hubRes = await callHub(cfg.hubFn, 'POST', '', {
         company_id: companyId,
         display_name: display_name || undefined,
       })
@@ -187,21 +203,22 @@ Deno.serve(async (req: Request) => {
     // -----------------------------------------------------------------------
     if (req.method === 'GET') {
       const url = new URL(req.url)
-      const instanceName = url.searchParams.get('instance_name')
+      const cfg = getProviderConfig(url.searchParams.get('provider') ?? undefined)
+      const idValue = url.searchParams.get(cfg.idField)
 
-      if (!instanceName) {
+      if (!idValue) {
         return new Response(
-          JSON.stringify({ error: 'instance_name obrigatorio' }),
+          JSON.stringify({ error: `${cfg.idField} obrigatorio` }),
           { status: 400, headers }
         )
       }
 
-      const ownership = await validateInstanceOwnership(supabaseAdmin, instanceName, companyId)
+      const ownership = await validateInstanceOwnership(supabaseAdmin, cfg.table, cfg.idField, idValue, companyId)
       if (ownership instanceof Response) {
         return new Response(ownership.body, { status: ownership.status, headers })
       }
 
-      const hubRes = await callHub('GET', `?instance_name=${instanceName}`)
+      const hubRes = await callHub(cfg.hubFn, 'GET', `?${cfg.idField}=${idValue}`)
       const hubBody = await hubRes.text()
       return new Response(hubBody, { status: hubRes.status, headers })
     }
@@ -210,22 +227,25 @@ Deno.serve(async (req: Request) => {
     // PATCH: desconectar / reconectar
     // -----------------------------------------------------------------------
     if (req.method === 'PATCH') {
-      const { instance_name, action } = await req.json()
+      const body = await req.json()
+      const cfg = getProviderConfig(body.provider)
+      const idValue = body[cfg.idField]
+      const { action } = body
 
-      if (!instance_name || !['disconnect', 'reconnect'].includes(action)) {
+      if (!idValue || !['disconnect', 'reconnect'].includes(action)) {
         return new Response(
-          JSON.stringify({ error: 'instance_name e action (disconnect|reconnect) obrigatorios' }),
+          JSON.stringify({ error: `${cfg.idField} e action (disconnect|reconnect) obrigatorios` }),
           { status: 400, headers }
         )
       }
 
-      const ownership = await validateInstanceOwnership(supabaseAdmin, instance_name, companyId)
+      const ownership = await validateInstanceOwnership(supabaseAdmin, cfg.table, cfg.idField, idValue, companyId)
       if (ownership instanceof Response) {
         return new Response(ownership.body, { status: ownership.status, headers })
       }
 
-      const hubRes = await callHub('PATCH', '', {
-        instance_name,
+      const hubRes = await callHub(cfg.hubFn, 'PATCH', '', {
+        [cfg.idField]: idValue,
         action,
         company_id: companyId,
       })
@@ -238,16 +258,18 @@ Deno.serve(async (req: Request) => {
     // DELETE: deletar instancia
     // -----------------------------------------------------------------------
     if (req.method === 'DELETE') {
-      const { instance_name } = await req.json()
+      const body = await req.json()
+      const cfg = getProviderConfig(body.provider)
+      const idValue = body[cfg.idField]
 
-      if (!instance_name) {
+      if (!idValue) {
         return new Response(
-          JSON.stringify({ error: 'instance_name obrigatorio' }),
+          JSON.stringify({ error: `${cfg.idField} obrigatorio` }),
           { status: 400, headers }
         )
       }
 
-      const ownership = await validateInstanceOwnership(supabaseAdmin, instance_name, companyId)
+      const ownership = await validateInstanceOwnership(supabaseAdmin, cfg.table, cfg.idField, idValue, companyId)
       if (ownership instanceof Response) {
         return new Response(ownership.body, { status: ownership.status, headers })
       }
@@ -260,8 +282,8 @@ Deno.serve(async (req: Request) => {
         )
       }
 
-      const hubRes = await callHub('DELETE', '', {
-        instance_name,
+      const hubRes = await callHub(cfg.hubFn, 'DELETE', '', {
+        [cfg.idField]: idValue,
         company_id: companyId,
       })
 

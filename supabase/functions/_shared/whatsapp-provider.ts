@@ -1,6 +1,6 @@
 // --- Tipos ---
 
-export type WhatsAppProviderType = 'zapi' | 'evolution' | 'cloud_api'
+export type WhatsAppProviderType = 'zapi' | 'evolution' | 'cloud_api' | 'waha'
 
 export interface WhatsAppConfig {
   id: string
@@ -22,8 +22,9 @@ export interface SendMessagePayload {
   // Metadados de roteamento opcionais, resolvidos por whatsapp-send e lidos pelo
   // provider correspondente. Ignorados pelos providers que nao os usam.
   instanceName?: string   // Evolution: instancia do Hub
+  sessionName?: string    // WAHA: sessao do Hub
   phoneNumberId?: string  // Cloud API: numero Meta resolvido
-  companyId?: string      // Evolution/Cloud API: tenant (m2m com o Hub)
+  companyId?: string      // Evolution/Cloud API/WAHA: tenant (m2m com o Hub)
 }
 
 export interface SendMessageResult {

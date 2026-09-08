@@ -3,7 +3,7 @@ export type LeadTemperature = 'cold' | 'warm' | 'hot' | 'fire'
 export type SenderType = 'ai' | 'human' | 'lead' | 'internal'
 export type ConversationStatus = 'unread' | 'read' | 'replied' | 'waiting_client' | 'waiting_internal' | 'resolved'
 export type IntegrationType = 'manual' | 'webhook' | 'whatsapp_api' | 'instagram_api' | 'linkedin_api'
-export type WhatsAppProviderType = 'zapi' | 'evolution' | 'cloud_api'
+export type WhatsAppProviderType = 'zapi' | 'evolution' | 'cloud_api' | 'waha'
 export type DeliveryStatus = 'pending' | 'sent' | 'delivered' | 'read' | 'failed'
 
 export interface CompanyFeatures {
@@ -21,6 +21,8 @@ export interface CompanyFeatures {
 export interface WhatsAppCategories {
   official: boolean
   qr_code: boolean
+  /** WAHA como categoria propria (rollout gradual; default OFF ate o Hub liberar). */
+  waha: boolean
 }
 
 export interface Company {

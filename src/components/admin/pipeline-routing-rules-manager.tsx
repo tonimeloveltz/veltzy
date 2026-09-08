@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useRoles } from '@/hooks/use-roles'
-import { useWhatsAppInstances } from '@/hooks/use-whatsapp-instances'
+import { useWhatsAppNumbers } from '@/hooks/use-whatsapp-numbers'
 import { useLeadSources } from '@/hooks/use-lead-sources'
 import {
   useRoutingRules,
@@ -36,8 +36,12 @@ interface PipelineRoutingRulesManagerProps {
 const PipelineRoutingRulesManager = ({ pipelineId }: PipelineRoutingRulesManagerProps) => {
   const { isAdmin } = useRoles()
   const { data: rules, isLoading } = useRoutingRules(pipelineId ?? undefined)
-  const { data: instances } = useWhatsAppInstances()
+  const { data: numbers } = useWhatsAppNumbers()
   const { data: sources } = useLeadSources()
+
+  // Numeros linkaveis a funil = os que tem identificador de roteamento (routingId).
+  // Cobre os 3 providers (evolution/waha/cloud_api), nao so Evolution.
+  const linkableNumbers = (numbers ?? []).filter((n) => !!n.routingId)
   const createRule = useCreateRoutingRule()
   const updateRule = useUpdateRoutingRule()
   const deleteRule = useDeleteRoutingRule()
@@ -51,7 +55,9 @@ const PipelineRoutingRulesManager = ({ pipelineId }: PipelineRoutingRulesManager
   // Rotulo legivel do valor de uma regra (nome da instancia/origem quando resolvido).
   const renderValue = (type: RoutingMatchType, value: string) => {
     if (type === 'instance') {
-      return instances?.find((i) => i.instance_name === value)?.display_name ?? value
+      const num = linkableNumbers.find((n) => n.routingId === value)
+      if (num) return `${num.displayNumber ?? value} (${num.providerLabel})`
+      return value
     }
     if (type === 'webhook_source') {
       return sources?.find((s) => s.id === value)?.name ?? value
@@ -176,9 +182,9 @@ const PipelineRoutingRulesManager = ({ pipelineId }: PipelineRoutingRulesManager
               <Select value={newValue} onValueChange={setNewValue}>
                 <SelectTrigger className="h-8 flex-1"><SelectValue placeholder="Escolha o número" /></SelectTrigger>
                 <SelectContent>
-                  {instances?.map((i) => (
-                    <SelectItem key={i.instance_name} value={i.instance_name}>
-                      {i.display_name || i.instance_name}
+                  {linkableNumbers.map((n) => (
+                    <SelectItem key={`${n.provider}:${n.routingId}`} value={n.routingId!}>
+                      {(n.displayNumber ?? n.routingId)} · {n.providerLabel}
                     </SelectItem>
                   ))}
                 </SelectContent>

@@ -56,7 +56,6 @@ Deno.serve(async (req) => {
   const url = Deno.env.get('SUPABASE_URL')!
   const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   const supabaseVeltzy = createClient(url, key, { db: { schema: 'veltzy' } })
-  const supabasePublic = createClient(url, key)
 
   // --- Loop sobre entry[].changes[].value ---
   // Erro de item individual nunca derruba a resposta: sempre 200 no fim
@@ -86,17 +85,13 @@ Deno.serve(async (req) => {
           continue
         }
 
-        // 2. Guard de provider — DEPOIS de resolver o tenant
-        const { data: company } = await supabasePublic
-          .from('companies')
-          .select('active_whatsapp_provider')
-          .eq('id', resolved.companyId)
-          .single()
-
-        if (company?.active_whatsapp_provider !== 'cloud_api') {
-          console.warn(`[cloud-api-inbound] company ${resolved.companyId} nao usa cloud_api (provider=${company?.active_whatsapp_provider})`)
-          continue
-        }
+        // 2. Guard multi-provider (V2): chegar aqui significa que resolveCloudApiNumber
+        //    JA casou este phone_number_id com um cloud_api_number desta empresa —
+        //    ou seja, "a empresa TEM numero Cloud API" ja esta provado por `resolved`.
+        //    Portanto NAO descartamos mais por active_whatsapp_provider != cloud_api:
+        //    um tenant pode receber por Cloud API E por outro provider ao mesmo tempo.
+        //    ZERO regressao: tenants cloud_api atuais tem o numero mapeado, seguem
+        //    processando; so param de ser descartados quando coexistem com outro provider.
 
         // 3. Mensagens (contato -> empresa)
         if (Array.isArray(value.messages)) {
@@ -186,6 +181,7 @@ async function processMessage(
       source: 'whatsapp',
       instanceName: resolved.instanceLabel,
       cloudApiNumberId: resolved.id,
+      whatsappProvider: 'cloud_api',
       adContext,
       profilePicUrl: null,
     })
@@ -329,6 +325,7 @@ async function processEcho(
       source: 'whatsapp',
       instanceName: resolved.instanceLabel,
       cloudApiNumberId: resolved.id,
+      whatsappProvider: 'cloud_api',
       adContext: null,
       profilePicUrl: null,
       senderType: 'human',   // o dono mandou pelo app
@@ -398,6 +395,7 @@ async function processHistory(
           source: 'whatsapp',
           instanceName: resolved.instanceLabel,
           cloudApiNumberId: resolved.id,
+          whatsappProvider: 'cloud_api',
           adContext: null,
           profilePicUrl: null,
           senderType,
