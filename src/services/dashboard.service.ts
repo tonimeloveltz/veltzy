@@ -100,6 +100,58 @@ export const onlyInPipeline = <T extends { id: string }>(rows: T[] | null, leadI
   return leadIds ? all.filter((r) => leadIds.has(r.id)) : all
 }
 
+/**
+ * Data que coloca o negocio no periodo: ganho e perdido contam quando fecharam,
+ * o resto conta quando entrou no funil.
+ *
+ * PONTO UNICO DE VERDADE do recorte de negocio no dashboard. TODA metrica que
+ * conta negocio por periodo passa por aqui - KPIs, curva, comparativo mensal,
+ * grade mensal e performance por vendedor. Filtrar por `created_at` no servidor
+ * parece equivalente e nao e: o negocio lancado hoje com fechamento retroativo
+ * (checkbox "Negocio fechado" do Novo Negocio) cairia no mes em que foi
+ * digitado, nao no mes em que fechou, e duas telas do mesmo dashboard dariam
+ * numeros diferentes para o mesmo negocio.
+ *
+ * Exportada para teste, nao para uso externo.
+ */
+export const dealRefDate = (d: { status: string; created_at: string; closed_at: string | null }) =>
+  d.status === 'won' || d.status === 'lost' ? d.closed_at ?? d.created_at : d.created_at
+
+/** Colunas que todo recorte por `dealRefDate` precisa ler. */
+export interface DealPeriodRow {
+  status: string
+  value: number | null
+  created_at: string
+  closed_at: string | null
+  assigned_to: string | null
+}
+
+/**
+ * Negocios da empresa para as metricas de periodo.
+ *
+ * Traz o conjunto INTEIRO e deixa o recorte para o JS, porque o criterio depende
+ * do status (ver `dealRefDate`) e uma clausula `.gte()` so sabe olhar uma coluna.
+ *
+ * `fetchAllRows` nao e opcional: sem paginacao a lista capa em `max_rows` e a
+ * metrica encolhe sem erro nenhum aparecer.
+ */
+const fetchDealsForMetrics = (companyId: string, pipelineId?: string, sellerProfileId?: string): Promise<DealPeriodRow[]> =>
+  fetchAllRows<DealPeriodRow>((from, to) => {
+    let q = veltzy()
+      .from('deals')
+      .select('status, value, created_at, closed_at, assigned_to')
+      .eq('company_id', companyId)
+    if (pipelineId) q = q.eq('pipeline_id', pipelineId)
+    if (sellerProfileId) q = q.eq('assigned_to', sellerProfileId)
+    return q.order('id').range(from, to)
+  })
+
+/** `dealRefDate` dentro de [from, to). `to` ausente = sem limite superior. */
+const dealInWindow = (d: DealPeriodRow, from: string, to?: string) => {
+  const ref = dealRefDate(d)
+  return ref >= from && (to === undefined || ref < to)
+}
+
 export const getConversionMetrics = async (companyId: string, days = 30, pipelineId?: string, sellerProfileId?: string): Promise<ConversionMetrics> => {
   const { start, prevStart, prevEnd } = getPeriodDates(days)
 
@@ -132,25 +184,17 @@ export const getConversionMetrics = async (companyId: string, days = 30, pipelin
 
   const currentLeadsCount = await countLeadsInWindow(start)
 
-  // Deals in period
-  let currentDealsQuery = veltzy().from('deals').select('status, value').eq('company_id', companyId).gte('created_at', start)
-  if (pipelineId) currentDealsQuery = currentDealsQuery.eq('pipeline_id', pipelineId)
-  if (sellerProfileId) currentDealsQuery = currentDealsQuery.eq('assigned_to', sellerProfileId)
-  const { data: currentDeals, error: cdError } = await currentDealsQuery
-  if (cdError) throw cdError
-
   // Previous period leads count
   const prevLeadsCount = await countLeadsInWindow(prevStart, prevEnd)
 
-  // Previous period deals
-  let prevDealsQuery = veltzy().from('deals').select('status, value').eq('company_id', companyId).gte('created_at', prevStart).lt('created_at', prevEnd)
-  if (pipelineId) prevDealsQuery = prevDealsQuery.eq('pipeline_id', pipelineId)
-  if (sellerProfileId) prevDealsQuery = prevDealsQuery.eq('assigned_to', sellerProfileId)
-  const { data: prevDeals, error: pdError } = await prevDealsQuery
-  if (pdError) throw pdError
+  // Negocios dos dois periodos, recortados por `dealRefDate`: o ganho conta no
+  // periodo em que FECHOU, nao naquele em que foi digitado.
+  const allDeals = await fetchDealsForMetrics(companyId, pipelineId, sellerProfileId)
+  const currentDeals = allDeals.filter((d) => dealInWindow(d, start))
+  const prevDeals = allDeals.filter((d) => dealInWindow(d, prevStart, prevEnd))
 
-  const calc = (leadsTotal: number, deals: typeof currentDeals) => {
-    const won = deals?.filter((d) => d.status === 'won') ?? []
+  const calc = (leadsTotal: number, deals: DealPeriodRow[]) => {
+    const won = deals.filter((d) => d.status === 'won')
     const revenue = won.reduce((sum, d) => sum + (Number(d.value) || 0), 0)
     return { total: leadsTotal, deals: won.length, rate: leadsTotal > 0 ? (won.length / leadsTotal) * 100 : 0, revenue }
   }
@@ -268,15 +312,6 @@ export const buildTrendBuckets = (days: number | undefined, now: number, earlies
   return buckets
 }
 
-/**
- * Data que coloca o negocio no periodo: ganho e perdido contam quando fecharam,
- * o resto conta quando entrou no funil. Mesma regra usada pelo recorte dos KPIs
- * e pela curva, de proposito: se as duas divergirem, a curva deixa de somar o
- * numero do card.
- */
-const dealRefDate = (d: { status: string; created_at: string; closed_at: string | null }) =>
-  d.status === 'won' || d.status === 'lost' ? d.closed_at ?? d.created_at : d.created_at
-
 export interface DashboardKpis {
   conversionRate: number
   avgAiScore: number
@@ -302,11 +337,7 @@ export interface DashboardKpis {
 export const getDashboardKpis = async (companyId: string, days?: number, pipelineId?: string, sellerProfileId?: string): Promise<DashboardKpis> => {
   // Deals: buscar com created_at E closed_at para filtrar por periodo no JS.
   // Abertos filtram por created_at, fechados/perdidos por closed_at.
-  let dealsQuery = veltzy().from('deals').select('status, value, created_at, closed_at').eq('company_id', companyId)
-  if (pipelineId) dealsQuery = dealsQuery.eq('pipeline_id', pipelineId)
-  if (sellerProfileId) dealsQuery = dealsQuery.eq('assigned_to', sellerProfileId)
-  const { data: deals, error: dealsError } = await dealsQuery
-  if (dealsError) throw dealsError
+  const allDeals = await fetchDealsForMetrics(companyId, pipelineId, sellerProfileId)
 
   const leadIdsInPipeline = pipelineId ? await getLeadIdsInPipeline(companyId, pipelineId) : null
 
@@ -329,7 +360,6 @@ export const getDashboardKpis = async (companyId: string, days?: number, pipelin
     return q.order('id').range(from, to)
   })
 
-  const allDeals = deals ?? []
   const allLeads = onlyInPipeline(leads, leadIdsInPipeline)
   const totalLeads = allLeads.length
 
@@ -531,12 +561,9 @@ export const getMonthlyComparison = async (companyId: string, days?: number, pip
     return q.order('id').range(from, to)
   })
 
-  // Won deals per month
-  let dealsQuery = veltzy().from('deals').select('created_at').eq('company_id', companyId).eq('status', 'won').gte('created_at', startIso)
-  if (pipelineId) dealsQuery = dealsQuery.eq('pipeline_id', pipelineId)
-  if (sellerProfileId) dealsQuery = dealsQuery.eq('assigned_to', sellerProfileId)
-  const { data: deals, error: dealsError } = await dealsQuery
-  if (dealsError) throw dealsError
+  // Won deals per month, pelo mes em que FECHARAM (`dealRefDate`).
+  const allDeals = await fetchDealsForMetrics(companyId, pipelineId, sellerProfileId)
+  const deals = allDeals.filter((d) => d.status === 'won' && dealInWindow(d, startIso))
 
   const months: Record<string, { leads: number; deals: number }> = {}
 
@@ -547,8 +574,8 @@ export const getMonthlyComparison = async (companyId: string, days?: number, pip
     months[key].leads++
   })
 
-  deals?.forEach((deal) => {
-    const d = new Date(deal.created_at)
+  deals.forEach((deal) => {
+    const d = new Date(dealRefDate(deal))
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
     if (!months[key]) months[key] = { leads: 0, deals: 0 }
     months[key].deals++
@@ -582,12 +609,9 @@ export const getMonthlyComparisonGrid = async (companyId: string, months = 6, pi
     return q.order('id').range(from, to)
   })
 
-  // Won deals per month with value
-  let dealsQuery = veltzy().from('deals').select('status, value, created_at').eq('company_id', companyId).gte('created_at', startIso)
-  if (pipelineId) dealsQuery = dealsQuery.eq('pipeline_id', pipelineId)
-  if (sellerProfileId) dealsQuery = dealsQuery.eq('assigned_to', sellerProfileId)
-  const { data: deals, error: dealsError } = await dealsQuery
-  if (dealsError) throw dealsError
+  // Won deals per month with value, pelo mes em que FECHARAM (`dealRefDate`).
+  const allDeals = await fetchDealsForMetrics(companyId, pipelineId, sellerProfileId)
+  const deals = allDeals.filter((d) => d.status === 'won' && dealInWindow(d, startIso))
 
   // Generate all months in period
   const allMonths: string[] = []
@@ -610,9 +634,8 @@ export const getMonthlyComparisonGrid = async (companyId: string, months = 6, pi
     buckets[key].leads++
   })
 
-  deals?.forEach((deal) => {
-    if (deal.status !== 'won') return
-    const d = new Date(deal.created_at)
+  deals.forEach((deal) => {
+    const d = new Date(dealRefDate(deal))
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
     if (!buckets[key]) buckets[key] = { leads: 0, deals: 0, value: 0 }
     buckets[key].deals++
@@ -703,13 +726,9 @@ export const getSellerPerformance = async (companyId: string, days?: number, pip
   const { data: profiles, error: profilesError } = await profilesQuery
   if (profilesError) throw profilesError
 
-  let dealsQuery = veltzy().from('deals').select('assigned_to, status, value').eq('company_id', companyId)
-  if (pipelineId) dealsQuery = dealsQuery.eq('pipeline_id', pipelineId)
-  if (sellerProfileId) dealsQuery = dealsQuery.eq('assigned_to', sellerProfileId)
   const startIso = periodStartIso(days)
-  if (startIso) dealsQuery = dealsQuery.gte('created_at', startIso)
-  const { data: deals, error: dealsError } = await dealsQuery
-  if (dealsError) throw dealsError
+  const allDeals = await fetchDealsForMetrics(companyId, pipelineId, sellerProfileId)
+  const deals = startIso ? allDeals.filter((d) => dealInWindow(d, startIso)) : allDeals
 
   const { data: responseTimes, error: rpcError } = await supabase.rpc('get_seller_avg_response_times', {
     _company_id: companyId,
@@ -726,7 +745,7 @@ export const getSellerPerformance = async (companyId: string, days?: number, pip
 
 
   return (profiles ?? []).map((p) => {
-    const myDeals = deals?.filter((d) => d.assigned_to === p.id) ?? []
+    const myDeals = deals.filter((d) => d.assigned_to === p.id)
     const won = myDeals.filter((d) => d.status === 'won')
     return {
       profile_id: p.id,
