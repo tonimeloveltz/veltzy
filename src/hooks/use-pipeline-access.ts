@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/stores/auth.store'
@@ -60,21 +61,18 @@ export const useAccessiblePipelines = () => {
   })
 
   const allPipelines = pipelinesQuery.data
-  let filteredPipelines: Pipeline[] | undefined
+  const allowedIds = accessQuery.data
 
-  if (allPipelines) {
-    if (isManager) {
-      // Admin/Manager: ve tudo
-      filteredPipelines = allPipelines
-    } else if (!accessQuery.data || accessQuery.data.length === 0) {
-      // Sem restricao: ve tudo (default permissivo)
-      filteredPipelines = allPipelines
-    } else {
-      // Filtrado pela allowlist
-      const allowedSet = new Set(accessQuery.data)
-      filteredPipelines = allPipelines.filter((p) => allowedSet.has(p.id))
-    }
-  }
+  // O useMemo nao e cosmetico: sem ele o branch da allowlist devolvia um array
+  // novo a cada render, e todo efeito com `pipelines` nas deps (NewDealModal)
+  // repetia o reset em loop -> React #185 "Maximum update depth exceeded".
+  const filteredPipelines = useMemo<Pipeline[] | undefined>(() => {
+    if (!allPipelines) return undefined
+    // Admin/Manager ve tudo; vendedor sem linhas na allowlist tambem (default permissivo).
+    if (isManager || !allowedIds || allowedIds.length === 0) return allPipelines
+    const allowedSet = new Set(allowedIds)
+    return allPipelines.filter((p) => allowedSet.has(p.id))
+  }, [allPipelines, allowedIds, isManager])
 
   return {
     ...pipelinesQuery,

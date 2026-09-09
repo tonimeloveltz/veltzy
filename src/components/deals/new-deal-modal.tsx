@@ -116,11 +116,15 @@ const NewDealModal = ({ open, onClose, defaultPipelineId, defaultStageId, locked
     }
   }
 
-  // Reset ao abrir, com pipeline default/primeiro acessivel.
+  // Pipeline inicial do form: o do board, senao o padrao da empresa.
+  const resolvedPipelineId = defaultPipelineId
+    ?? pipelines?.find((p) => p.is_default)?.id ?? pipelines?.[0]?.id ?? ''
+
+  // Reset ao abrir, com pipeline default/primeiro acessivel. A dep e o id
+  // resolvido, e nao o array `pipelines`: uma referencia nova vinda do hook
+  // re-disparava o reset a cada render e travava o modal em loop (React #185).
   useEffect(() => {
     if (open) {
-      const resolvedPipelineId = defaultPipelineId
-        ?? pipelines?.find((p) => p.is_default)?.id ?? pipelines?.[0]?.id ?? ''
       setSelectedContact(lockedLeadId ? { id: lockedLeadId, name: lockedLeadName ?? null, phone: '' } : null)
       setContactSearch('')
       reset({
@@ -131,7 +135,7 @@ const NewDealModal = ({ open, onClose, defaultPipelineId, defaultStageId, locked
         value: 0, assigned_to: NO_OWNER, is_closed: false, closed_date: todayStr, observations: '',
       })
     }
-  }, [open, pipelines, reset, todayStr, defaultPipelineId, defaultStageId, lockedLeadId, lockedLeadName])
+  }, [open, resolvedPipelineId, reset, todayStr, defaultStageId, lockedLeadId, lockedLeadName])
 
   // Quando pipeline muda, seleciona a primeira etapa - ou a coluna de
   // fechamento do novo pipeline, se o negocio ja esta marcado como fechado.
