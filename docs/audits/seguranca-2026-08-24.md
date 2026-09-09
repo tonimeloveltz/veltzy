@@ -27,37 +27,70 @@
 Revisao feita 16 dias depois da varredura, conferindo cada achado contra o codigo
 em `develop` e contra as migrations do Hub, uma a uma.
 
-> **Leia isto antes de usar a tabela.** "Aplicado" aqui significa **aplicado no
-> staging** (projeto `hfeb...`, confirmado por `supabase migration list`). O
-> estado de **producao nao foi conferido** nesta revisao. Producao segue a `main`,
-> nao a `develop`, entao a distancia entre os dois ambientes e real e nao foi
-> medida. Continua valendo o limite da varredura original: nada aqui foi
-> demonstrado por exploracao, so por leitura de codigo e de migration.
+> **Como o estado foi apurado.** Os dois ambientes foram consultados em
+> 2026-09-09, sem alterar o link de nenhum repo (`--project-ref`):
+> `supabase migration list` no staging (`hfeb...`) e em producao (`zxef...`),
+> mais `supabase functions list` em producao para saber o que esta **deployado**,
+> que e o unico jeito de responder por achado de Edge Function. Migration
+> aplicada e function deployada sao coisas diferentes e aqui estao separadas.
+>
+> Continua valendo o limite da varredura original: nada foi demonstrado por
+> exploracao, so por leitura de codigo, de migration e do estado remoto.
 
 | | Qtd | Achados |
 |---|---|---|
-| ✅ Corrigido e verificado | 17 | C1, C2, C3, C4, C5, C6, A1, A3, A4, A5, A6, A8, M1, M2, M3, M5, M10 |
+| ✅ Corrigido **e ja em producao** | 15 | C1, C2, C3, C4, C5, C6, A1, A3, A4, A5, A6, M1, M2, M3, e o A8 (ver ressalva) |
+| 🟡 Corrigido **so no staging** | 2 | M5, M10 |
 | 🟠 Em transito | 3 | A7, M8, M9 |
 | ❌ Aberto | 4 | A2, M4, M6, M7 |
 
-**A cadeia de takeover esta fechada.** Os quatro passos dependiam de C1 e C2, e
-os dois foram corrigidos por migration aplicada no staging. O semaforo vermelho
-da varredura original respondia "pode entrar em producao multi-tenant? Nao"
-por causa dessa cadeia. Para o staging, a resposta mudou. Para producao, a
-pergunta segue **sem resposta ate alguem conferir o que foi promovido**.
+Ressalva no A8: sao headers no `vercel.json`, entao quem responde e o deploy da
+Vercel, nao o Supabase. O commit esta na `main` desde 04/09 e nao foi conferido
+contra o deploy. E o unico ✅ desta lista sem verificacao remota.
+
+**A cadeia de takeover esta fechada nos dois ambientes.** Os quatro passos
+dependiam de C1 e C2, e as duas migrations (`hub/20260824120000` e
+`hub/20260826120000`) constam como aplicadas tanto no staging quanto em
+producao. O semaforo vermelho da varredura original respondia "pode entrar em
+producao multi-tenant? Nao" por causa dessa cadeia: essa resposta mudou, e
+mudou tambem para producao.
+
+O que sobra em producao nao e mais escalonamento de privilegio, e sim exposicao
+de dado (A2) e higiene de GRANT (M5/M10, corrigidos so no staging).
+
+### Staging x producao
+
+As migrations do Hub que existem no repo e **nao constam em producao**:
+
+| Migration | Achado | Situacao |
+|---|---|---|
+| `20260904120000` | M5 + M10 | corrigido no staging, **falta promover** |
+| `20260908120000` / `20260908130000` | A7 Instagram (fases 1 e 3) | so no staging |
+| `20260909120000` | M9 | escrita, nao aplicada em lugar nenhum |
+| `20260909130000` / `20260909140000` | M8 (fases 1 e 3) | escritas, nao aplicadas em lugar nenhum |
+
+**Producao esta coerente no A7 do Instagram, o staging nao.** Em producao nao ha
+nem as migrations nem o deploy da fase 2: codigo antigo lendo coluna que ainda
+existe, funcionando. No staging as fases 1 e 3 foram aplicadas em 08/09 e a
+coluna `access_token` **ja foi dropada**, mas a fase 2 so entrou na `develop` em
+09/09 e ainda nao foi deployada. **O risco de Instagram quebrado e do staging,
+nao de producao** (a revisao anterior deste documento nao fazia essa distincao).
+
+Aparece tambem drift no outro sentido: tres migrations constam em producao e
+**nao existem no repo** (`20260818174410`, `20260818182306`, `20260818182414`),
+sinal de mudanca aplicada direto pelo dashboard. Nao foram auditadas.
 
 ### O que falta aplicar ou deployar
 
 Nesta ordem, porque a ordem importa:
 
 1. Aplicar no staging: `hub/20260909120000` (M9) e `hub/20260909130000` (M8 fase 1).
-2. Deploy do Veltzy a partir da `develop`. Cobre a fase 2 do M8 (`9797127`) **e
-   a fase 2 do A7 do Instagram** (`8a96ed4`), que e a mais urgente das duas: as
-   fases 1 e 3 do Instagram ja estao aplicadas no staging, ou seja, a coluna
-   `instagram_connections.access_token` **ja foi dropada la**. Enquanto o deploy
-   nao sair, envio e callback do Instagram dependem de codigo que referencia uma
-   coluna que nao existe mais.
+2. Deploy do Veltzy a partir da `develop`. Cobre a fase 2 do M8 (`9797127`) **e a
+   fase 2 do A7 do Instagram** (`8a96ed4`), que e a que desfaz a incoerencia do
+   staging descrita acima.
 3. So depois do passo 2: aplicar `hub/20260909140000` (M8 fase 3).
+4. Promover para producao: `20260904120000` (M5 + M10), que e correcao pronta e
+   testada no staging ha cinco dias e nao foi junto.
 
 ### Correcao de premissa no A7
 
@@ -118,7 +151,7 @@ Cada passo abaixo esta documentado com arquivo e linha.
 
 ### C1. Qualquer usuario autenticado le os convites de todos os tenants e entra em qualquer empresa
 
-**Status (2026-09-09):** ✅ **Corrigido**, aplicado no staging. `hub/20260824120000_fix_c1_invitation_security.sql` revoga SELECT/INSERT/UPDATE do `anon`, troca a policy aberta por `invitations_select_scoped` (proprio email, propria empresa ou super admin), cria `get_invitation_by_token` SECURITY DEFINER para o fluxo legitimo por token, e refaz `accept_invitation` sem o parametro `p_user_id`: agora usa `auth.uid()` e recusa quando `lower(_invite.email) <> lower(auth.jwt()->>'email')`.
+**Status (2026-09-09):** ✅ **Corrigido**, aplicado no staging **e em producao**. `hub/20260824120000_fix_c1_invitation_security.sql` revoga SELECT/INSERT/UPDATE do `anon`, troca a policy aberta por `invitations_select_scoped` (proprio email, propria empresa ou super admin), cria `get_invitation_by_token` SECURITY DEFINER para o fluxo legitimo por token, e refaz `accept_invitation` sem o parametro `p_user_id`: agora usa `auth.uid()` e recusa quando `lower(_invite.email) <> lower(auth.jwt()->>'email')`.
 
 **Arquivos:** `veltzy/supabase/migrations/034_fix_invitations_rls.sql:15-17` e `050_fix_accept_invitation_app_role_cast.sql:10-77`
 **Confirmado no banco real:** `hub/supabase/migrations/00000000000000_baseline.sql:7107` (policy) e `:516-575` (funcao, byte a byte identica). Nenhuma das 31 migrations pos-baseline do Hub toca nesses objetos.
@@ -170,7 +203,7 @@ Um alivio verificado: `get_user_id_by_email` (baseline:1017) so tem EXECUTE para
 
 ### C2. Qualquer admin de tenant se promove a super_admin
 
-**Status (2026-09-09):** ✅ **Corrigido**, aplicado no staging. `hub/20260826120000_fix_c2_user_roles_policy.sql` derruba a policy `FOR ALL` sem `WITH CHECK` e a substitui por quatro policies por comando, todas com `WITH CHECK` explicito, escopo `company_id = get_current_company_id()` e a condicao `role <> 'super_admin'` para quem nao e super admin. O passo 4 da cadeia deixa de existir.
+**Status (2026-09-09):** ✅ **Corrigido**, aplicado no staging **e em producao**. `hub/20260826120000_fix_c2_user_roles_policy.sql` derruba a policy `FOR ALL` sem `WITH CHECK` e a substitui por quatro policies por comando, todas com `WITH CHECK` explicito, escopo `company_id = get_current_company_id()` e a condicao `role <> 'super_admin'` para quem nao e super admin. O passo 4 da cadeia deixa de existir.
 
 **Arquivo:** `veltzy/supabase/migrations/001_foundation.sql:349-351`
 **Confirmado no banco real:** `hub/baseline:7001`. Nenhuma migration posterior a substitui — verificado nas 70 do Veltzy, nas 31 do Hub e nas 38 arquivadas.
@@ -222,7 +255,7 @@ WITH CHECK (
 
 ### C3. `ai-copilot` entrega PII de qualquer tenant sem autenticacao
 
-**Status (2026-09-09):** ✅ **Corrigido**. `ai-copilot/index.ts:26-74` exige `Authorization`, resolve `company_id` pelo perfil do token e ignora o que vier no body.
+**Status (2026-09-09):** ✅ **Corrigido e no ar em producao** (deploy de 01/09 13:05). `ai-copilot/index.ts:26-74` exige `Authorization`, resolve `company_id` pelo perfil do token e ignora o que vier no body.
 
 **Arquivo:** `supabase/functions/ai-copilot/index.ts:18-201`
 
@@ -249,7 +282,7 @@ Falta so um `company_id` valido, e o C10 abaixo entrega a lista completa.
 
 ### C4. `instagram-send` envia DM por qualquer empresa, sem autenticacao
 
-**Status (2026-09-09):** ✅ **Corrigido**. `instagram-send` valida `auth.getUser` e deriva `company_id` do perfil (commit `793b180`).
+**Status (2026-09-09):** ✅ **Corrigido e no ar em producao** (deploy de 01/09 13:05). `instagram-send` valida `auth.getUser` e deriva `company_id` do perfil (commit `793b180`).
 
 **Arquivo:** `supabase/functions/instagram-send/index.ts:12-33` (`verify_jwt = false` em `config.toml`)
 
@@ -269,7 +302,7 @@ Sem nenhuma verificacao. Um POST anonimo:
 
 ### C5. `send-invite-email` e um relay de email aberto com a marca Veltzy
 
-**Status (2026-09-09):** ✅ **Corrigido**. `send-invite-email/index.ts:30-36` exige `Authorization` e valida o JWT antes de disparar o email.
+**Status (2026-09-09):** ✅ **Corrigido e no ar em producao** (deploy de 01/09 13:06). `send-invite-email/index.ts:30-36` exige `Authorization` e valida o JWT antes de disparar o email.
 
 **Arquivo:** `supabase/functions/send-invite-email/index.ts:8-100` (`verify_jwt = false`)
 
@@ -291,7 +324,7 @@ Qualquer pessoa na internet dispara emails pela conta Brevo do produto, com dest
 
 ### C6. `sdr-engine` executa o agent loop para qualquer lead/empresa, sem autenticacao
 
-**Status (2026-09-09):** ✅ **Corrigido**. `sdr-engine` passou a exigir `auth.getUser` (commit `793b180`).
+**Status (2026-09-09):** ✅ **Corrigido e no ar em producao** (deploy de 01/09 13:06). `sdr-engine` passou a exigir `auth.getUser` (commit `793b180`).
 
 **Arquivo:** `supabase/functions/sdr-engine/index.ts:26-45`
 
@@ -314,7 +347,7 @@ Some-se a isso que `messageContent` vai direto para o prompt do modelo: e um can
 
 ### A1. `sdr-knowledge-ingest`: SSRF sem autenticacao
 
-**Status (2026-09-09):** ✅ **Corrigido**. `sdr-knowledge-ingest` exige `auth.getUser`, e o front deixou de mandar `filePath` arbitrario (`2bed9c4`).
+**Status (2026-09-09):** ✅ **Corrigido e no ar em producao** (deploy de 01/09 13:06). `sdr-knowledge-ingest` exige `auth.getUser`, e o front deixou de mandar `filePath` arbitrario (`2bed9c4`).
 
 **Arquivo:** `supabase/functions/sdr-knowledge-ingest/index.ts:31-48`
 ```ts
@@ -342,7 +375,7 @@ Publico significa: qualquer pessoa com a URL le o arquivo, sem login, sem checag
 
 ### A3. Policies do Storage nao estao versionadas em nenhum dos dois repos
 
-**Status (2026-09-09):** ✅ **Corrigido**, aplicado no staging. `hub/20260827130000_fix_a3_chat_attachments_policies.sql` versiona as quatro policies de `storage.objects` do bucket, filtrando por `(storage.foldername(name))[1]` contra `get_current_company_id()`. O controle de acesso do bucket passou a ser auditavel no repositorio.
+**Status (2026-09-09):** ✅ **Corrigido**, aplicado no staging **e em producao**. `hub/20260827130000_fix_a3_chat_attachments_policies.sql` versiona as quatro policies de `storage.objects` do bucket, filtrando por `(storage.foldername(name))[1]` contra `get_current_company_id()`. O controle de acesso do bucket passou a ser auditavel no repositorio.
 
 Nao existe **nenhuma** policy de `storage.objects` para `chat-attachments` nas 70 migrations do Veltzy nem nas 69 do Hub. O Veltzy versiona so as tres de `agent-knowledge` (`053_sdr_v2_storage.sql:23-43`); o Hub versiona so as tres do bucket `iris-docs` (`20260722013120_iris_docs_bucket.sql:30-50`), com o filtro de tenant certinho. O padrao existe nos dois lados — nao foi aplicado ao bucket que guarda as conversas dos clientes. Como o upload autenticado do front funciona, as policies foram criadas direto no dashboard.
 
@@ -353,7 +386,7 @@ Consequencia: o controle de acesso real do bucket **nao e auditavel neste reposi
 
 ### A4. Webhooks sem validacao de assinatura
 
-**Status (2026-09-09):** ✅ **Corrigido**. Os tres passaram a validar remetente: `zapi-webhook:64-69` confere o header `z-api-token` contra `metadata.token` da config, `instagram-webhook` valida HMAC, e `source-webhook:22-40` exige Bearer com o `webhook_token` da integracao. Nao e assinatura HMAC nos tres, mas todos deixaram de aceitar POST anonimo.
+**Status (2026-09-09):** ✅ **Corrigido e no ar em producao** (`zapi-webhook` e `instagram-webhook` em 01/09 e 02/09, `source-webhook` em 08/09). Os tres passaram a validar remetente: `zapi-webhook:64-69` confere o header `z-api-token` contra `metadata.token` da config, `instagram-webhook` valida HMAC, e `source-webhook:22-40` exige Bearer com o `webhook_token` da integracao. Nao e assinatura HMAC nos tres, mas todos deixaram de aceitar POST anonimo.
 
 `zapi-webhook`, `instagram-webhook` e `source-webhook` (todos `verify_jwt = false`) aceitam qualquer POST sem verificar remetente. Quem descobrir a URL injeta leads e mensagens falsas em qualquer tenant.
 Bom contraste: `cloud-api-inbound/index.ts:4` valida HMAC via `verifyMetaSignature`, e `evolution-inbound/index.ts:43-53` valida segredo compartilhado. O padrao certo ja existe no repo — falta aplicar.
@@ -362,14 +395,14 @@ Bom contraste: `cloud-api-inbound/index.ts:4` valida HMAC via `verifyMetaSignatu
 
 ### A5. Funcoes de cron publicamente invocaveis
 
-**Status (2026-09-09):** ✅ **Corrigido**. As cinco importam `_shared/cron-auth.ts`, que aceita service key ou o header `x-cron-secret` contra `CRON_SECRET`.
+**Status (2026-09-09):** ✅ **Corrigido e no ar em producao** (as cinco deployadas em 02/09 10:46). As cinco importam `_shared/cron-auth.ts`, que aceita service key ou o header `x-cron-secret` contra `CRON_SECRET`.
 
 `distribute-queue`, `process-message-queue`, `check-sla`, `send-task-reminders`, `check-whatsapp-health` — todas `verify_jwt = false`, service_role, zero autenticacao. Qualquer um dispara em loop: redistribuicao forcada de leads entre vendedores, reenvio de fila de mensagens, spam de lembretes, e custo.
 **Correcao:** header `CRON_SECRET` comparado com `Deno.env.get('CRON_SECRET')`, configurado no cron trigger.
 
 ### A6. CORS wildcard em 22 das 25 Edge Functions
 
-**Status (2026-09-09):** ✅ **Corrigido**. `_shared/cors.ts` agora so exporta `getCorsHeaders(req)` com allowlist de dominios mais o regex de preview do Vercel; o export wildcard de retrocompatibilidade saiu e nao existe mais nenhum `'Access-Control-Allow-Origin': '*'` em `supabase/functions/`.
+**Status (2026-09-09):** ✅ **Corrigido e no ar em producao** (batch de 01/09 13:05, commit `7829796` promovido em `793b180`). `_shared/cors.ts` agora so exporta `getCorsHeaders(req)` com allowlist de dominios mais o regex de preview do Vercel; o export wildcard de retrocompatibilidade saiu e nao existe mais nenhum `'Access-Control-Allow-Origin': '*'` em `supabase/functions/`.
 
 `_shared/cors.ts` ja tem `getCorsHeaders()` com allowlist de dominios — mas so 3 funcoes usam (`whatsapp-instance-manage`, `cloud-api-onboard-proxy`, `cloud-api-templates-proxy`). As outras 22 importam ou redeclaram `'Access-Control-Allow-Origin': '*'`, inclusive o export de retrocompatibilidade em `cors.ts:19-22`.
 Wildcard permite que qualquer site chame as funcoes com a sessao do usuario, o que transforma os achados C3–C6 em algo explorável tambem por um link malicioso enviado a um funcionario do cliente.
@@ -380,8 +413,8 @@ Wildcard permite que qualquer site chame as funcoes com a sessao do usuario, o q
 
 | Tabela | Estado |
 |---|---|
-| `public.cloud_api_credentials` | ✅ no Vault. `hub/20260827140000` e `20260827150000`, aplicadas no staging |
-| `veltzy.instagram_connections` | 🟠 migrations aplicadas (`hub/20260908120000` e `20260908130000`), codigo da fase 2 na `develop` (`8a96ed4`), **falta o deploy das edge functions** |
+| `public.cloud_api_credentials` | ✅ no Vault. `hub/20260827140000` e `20260827150000`, aplicadas no staging **e em producao** |
+| `veltzy.instagram_connections` | 🟠 so no staging: migrations aplicadas la (`hub/20260908120000` e `20260908130000`), codigo da fase 2 na `develop` (`8a96ed4`), **falta o deploy**. Producao nao tem nem as migrations nem o deploy, e por isso segue coerente |
 | `veltzy.whatsapp_configs` | ⚠️ premissa errada: colunas mortas, ver abaixo |
 | `veltzy.payment_configs` | ❌ aberto, e sem consumidor, ver abaixo |
 
@@ -389,7 +422,7 @@ Wildcard permite que qualquer site chame as funcoes com a sessao do usuario, o q
 
 **`payment_configs` nao tem consumidor.** Nenhuma edge function chama asaas, stripe ou mercadopago. Um admin digita segredo no formulario de integracoes, o segredo vai para o banco em texto claro e nada nunca le. Antes de portar para o Vault, decidir se a feature continua.
 
-**Risco de ordem, ja materializado uma vez.** As fases 1 e 3 do Instagram foram aplicadas no staging antes de a fase 2 estar na `develop`: a coluna `access_token` foi dropada com o codigo antigo ainda no ar. O merge de 09/09 fechou a janela no repositorio, mas o deploy ainda nao aconteceu. Fase 3 so depois de fase 2 **deployada**, nunca so commitada.
+**Risco de ordem, ja materializado uma vez, no staging.** As fases 1 e 3 do Instagram foram aplicadas no staging em 08/09, antes de a fase 2 estar na `develop`: a coluna `access_token` foi dropada com o codigo antigo ainda no ar. O merge de 09/09 fechou a janela no repositorio, mas o deploy ainda nao aconteceu, entao **no staging o Instagram esta com codigo que le uma coluna inexistente**. Producao escapou por nao ter recebido nenhuma das duas pontas. Regra que fica: fase 3 so depois de fase 2 **deployada**, nunca so commitada, e conferir com `functions list` em vez de assumir pelo commit.
 
 Este achado mudou de figura ao conferir o Hub. **O Supabase Vault esta instalado e em uso no Central**, com o padrao correto:
 
@@ -430,7 +463,7 @@ Nao ha mais objecao de infra: o cofre esta la, o wrapper esta escrito, o padrao 
 
 ### M1. `tenant_role_permissions`: lista de todos os tenants para qualquer usuario logado
 
-**Status (2026-09-09):** ✅ **Corrigido**, aplicado no staging. `hub/20260827120000_fix_m1_tenant_role_permissions.sql` revoga o GRANT morto do `anon`, escopa a leitura por `get_current_company_id()` e passa a escrita para `is_super_admin()` com `WITH CHECK` explicito. Fecha tambem o adendo de escrita cross-tenant.
+**Status (2026-09-09):** ✅ **Corrigido**, aplicado no staging **e em producao**. `hub/20260827120000_fix_m1_tenant_role_permissions.sql` revoga o GRANT morto do `anon`, escopa a leitura por `get_current_company_id()` e passa a escrita para `is_super_admin()` com `WITH CHECK` explicito. Fecha tambem o adendo de escrita cross-tenant.
 
 `042_tenant_role_permissions.sql:18-20` cria a policy de SELECT com `using (true)` e `048_fix_dashboard_errors.sql:4` faz `GRANT SELECT ... TO anon`.
 
@@ -443,13 +476,13 @@ O que sobra: qualquer usuario logado, de qualquer tenant, faz `select company_id
 
 ### M2. `fix-lead-names`: script descartavel em producao com tenant hardcoded
 
-**Status (2026-09-09):** ✅ **Corrigido, depois de uma regressao.** Removida em `2bed9c4`, mas o arquivo **voltou para a arvore da `develop` por merge** e so saiu de vez em `8a96ed4` (09/09), quando o conflito de um outro merge o expos. Fica o registro: commit de remocao no historico nao prova ausencia na arvore, e vale reconferir na proxima varredura.
+**Status (2026-09-09):** ✅ **Corrigido, depois de uma regressao.** Removida em `2bed9c4`, mas o arquivo **voltou para a arvore da `develop` por merge** e so saiu de vez em `8a96ed4` (09/09), quando o conflito de um outro merge o expos. **Em producao a function nao existe**: conferido em 09/09 por `functions list --project-ref`, `fix-lead-names` nao aparece entre as 44 deployadas. Fica o registro: commit de remocao no historico nao prova ausencia na arvore, e vale reconferir na proxima varredura.
 
 `supabase/functions/fix-lead-names/index.ts:19` — `const companyId = 'd20f7d62-974b-40c4-8f0b-bb8207513554'`. Sem auth, `verify_jwt = false`, e reescreve nomes de leads desse cliente a cada chamada. Deveria ser removido do deploy.
 
 ### M3. `whatsapp-manager` sem checagem de role
 
-**Status (2026-09-09):** ✅ **Corrigido**. `whatsapp-manager` exige admin ou manager nas acoes de conexao (`05e289d`).
+**Status (2026-09-09):** ✅ **Corrigido e no ar em producao** (deploy de 04/09 10:35, dois minutos depois do commit). `whatsapp-manager` exige admin ou manager nas acoes de conexao (`05e289d`).
 
 `supabase/functions/whatsapp-manager/index.ts:16-27`: exige que exista header `Authorization` e o repassa ao PostgREST, entao **o RLS protege o cross-tenant** — este nao e um furo de isolamento. Mas nao ha checagem de papel: qualquer `seller` da empresa chama `action: 'disconnect'` e derruba o WhatsApp do time inteiro, ou `qrcode` e sequestra a sessao.
 
@@ -466,7 +499,7 @@ xlsx *                       HIGH   prototype pollution + ReDoS  → sem fix no 
 
 ### M5. `GRANT SELECT ON ALL TABLES IN SCHEMA veltzy TO anon`
 
-**Status (2026-09-09):** ✅ **Corrigido**, aplicado no staging. `hub/20260904120000_fix_m5_m10_revoke_anon_grants.sql` faz `REVOKE ALL ON ALL TABLES IN SCHEMA veltzy FROM anon`. A bomba foi desarmada.
+**Status (2026-09-09):** ✅ **Corrigido no staging, ❌ ainda nao em producao.** `hub/20260904120000_fix_m5_m10_revoke_anon_grants.sql` faz `REVOKE ALL ON ALL TABLES IN SCHEMA veltzy FROM anon`. Conferido em 09/09 por `migration list --project-ref`: a migration **nao consta em producao**. A bomba foi desarmada so no staging; em producao os GRANTs do `anon` seguem de pe, e com eles a exposicao do M9.
 
 `010_central_migration.sql:608`. Hoje inofensivo — verifiquei que **as 31 tabelas do schema `veltzy` tem RLS habilitado** e as policies sao `TO authenticated`, entao `anon` nao le nada. Mas e uma bomba armada: a primeira tabela que subir sem policy vira leitura publica. O comentario ("Also grant to anon for Edge Functions") esta errado — Edge Functions usam service_role.
 
@@ -522,7 +555,7 @@ O problema e a combinacao com M5: um unico `GRANT SELECT ON ALL TABLES IN SCHEMA
 
 ### M10. `permissions` e `role_permissions` legiveis por `anon`
 
-**Status (2026-09-09):** ✅ **Corrigido**, aplicado no staging. Mesma migration do M5, `hub/20260904120000`, que revoga `permissions` e `role_permissions` do `anon`.
+**Status (2026-09-09):** ✅ **Corrigido no staging, ❌ ainda nao em producao.** Mesma migration do M5, `hub/20260904120000`, que revoga `permissions` e `role_permissions` do `anon`, e que **nao consta em producao**.
 
 `hub/baseline:7167,7177` — `FOR SELECT USING (true)` sem clausula `TO`, com `GRANT SELECT ... TO anon` (`:9301,9307`). Sao catalogos globais de chaves de permissao, nao tem dado de cliente, entao o impacto e baixo: expoe o mapa de capacidades do produto para quem quiser estudar a superficie. Fica registrado por consistencia — nao ha motivo para o `anon` ler.
 
