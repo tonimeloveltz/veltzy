@@ -45,8 +45,10 @@ em `develop` e contra as migrations do Hub, uma a uma.
 | ❌ Aberto | 4 | A2, M4, M6, M7 |
 
 Ressalva no A8: sao headers no `vercel.json`, entao quem responde e o deploy da
-Vercel, nao o Supabase. O commit esta na `main` desde 04/09 e nao foi conferido
-contra o deploy. E o unico ✅ desta lista sem verificacao remota.
+Vercel, nao o Supabase. Conferido em 09/09 por `curl -I https://app.veltzy.com`:
+os seis estao no ar. Fica um residuo documentado no proprio achado, o CSP sem
+`script-src`, que nao invalida o ✅ do achado original ("sem headers no deploy")
+mas continua sendo trabalho aberto.
 
 **A cadeia de takeover esta fechada nos dois ambientes.** Os quatro passos
 dependiam de C1 e C2, e as duas migrations (`hub/20260824120000` e
@@ -453,7 +455,19 @@ Nao ha mais objecao de infra: o cofre esta la, o wrapper esta escrito, o padrao 
 
 ### A8. Sem headers de seguranca no deploy
 
-**Status (2026-09-09):** ✅ **Corrigido**. `vercel.json` passou a ter `Content-Security-Policy`, `X-Frame-Options`, `Strict-Transport-Security`, `X-Content-Type-Options`, `Referrer-Policy` e `Permissions-Policy` (`2bed9c4`).
+**Status (2026-09-09):** ✅ **Corrigido e verificado no ar**, com um residuo registrado abaixo. `vercel.json` passou a ter os seis headers (`2bed9c4`), e os seis respondem em `https://app.veltzy.com` (conferido por `curl -I`). A regra de `/assets/` **soma** com a global em vez de sobrescrever: o bundle recebe `nosniff` e HSTS junto com o `Cache-Control`, conferido no mesmo teste.
+
+**Residuo: o CSP so faz `frame-ancestors`.** O header existe e por isso bate em qualquer conferencia por nome, mas a unica directive era `frame-ancestors 'none'`, que duplica o `X-Frame-Options: DENY` ja presente. Sem `default-src`, `script-src`, `connect-src`, `base-uri`, `form-action` ou `object-src`, ele nao contribui nada contra injecao.
+
+Em 09/09 entraram as tres directives que fecham vetores reais **sem risco de quebrar nada**, verificado antes de escrever: o repo nao tem nenhuma tag `<base>`, nenhum `<object>`/`<embed>`/`<applet>` (nem criado por `createElement`) e nenhum `<form action=>`.
+
+```
+frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'
+```
+
+**Continua faltando o `script-src`**, que e o que teria valor de verdade, principalmente enquanto o M4 estiver aberto: com dependencia comprometida (o `xlsx` recebe planilha de usuario e nao tem correcao no npm), `script-src` e o que impede o payload de buscar codigo de fora. Atenuante honesto: nao ha um unico `dangerouslySetInnerHTML` no `src/` e o React escapa por padrao, entao a superficie de XSS hoje e pequena, e isso e defesa em profundidade, nao tapa-buraco.
+
+Nao e uma linha, e por isso ficou de fora: (1) `index.html:19` tem script inline de 1300 bytes (aplica tema e cor da marca antes do React montar, evitando flash), que exige hash `sha256-leBvtoAs8t/81ObYvlRApWVn6RjISOeNSYre6zanWy8=`, e **qualquer edicao nesse script invalida o hash e quebra o tema em producao**; (2) `connect.facebook.net/en_US/sdk.js` e carregado em runtime por `facebook-sdk.ts`; (3) `connect-src` precisa cobrir Supabase em `https` **e `wss`**, senao o realtime do inbox morre; (4) `img-src` precisa de `api.dicebear.com`, do storage, e de `data:`/`blob:`; (5) `style-src` precisa de `'unsafe-inline'` por causa do Radix. Ponto de teste obrigatorio quando for feito: o fluxo do Meta Embedded Signup, que hoje nao esbarra em nada porque nao existe `default-src`.
 
 **Arquivo:** `vercel.json` — so tem `Cache-Control`. Faltam `Content-Security-Policy`, `X-Frame-Options`/`frame-ancestors`, `Strict-Transport-Security`, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`. Sem `frame-ancestors`, o CRM pode ser embutido em iframe de terceiro (clickjacking).
 
