@@ -41,8 +41,8 @@ em `develop` e contra as migrations do Hub, uma a uma.
 |---|---|---|
 | ✅ Corrigido **e ja em producao** | 15 | C1, C2, C3, C4, C5, C6, A1, A3, A4, A5, A6, M1, M2, M3, e o A8 (ver ressalva) |
 | 🟡 Corrigido **so no staging** | 2 | M5, M10 |
-| 🟠 Em transito | 3 | A7, M8, M9 |
-| ❌ Aberto | 4 | A2, M4, M6, M7 |
+| 🟠 Em transito | 4 | A7, M8, M9, M6 |
+| ❌ Aberto | 3 | A2, M4, M7 |
 
 Ressalva no A8: sao headers no `vercel.json`, entao quem responde e o deploy da
 Vercel, nao o Supabase. Conferido em 09/09 por `curl -I https://app.veltzy.com`:
@@ -93,6 +93,8 @@ Nesta ordem, porque a ordem importa:
 3. So depois do passo 2: aplicar `hub/20260909140000` (M8 fase 3).
 4. Promover para producao: `20260904120000` (M5 + M10), que e correcao pronta e
    testada no staging ha cinco dias e nao foi junto.
+5. M6: deployar `provision-company` e `accept-invite`, avisar o Lemya, e so entao
+   ligar a politica de senha no Auth hospedado, staging antes de producao.
 
 ### Correcao de premissa no A7
 
@@ -519,7 +521,27 @@ xlsx *                       HIGH   prototype pollution + ReDoS  → sem fix no 
 
 ### M6. Politica de senha inconsistente
 
-**Status (2026-09-09):** ❌ **Aberto e nao conferido.** `config.toml:175` continua com `minimum_password_length = 6` e o front valida 8. O valor real do projeto hospedado so o dashboard responde, e ninguem olhou ate agora.
+**Status (2026-09-10):** 🟠 **Corrigido no codigo (develop), falta deployar e configurar o Auth hospedado.**
+
+O achado dizia "front valida 8, `config.toml` diz 6". A correcao de 10/09 mostrou que o problema era maior e morava em outro lugar: **as duas portas reais de criacao de conta sao edge functions do Hub usando a Admin API**, e nenhuma aplicava a politica.
+
+| Porta | Antes | Agora |
+|---|---|---|
+| `provision-company` (cadastro publico, `--no-verify-jwt`) | qualquer senha nao vazia virava conta | 4 regras no servidor, recusa com `SENHA_FRACA` (422) |
+| `accept-invite` (convite do Veltzy) | so comprimento: `aaaaaaaa` passava chamando a funcao direto | 4 regras no servidor |
+| Cadastro do Hub (front) | so `min(8)` | 4 regras e checklist, igual ao Veltzy |
+| Login do Veltzy (front) | `min(8)`, que barrava quem tinha senha antiga de 6 ou 7 caracteres aceita pelo servidor | `min(1)`: login nao aplica politica de criacao |
+| `veltzy/supabase/config.toml` (dev local) | 6, sem requisitos | 8, `lower_upper_letters_digits` |
+
+A regra e uma so: 8 caracteres, maiuscula, minuscula e numero, que e exatamente o `lower_upper_letters_digits` do Auth. Vive em tres copias, porque repos e runtimes diferentes nao compartilham arquivo: `veltzy/src/lib/password-rules.ts`, `hub/src/lib/password-rules.ts` e `hub/supabase/functions/_shared/password-policy.ts`. O teste Deno `password-policy_test.ts` importa a copia do front do Hub e falha se ela divergir do servidor. Entre Veltzy e Hub nao ha teste possivel, so os comentarios cruzados nos tres arquivos.
+
+**O que falta, nesta ordem:**
+
+1. Deployar `provision-company` e `accept-invite`. O merge nao deploya edge function.
+2. **Avisar o Lemya.** O projeto de Auth e o mesmo, e o front do Lemya nao esta nos repos auditados: se ele deixar criar ou trocar senha mais fraca, vai passar a receber `weak_password` do servidor depois do passo 3.
+3. Configurar a politica no Auth **hospedado**, staging e depois producao: comprimento minimo 8 e requisito `lower_upper_letters_digits`. E a unica camada que cobre o `signUp` feito direto com a anon key, que nao passa por front nem por edge function: `/auth/v1/settings` confirma `disable_signup = false` no staging. O valor atual **segue nao conferido**, porque o endpoint publico de settings nao expoe a politica de senha e ela so se le no dashboard ou na Management API com token.
+
+A politica do Auth vale quando a senha e definida (cadastro e troca), entao ligar o passo 3 nao invalida senha existente.
 
 `login-form.tsx:14` usa `min(8)`, mas `supabase/config.toml:170` tem `minimum_password_length = 6` e `password_requirements = ""`. O config.toml e o template local (nao reflete o projeto hospedado), entao o valor real precisa ser conferido no dashboard. Validacao no client nao vale nada sozinha: `auth.signUp` aceita o que o servidor Supabase aceitar.
 

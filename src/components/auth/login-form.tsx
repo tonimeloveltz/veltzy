@@ -11,7 +11,10 @@ import { useAuth } from '@/hooks/use-auth'
 
 const loginSchema = z.object({
   email: z.string().email('E-mail inválido'),
-  password: z.string().min(8, 'Mínimo 8 caracteres'),
+  // Login nao aplica politica de criacao (M6): quem tem senha antiga de 6 ou 7
+  // caracteres, aceita pelo servidor na epoca, ficava barrado aqui antes de tentar.
+  // A politica vale onde a senha nasce: convite, troca de senha e Auth hospedado.
+  password: z.string().min(1, 'Informe a senha'),
 })
 
 type LoginValues = z.infer<typeof loginSchema>

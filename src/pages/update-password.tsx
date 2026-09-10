@@ -15,7 +15,7 @@ import { PasswordChecklist } from '@/components/auth/password-checklist'
 
 const formSchema = z.object({
   password: passwordSchema,
-  confirmPassword: z.string().min(8, 'Minimo 8 caracteres'),
+  confirmPassword: z.string(),
 }).refine((data) => data.password === data.confirmPassword, {
   message: 'Senhas nao conferem',
   path: ['confirmPassword'],
