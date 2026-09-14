@@ -60,6 +60,10 @@ export interface InboundParams {
    *  migration, so a importacao de history falha, o inbound normal segue intacto.
    *  O caller de history passa isHistory e skipSideEffects juntos. Default false. */
   isHistory?: boolean
+  /** IGSID do contato (source 'instagram'). Chave de busca do lead no lugar de phone. */
+  instagramId?: string | null
+  /** @ do contato, gravado em leads.instagram_handle na criacao e backfill quando nulo. */
+  instagramUsername?: string | null
 }
 
 export interface InboundResult {
@@ -78,17 +82,19 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
   const skipSideEffects = params.skipSideEffects ?? false
 
   // 0. Origem -> pipeline: resolver UMA vez (RF6, elimina o ponto duplo de decisao).
-  //    source_id: webhook usa o override (params.sourceId); WhatsApp/IG resolve pelo slug 'whatsapp'.
+  //    source_id: webhook usa o override (params.sourceId); WhatsApp resolve pelo slug 'whatsapp'
+  //    e Instagram pelo slug 'instagram' (Instagram DM, Onda 1).
   //    Alimenta tanto o resolver (habilita catch-all webhook_source) quanto a coluna deals.source_id (RF5).
   let originSourceId: string | null = params.sourceId ?? null
   if (!originSourceId) {
-    const { data: whatsappSource } = await supabase
+    const originSlug = params.source === 'instagram' ? 'instagram' : 'whatsapp'
+    const { data: originSource } = await supabase
       .from('lead_sources')
       .select('id')
       .eq('company_id', params.companyId)
-      .eq('slug', 'whatsapp')
+      .eq('slug', originSlug)
       .maybeSingle()
-    originSourceId = whatsappSource?.id ?? null
+    originSourceId = originSource?.id ?? null
   }
   const adCtx = (params.adContext ?? {}) as Record<string, unknown>
   const origin: OriginIdentifiers = {
@@ -101,12 +107,23 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
   const resolved = await resolvePipelineByOrigin(supabase, params.companyId, origin)
 
   // 1. Buscar lead existente
-  let { data: lead } = await supabase
+  // Instagram DM: a identidade do contato e o IGSID (leads.instagram_id), nao o phone.
+  const leadLookup = supabase
     .from('leads')
     .select('id, assigned_to, avatar_url, name, whatsapp_instance_name, cloud_api_number_id, whatsapp_provider')
     .eq('company_id', params.companyId)
-    .eq('phone', params.phone)
-    .maybeSingle()
+  let { data: lead } = await (params.source === 'instagram' && params.instagramId
+    ? leadLookup.eq('instagram_id', params.instagramId)
+    : leadLookup.eq('phone', params.phone)
+  ).maybeSingle()
+
+  // Instagram DM: backfill do @ so quando o lead ainda nao tem (nao sobrescreve edicao do vendedor).
+  if (lead && params.source === 'instagram' && params.instagramUsername) {
+    await supabase.from('leads')
+      .update({ instagram_handle: params.instagramUsername })
+      .eq('id', lead.id)
+      .is('instagram_handle', null)
+  }
 
   // Atualizar nome se veio senderName e lead nao tem nome
   if (lead && (!lead.name || lead.name.startsWith('Contato ')) && params.senderName) {
@@ -284,10 +301,17 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
   // 7. Disparar SDR e automacoes (async, best-effort)
   const fnHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${params.supabaseKey}` }
 
-  // SDR dispatch: apenas para WhatsApp/Instagram (precisa de mensagem para responder).
+  // SDR dispatch: apenas para WhatsApp (precisa de mensagem para responder).
   // skipSideEffects (echoes/history): nao acionar a IA (senao ela responde a
   // propria mensagem do dono / mensagens antigas).
-  if (params.source !== 'webhook' && !skipSideEffects) {
+  // Instagram DM, Onda 1: SDR e auto-reply desligados para o canal, porque
+  // sdr-ai, sdr-engine e o auto-reply so enviam por whatsapp-send. A Onda 2 liga
+  // o canal por um roteador de envio compartilhado.
+  const channelAutomationOff = params.source === 'instagram'
+  if (channelAutomationOff && !skipSideEffects) {
+    console.log('[instagram] SDR/auto-reply desligados para o canal nesta fase')
+  }
+  if (params.source !== 'webhook' && !skipSideEffects && !channelAutomationOff) {
     try {
       const { data: leadFull } = await supabase
         .from('leads')
@@ -373,9 +397,10 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
     } catch { /* best-effort */ }
   }
 
-  // 8. Auto-reply fora do horario (apenas para leads novos de WhatsApp/Instagram).
+  // 8. Auto-reply fora do horario (apenas para leads novos de WhatsApp).
   // skipSideEffects (echoes/history): nao responder automaticamente.
-  if (params.source !== 'webhook' && isNewLead && !skipSideEffects) {
+  // Instagram DM, Onda 1: desligado para o canal (channelAutomationOff, passo 7).
+  if (params.source !== 'webhook' && isNewLead && !skipSideEffects && !channelAutomationOff) {
     await handleAutoReply(supabase, params, lead.id)
   }
 
@@ -460,7 +485,8 @@ async function createLead(
     }
   }
 
-  const { data: newLead } = await supabase
+  const isInstagram = params.source === 'instagram'
+  const { data: newLead, error: insertError } = await supabase
     .from('leads')
     .insert({
       // Negocio fica inteiro em deals: createDealForLead (chamado depois) cria o
@@ -476,9 +502,26 @@ async function createLead(
       whatsapp_instance_name: params.instanceName,
       cloud_api_number_id: params.cloudApiNumberId ?? null,
       whatsapp_provider: params.whatsappProvider ?? null,
+      // Instagram DM: identidade do contato. phone segue o placeholder 'ig_<IGSID>'.
+      ...(isInstagram
+        ? { instagram_id: params.instagramId ?? null, instagram_handle: params.instagramUsername ?? null }
+        : {}),
     })
     .select('id, assigned_to, avatar_url, name, whatsapp_instance_name, cloud_api_number_id, whatsapp_provider')
     .single()
+
+  // Instagram DM: dois webhooks do mesmo contato ao mesmo tempo esbarram na unique
+  // (company_id, phone) do placeholder. Rebusca pelo instagram_id e segue.
+  // O ramo WhatsApp nao muda.
+  if (!newLead && isInstagram && insertError?.code === '23505' && params.instagramId) {
+    const { data: existing } = await supabase
+      .from('leads')
+      .select('id, assigned_to, avatar_url, name, whatsapp_instance_name, cloud_api_number_id, whatsapp_provider')
+      .eq('company_id', params.companyId)
+      .eq('instagram_id', params.instagramId)
+      .maybeSingle()
+    return existing
+  }
 
   return newLead
 }
