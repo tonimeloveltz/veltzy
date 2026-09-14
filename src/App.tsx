@@ -25,6 +25,7 @@ const MinhaContaPage = lazy(() => import('@/pages/minha-conta'))
 const AceitarConvitePage = lazy(() => import('@/pages/aceitar-convite'))
 const AcessoNegadoPage = lazy(() => import('@/pages/acesso-negado'))
 const SdrIaPage = lazy(() => import('@/pages/sdr-ia'))
+const InstagramCallbackPage = lazy(() => import('@/pages/instagram-callback-page'))
 const PrivacidadePage = lazy(() => import('@/pages/privacidade'))
 const TermosPage = lazy(() => import('@/pages/termos'))
 const NotFoundPage = lazy(() => import('@/pages/not-found'))
@@ -100,6 +101,7 @@ const App = () => {
                 <Route path="/settings" element={<Navigate to="/minha-conta" replace />} />
                 <Route path="/minha-conta" element={<MinhaContaPage />} />
                 <Route path="/sdr-ia" element={<ProtectedRoute requireRole={['admin', 'manager', 'super_admin']} requireFeature="sdr_agent_v2"><SdrIaPage /></ProtectedRoute>} />
+                <Route path="/integracoes/instagram/callback" element={<ProtectedRoute requireRole={['admin', 'super_admin']}><InstagramCallbackPage /></ProtectedRoute>} />
                 <Route path="/admin" element={<ProtectedRoute requireRole={['admin', 'super_admin']}><AdminPage /></ProtectedRoute>} />
                 {/* Alias legado mantido de proposito (ver bloco de aliases acima): protege links antigos para /company. */}
                 <Route path="/company" element={<Navigate to="/admin?tab=empresa" replace />} />
