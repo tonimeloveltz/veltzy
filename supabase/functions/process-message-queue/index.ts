@@ -3,6 +3,7 @@ import { isCronAuthorized, cronUnauthorized } from '../_shared/cron-auth.ts'
 import { getWhatsAppConfig, getActiveProvider } from '../_shared/whatsapp-config.ts'
 import { createProvider } from '../_shared/whatsapp-factory.ts'
 import type { WhatsAppConfig } from '../_shared/whatsapp-provider.ts'
+import { isInstagramPlaceholderPhone } from '../_shared/phone.ts'
 
 import { getCorsHeaders } from '../_shared/cors.ts'
 
@@ -53,10 +54,14 @@ Deno.serve(async (req) => {
           .eq('id', item.lead_id)
           .single()
 
-        if (!lead?.phone) {
+        // Instagram DM: placeholder 'ig_<IGSID>' nao e telefone, nunca vai ao WhatsApp.
+        if (!lead?.phone || isInstagramPlaceholderPhone(lead.phone)) {
           await supabase
             .from('message_queue')
-            .update({ status: 'failed', error_message: 'Lead has no phone' })
+            .update({
+              status: 'failed',
+              error_message: lead?.phone ? 'Lead sem WhatsApp (contato do Instagram)' : 'Lead has no phone',
+            })
             .eq('id', item.id)
           failed++
           continue

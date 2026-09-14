@@ -3,6 +3,7 @@ import { getWhatsAppConfig, getActiveProvider } from '../_shared/whatsapp-config
 import { createProvider } from '../_shared/whatsapp-factory.ts'
 import { resolveInstanceName } from '../_shared/resolve-instance.ts'
 import { resolveOutboundCloudApiNumber } from '../_shared/cloud-api-resolve.ts'
+import { isInstagramPlaceholderPhone } from '../_shared/phone.ts'
 
 import { getCorsHeaders } from '../_shared/cors.ts'
 
@@ -100,6 +101,13 @@ Deno.serve(async (req) => {
     if (!isServiceRole && lead.company_id !== companyId) {
       return new Response(JSON.stringify({ error: 'Lead not found' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+
+    // Instagram DM: lead do Instagram tem phone placeholder 'ig_<IGSID>'. Nunca
+    // mandar WhatsApp para ele nem gravar mensagem: o canal dele e o instagram-send.
+    if (isInstagramPlaceholderPhone(lead.phone)) {
+      return new Response(JSON.stringify({ error: 'lead_sem_whatsapp' }),
+        { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
     // --- Roteamento por provider (multi-provider V2) ---

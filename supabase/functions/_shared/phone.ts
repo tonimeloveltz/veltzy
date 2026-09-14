@@ -12,3 +12,10 @@ export const normalizePhoneBR = (phone: string): string => {
   }
   return digits
 }
+
+/**
+ * Lead do Instagram tem phone = 'ig_<IGSID>' (placeholder, Instagram DM D4).
+ * Nenhum caminho de envio de WhatsApp pode aceitar esse valor.
+ */
+export const isInstagramPlaceholderPhone = (phone: string | null | undefined): boolean =>
+  !!phone && phone.startsWith('ig_')
