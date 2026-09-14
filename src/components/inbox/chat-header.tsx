@@ -11,6 +11,7 @@ import { useWhatsAppStatus } from '@/hooks/use-whatsapp-status'
 import { useIsPanelInline } from '@/hooks/use-panel-inline'
 import { useInboxStore } from '@/stores/inbox.store'
 import { leadDisplayName } from '@/lib/phone'
+import { leadContactLabel } from '@/lib/lead-channel'
 import type { LeadWithLastMessage } from '@/types/database'
 
 interface ChatHeaderProps {
@@ -70,7 +71,7 @@ const ChatHeader = ({ lead }: ChatHeaderProps) => {
           <p className="text-[11px] text-muted-foreground/70 truncate">{lead.company_name}</p>
         )}
         <p className="text-xs text-muted-foreground">
-          {lead.phone}
+          {leadContactLabel(lead)}
           {pipelineName && <span className="ml-1.5 text-muted-foreground/60">· {pipelineName}</span>}
         </p>
         {showInstanceBadge && lead.whatsapp_instance_name && (

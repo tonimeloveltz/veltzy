@@ -1,4 +1,6 @@
 import { veltzy as db, supabase } from '@/lib/supabase'
+import { toEdgeFunctionError } from '@/lib/edge-function-error'
+import { decideOutboundChannel, isInstagramPlaceholderPhone } from '@/lib/lead-channel'
 import type { Message, SendMessagePayload, LeadWithLastMessage } from '@/types/database'
 
 export const getMessages = async (companyId: string, leadId: string): Promise<Message[]> => {
@@ -149,6 +151,7 @@ export const isInstagramConnected = async (companyId: string): Promise<boolean> 
     .select('id')
     .eq('company_id', companyId)
     .eq('is_active', true)
+    .eq('status', 'active')
     .maybeSingle()
   return !!data
 }
@@ -156,29 +159,56 @@ export const isInstagramConnected = async (companyId: string): Promise<boolean> 
 export const getLeadPhoneAndSource = async (
   companyId: string,
   leadId: string,
-): Promise<{ phone: string | null; sourceSlug: string | null }> => {
+): Promise<{ phone: string | null; sourceSlug: string | null; instagramId: string | null }> => {
   const { data } = await db()
     .from('leads')
-    .select('phone, lead_sources:source_id(slug)')
+    .select('phone, instagram_id, lead_sources:source_id(slug)')
     .eq('id', leadId)
     .eq('company_id', companyId)
     .single()
-  const sources = (data as Record<string, unknown>)?.lead_sources as { slug: string } | null
+  const row = data as Record<string, unknown> | null
+  const sources = row?.lead_sources as { slug: string } | null
   return {
-    phone: (data as Record<string, unknown>)?.phone as string | null,
+    phone: row?.phone as string | null,
     sourceSlug: sources?.slug ?? null,
+    instagramId: (row?.instagram_id as string | null) ?? null,
   }
+}
+
+/** Canal da ultima mensagem que o contato mandou (PRD D5). */
+export const getLastInboundSource = async (companyId: string, leadId: string): Promise<string | null> => {
+  const { data } = await db()
+    .from('messages')
+    .select('source')
+    .eq('company_id', companyId)
+    .eq('lead_id', leadId)
+    .eq('sender_type', 'lead')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  return (data?.source as string | undefined) ?? null
 }
 
 export const routeMessage = async (
   companyId: string,
   payload: SendMessagePayload,
 ): Promise<Message> => {
-  const { phone, sourceSlug } = await getLeadPhoneAndSource(companyId, payload.leadId)
-  const whatsAppConnected = phone ? await isWhatsAppConnected(companyId) : false
+  const [{ phone, instagramId }, lastInboundSource] = await Promise.all([
+    getLeadPhoneAndSource(companyId, payload.leadId),
+    getLastInboundSource(companyId, payload.leadId),
+  ])
+  // Placeholder 'ig_<IGSID>' nao e telefone: nem consulta o WhatsApp para ele.
+  const [whatsAppConnected, instagramConnected] = await Promise.all([
+    phone && !isInstagramPlaceholderPhone(phone) ? isWhatsAppConnected(companyId) : Promise.resolve(false),
+    instagramId ? isInstagramConnected(companyId) : Promise.resolve(false),
+  ])
 
-  // Lead com phone + WhatsApp conectado: envia via whatsapp-send (roteia internamente por provider)
-  if (phone && whatsAppConnected) {
+  const channel = decideOutboundChannel({
+    lastInboundSource, phone, instagramId, whatsAppConnected, instagramConnected,
+  })
+
+  // WhatsApp: whatsapp-send roteia internamente por provider
+  if (channel === 'whatsapp') {
     const { data, error } = await supabase.functions.invoke('whatsapp-send', {
       body: payload,
     })
@@ -186,17 +216,22 @@ export const routeMessage = async (
     return data as Message
   }
 
-  if (sourceSlug === 'instagram') {
-    const connected = await isInstagramConnected(companyId)
-    if (connected) {
-      const { data, error } = await supabase.functions.invoke('instagram-send', {
-        body: { leadId: payload.leadId, content: payload.content, companyId },
-      })
-      if (error) throw error
-      return data as Message
-    }
+  // Instagram: company vem do JWT no servidor, nunca do body
+  if (channel === 'instagram') {
+    const { data, error } = await supabase.functions.invoke('instagram-send', {
+      body: {
+        leadId: payload.leadId,
+        content: payload.content,
+        messageType: payload.messageType,
+        fileUrl: payload.fileUrl,
+        fileName: payload.fileName,
+        mimeType: payload.mimeType,
+      },
+    })
+    if (error) throw await toEdgeFunctionError(error)
+    return data as Message
   }
 
-  // Sem phone, sem WhatsApp, ou sem integracao: salva como manual
+  // Sem canal conectado: salva como manual
   return sendMessage(companyId, payload)
 }

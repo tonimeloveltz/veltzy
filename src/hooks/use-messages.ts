@@ -4,6 +4,8 @@ import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth.store'
 import * as messagesService from '@/services/messages.service'
+import { edgeFunctionErrorCode } from '@/lib/edge-function-error'
+import { sendErrorMessage } from '@/lib/instagram-messages'
 import type { SendMessagePayload, Message } from '@/types/database'
 
 export const useMessages = (leadId: string | null) => {
@@ -103,11 +105,12 @@ export const useSendMessage = () => {
 
       return { previous, leadId: payload.leadId }
     },
-    onError: (_err, _payload, context) => {
+    onError: (err, _payload, context) => {
       if (context?.previous) {
         queryClient.setQueryData(['messages', context.leadId], context.previous)
       }
-      toast.error('Erro ao enviar mensagem')
+      // Codigos conhecidos do instagram-send (ex.: janela de 24h fechada) tem copy propria.
+      toast.error(sendErrorMessage(edgeFunctionErrorCode(err)) ?? 'Erro ao enviar mensagem')
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['messages', variables.leadId] })

@@ -1,8 +1,9 @@
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
-import { Clock } from 'lucide-react'
+import { Camera, Clock } from 'lucide-react'
 import { timeAgo } from '@/lib/time'
 import { leadDisplayName } from '@/lib/phone'
+import { isInstagramConversation } from '@/lib/lead-channel'
 import type { LeadWithLastMessage } from '@/types/database'
 
 interface ConversationItemProps {
@@ -82,7 +83,10 @@ const ConversationItem = ({ lead, isSelected, onClick }: ConversationItemProps) 
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-sm font-medium truncate">{leadDisplayName(lead.name, lead.phone)}</p>
+          <div className="flex min-w-0 items-center gap-1">
+            {isInstagramConversation(lead) && <Camera className="h-3 w-3 shrink-0 text-muted-foreground" />}
+            <p className="text-sm font-medium truncate">{leadDisplayName(lead.name, lead.phone)}</p>
+          </div>
           <div className="flex items-center gap-1 shrink-0">
             {lead.sla_breached && (
               <Clock className="h-3 w-3 text-destructive" />
