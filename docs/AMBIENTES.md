@@ -41,6 +41,20 @@ schema é o Hub. Consequência prática:
   HUB_* explícita) NÃO tiveram secrets configurados no staging. Quando forem
   para produção, configuraremos os secrets correspondentes no staging junto.
 
+## Secrets das Edge Functions do Instagram (Instagram DM, Onda 1)
+
+Lista para configurar no staging antes do teste no browser. Valores nunca aqui.
+Referência: `docs/features/instagram-dm/Spec.md`, seção 6.
+
+- `INSTAGRAM_APP_ID`: Instagram App ID (Meta > Instagram > API setup with Instagram login)
+- `INSTAGRAM_APP_SECRET`: Instagram App Secret (troca de token, assinatura do webhook, signed_request)
+- `INSTAGRAM_VERIFY_TOKEN`: verificação do webhook
+- `INSTAGRAM_REDIRECT_URI`: `https://<front do ambiente>/integracoes/instagram/callback`, idêntica à cadastrada na Meta
+- `INSTAGRAM_OAUTH_STATE_SECRET`: HMAC do `state` do OAuth (32+ bytes aleatórios)
+- `INSTAGRAM_HUMAN_AGENT_ENABLED`: `false` até a Meta aprovar a tag `HUMAN_AGENT`
+- `APP_URL`: já lido pelo `send-invite-email` (default `https://app.veltzy.com`); o `instagram-data-deletion` usa o mesmo
+- `META_APP_SECRET` (opcional, já existe): fallback da assinatura do webhook quando o app da Meta é compartilhado
+
 ## Regras de segurança (guard-rails)
 
 - **Produção é READ-ONLY em desenvolvimento.** Nunca `db push`/`db pull`/
