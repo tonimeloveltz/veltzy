@@ -4,6 +4,7 @@ import {
   createRoutingRule,
   deleteRoutingRule,
   listRoutingRules,
+  reassignRoutingRule,
   updateRoutingRule,
 } from '@/services/pipeline-routing-rules.service'
 import type { RoutingMatchType } from '@/types/database'
@@ -33,6 +34,17 @@ export const useUpdateRoutingRule = () => {
   return useMutation({
     mutationFn: (args: { id: string; patch: { matchValue?: string; isActive?: boolean } }) =>
       updateRoutingRule(companyId!, args.id, args.patch),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['pipeline-routing-rules'] }),
+  })
+}
+
+export const useReassignRoutingRule = () => {
+  const companyId = useAuthStore((s) => s.company?.id)
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (args: { id: string; pipelineId: string }) =>
+      reassignRoutingRule(companyId!, args.id, args.pipelineId),
+    // Invalida todas as listas de regras (funil origem some, funil destino aparece).
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['pipeline-routing-rules'] }),
   })
 }
