@@ -40,6 +40,21 @@ export const useWhatsAppStatus = () => {
         return { provider: 'cloud_api', connected: !!data }
       }
 
+      if (provider === 'waha') {
+        // Deriva de existir >=1 instancia WAHA connected (espelha o cloud_api).
+        // waha_instances vive no schema PUBLIC (usa `supabase`, nao `veltzy()`);
+        // a RLS ja e company-scoped, entao o read direto do frontend funciona.
+        const { data } = await supabase
+          .from('waha_instances')
+          .select('id')
+          .eq('company_id', companyId!)
+          .eq('status', 'connected')
+          .limit(1)
+          .maybeSingle()
+
+        return { provider: 'waha', connected: !!data }
+      }
+
       const { data } = await supabase
         .from('oauth_integrations')
         .select('status')
