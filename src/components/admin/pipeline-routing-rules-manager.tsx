@@ -14,8 +14,11 @@ import {
   useRoutingRules,
   useCreateRoutingRule,
   useUpdateRoutingRule,
+  useReassignRoutingRule,
   useDeleteRoutingRule,
 } from '@/hooks/use-pipeline-routing-rules'
+import { getRoutingRuleByOrigin } from '@/services/pipeline-routing-rules.service'
+import { useAuthStore } from '@/stores/auth.store'
 import type { RoutingMatchType } from '@/types/database'
 
 const MATCH_TYPE_LABELS: Record<RoutingMatchType, string> = {
@@ -42,8 +45,10 @@ const PipelineRoutingRulesManager = ({ pipelineId }: PipelineRoutingRulesManager
   // Numeros linkaveis a funil = os que tem identificador de roteamento (routingId).
   // Cobre os 3 providers (evolution/waha/cloud_api), nao so Evolution.
   const linkableNumbers = (numbers ?? []).filter((n) => !!n.routingId)
+  const companyId = useAuthStore((s) => s.company?.id)
   const createRule = useCreateRoutingRule()
   const updateRule = useUpdateRoutingRule()
+  const reassignRule = useReassignRoutingRule()
   const deleteRule = useDeleteRoutingRule()
 
   const [newType, setNewType] = useState<RoutingMatchType>('instance')
@@ -66,15 +71,34 @@ const PipelineRoutingRulesManager = ({ pipelineId }: PipelineRoutingRulesManager
   }
 
   const handleAdd = async () => {
-    if (!pipelineId || !newValue.trim()) return
+    if (!pipelineId || !newValue.trim() || !companyId) return
+    const matchValue = newValue.trim()
     try {
-      await createRule.mutateAsync({ pipelineId, matchType: newType, matchValue: newValue.trim() })
+      // A unicidade da regra e por empresa+origem (nao por funil). Antes de criar,
+      // checa se essa origem ja tem regra em algum funil para nao dar erro seco.
+      const existing = await getRoutingRuleByOrigin(companyId, newType, matchValue)
+      if (existing) {
+        if (existing.pipeline_id === pipelineId) {
+          toast.info('Essa origem já está neste funil')
+          return
+        }
+        const funil = existing.pipelineName || 'outro funil'
+        if (!confirm(`Esta origem já roteia para "${funil}". Mover para este funil?`)) return
+        await reassignRule.mutateAsync({ id: existing.id, pipelineId })
+        setNewValue('')
+        toast.success('Origem movida para este funil!')
+        return
+      }
+
+      await createRule.mutateAsync({ pipelineId, matchType: newType, matchValue })
       setNewValue('')
       toast.success('Regra criada!')
     } catch (err) {
+      // Fallback defensivo: se o pre-check nao pegou (ex: corrida) e o banco
+      // devolveu a violacao de unicidade, ainda evita o erro cru.
       const code = (err as { code?: string })?.code
       if (code === '23505') {
-        toast.error('Já existe uma regra para essa origem')
+        toast.error('Essa origem já tem uma regra em outro funil. Recarregue e tente mover.')
       } else {
         toast.error(err instanceof Error ? err.message : 'Erro ao criar regra')
       }
@@ -208,7 +232,7 @@ const PipelineRoutingRulesManager = ({ pipelineId }: PipelineRoutingRulesManager
               />
             )}
 
-            <Button size="sm" onClick={handleAdd} disabled={!newValue.trim() || createRule.isPending}>
+            <Button size="sm" onClick={handleAdd} disabled={!newValue.trim() || createRule.isPending || reassignRule.isPending}>
               <Plus className="h-4 w-4" />
             </Button>
           </div>
