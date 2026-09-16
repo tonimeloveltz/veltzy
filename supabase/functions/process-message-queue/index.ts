@@ -66,7 +66,35 @@ Deno.serve(async (req) => {
         const msgType = (item.message_type ?? 'text') as 'text' | 'image' | 'audio' | 'video' | 'document'
         let deliveryStatus: 'sent' | 'failed' = 'sent'
 
-        if (activeProvider === 'evolution') {
+        if (activeProvider === 'waha') {
+          // WAHA: espelha o ramo evolution, mas o provider usa sessionName (mesmo
+          // valor do nome do numero) + companyId. Sem este ramo, a fila de empresa
+          // waha caia no else->zapi (getWhatsAppConfig=null) e marcava 'failed'
+          // "WhatsApp not connected". Alinha com o ramo waha do whatsapp-send.
+          if (!item.instance_name) {
+            await supabase
+              .from('message_queue')
+              .update({ status: 'failed', error_message: 'No session for WAHA' })
+              .eq('id', item.id)
+            failed++
+            continue
+          }
+
+          try {
+            const provider = createProvider('waha')
+            await provider.sendMessage({} as WhatsAppConfig, {
+              phone: lead.phone,
+              content: item.content,
+              type: msgType,
+              mediaUrl: item.file_url ?? undefined,
+              sessionName: item.instance_name,
+              companyId: item.company_id,
+            })
+          } catch (err) {
+            console.error('[process-message-queue] WAHA send failed:', err)
+            deliveryStatus = 'failed'
+          }
+        } else if (activeProvider === 'evolution') {
           if (!item.instance_name) {
             await supabase
               .from('message_queue')
