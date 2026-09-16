@@ -126,9 +126,13 @@ export const isWhatsAppConnected = async (companyId: string): Promise<boolean> =
 
   const provider = company?.active_whatsapp_provider ?? 'zapi'
 
-  if (provider === 'evolution' || provider === 'cloud_api') {
-    // Evolution e Cloud API: empresa "conectada" se usa o provider.
-    // A validacao real (instancia/numero) acontece no backend ao enviar.
+  if (provider === 'evolution' || provider === 'cloud_api' || provider === 'waha') {
+    // Evolution, Cloud API e WAHA: empresa "conectada" se usa o provider.
+    // A validacao real (instancia/numero/sessao) acontece no backend ao enviar:
+    // whatsapp-send roteia pro ramo do provider e devolve erro real se a sessao
+    // estiver down -> a mensagem vira delivery_status='failed' (falha barulhenta).
+    // Sem o 'waha' aqui, routeMessage pulava o whatsapp-send e gravava a msg como
+    // manual, "enviada" sem enviar nada e sem erro (falha silenciosa).
     return true
   }
 
