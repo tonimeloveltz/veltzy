@@ -380,6 +380,13 @@ verify_jwt = false
 [functions.instagram-webhook]
 verify_jwt = false
 
+# Callbacks da Meta (Instagram DM): validam o signed_request com o app secret.
+[functions.instagram-deauthorize]
+verify_jwt = false
+
+[functions.instagram-data-deletion]
+verify_jwt = false
+
 [functions.source-webhook]
 verify_jwt = false
 
@@ -413,6 +420,9 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.send-task-reminders]
+verify_jwt = false
+
+[functions.instagram-token-refresh]
 verify_jwt = false
 
 # --- Frontend autenticado (verify_jwt=true, validam JWT do usuario) ---

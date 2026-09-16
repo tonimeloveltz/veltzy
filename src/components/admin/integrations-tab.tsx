@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Calendar, Globe, Mail, Plus, Copy, RefreshCw, Trash2, Loader2 } from 'lucide-react'
+import { Calendar, Mail, Plus, Copy, RefreshCw, Trash2, Loader2 } from 'lucide-react'
+import { InstagramConnectionCard } from '@/components/admin/instagram-connection-card'
 import { toast } from 'sonner'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -313,7 +314,7 @@ const IntegrationsTab = () => {
             seletor (Oficial / QR Evolution / QR WAHA). Os cards antigos (Oficial +
             Conexao QR) foram absorvidos aqui. */}
         <WhatsAppNumbersList />
-        <HubManagedCard title="Instagram Business" description="DMs e comentarios do Instagram" icon={Globe} />
+        <InstagramConnectionCard />
         <HubManagedCard title="Email (Brevo)" description="Envio de emails transacionais e lembretes" icon={Mail} />
       </TabsContent>
 

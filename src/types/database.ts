@@ -611,15 +611,25 @@ export interface WebhookIntegrationWithDetails extends SourceIntegration {
   pipeline_name: string | null
 }
 
+export type InstagramAuthFlow = 'facebook_login' | 'instagram_login'
+export type InstagramConnectionStatus = 'active' | 'token_expired' | 'revoked' | 'error'
+
+// Sem access_token: a coluna saiu no A7 fase 3, o token mora no Vault.
 export interface InstagramConnection {
   id: string
   company_id: string
-  page_id: string
+  page_id: string | null
   page_name: string | null
   instagram_account_id: string
+  instagram_app_user_id: string | null
   instagram_username: string | null
-  access_token: string
+  instagram_name: string | null
+  auth_flow: InstagramAuthFlow
+  status: InstagramConnectionStatus
   token_expires_at: string | null
+  token_refreshed_at: string | null
+  webhook_subscribed_at: string | null
+  last_error: string | null
   is_active: boolean
   created_by: string | null
   created_at: string

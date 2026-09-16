@@ -1,3 +1,5 @@
+import { isInstagramPlaceholderPhone } from '@/lib/lead-channel'
+
 /**
  * Normaliza telefone para formato brasileiro com código de país (55).
  *
@@ -9,10 +11,12 @@
  */
 /**
  * Nome para exibicao do lead. Se name e vazio e phone tem >13 digitos (LID do Meta),
- * exibe "Contato WhatsApp" em vez do numero cru.
+ * exibe "Contato WhatsApp" em vez do numero cru. Placeholder do Instagram
+ * ('ig_<IGSID>') nunca aparece: vira "Contato do Instagram".
  */
 export const leadDisplayName = (name: string | null | undefined, phone: string): string => {
   if (name) return name
+  if (isInstagramPlaceholderPhone(phone)) return 'Contato do Instagram'
   if (phone.length > 13) return 'Contato WhatsApp'
   return phone
 }

@@ -24,6 +24,7 @@ import { useWhatsAppStatus } from '@/hooks/use-whatsapp-status'
 import { useInboxStore } from '@/stores/inbox.store'
 import { useAuthStore } from '@/stores/auth.store'
 import { leadDisplayName } from '@/lib/phone'
+import { leadContactLabel } from '@/lib/lead-channel'
 import { updateLead as updateLeadService } from '@/services/leads.service'
 import { leadTemperatureConfig } from '@/lib/lead-config'
 import type { LeadWithLastMessage, TaskType } from '@/types/database'
@@ -248,7 +249,7 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
           </Avatar>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold truncate">{displayName}</p>
-            <p className="text-xs text-muted-foreground">{lead.phone}</p>
+            <p className="text-xs text-muted-foreground">{leadContactLabel(lead)}</p>
             {showInstanceBadge && lead.whatsapp_instance_name && (
               <p className="text-[10px] text-muted-foreground/60 flex items-center gap-0.5 mt-0.5">
                 <Phone className="h-2.5 w-2.5" />

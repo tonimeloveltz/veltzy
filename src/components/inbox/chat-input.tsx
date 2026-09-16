@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import {
   SendHorizonal, Paperclip, Loader2, AlertTriangle, Plus, FileText, Package,
 } from 'lucide-react'
@@ -8,28 +8,39 @@ import { Button } from '@/components/ui/button'
 import { ReplyTemplatesPopover } from '@/components/inbox/reply-templates-popover'
 import { ProductsPopover } from '@/components/inbox/products-popover'
 import { AudioRecorder } from '@/components/inbox/audio-recorder'
+import { InstagramWindowNotice } from '@/components/inbox/instagram-window-notice'
 import { useSendMessage, useWhatsAppConnected } from '@/hooks/use-messages'
 import { useWhatsAppStatus } from '@/hooks/use-whatsapp-status'
 import { useAuthStore } from '@/stores/auth.store'
 import { supabase } from '@/lib/supabase'
 import { safeStorageName } from '@/lib/storage'
-import type { Product } from '@/types/database'
+import {
+  instagramWindowRemainingMs, instagramWindowState, isInstagramConversation,
+} from '@/lib/lead-channel'
+import { validateInstagramAttachment } from '@/lib/instagram-attachment'
+import { sendErrorMessage } from '@/lib/instagram-messages'
+import type { LeadWithLastMessage, Product } from '@/types/database'
 
 interface ChatInputProps {
-  leadId: string
+  lead: LeadWithLastMessage
   onTyping?: () => void
 }
 
 const composeMenuItemClass =
   'flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground transition-smooth'
 
-const ChatInput = ({ leadId, onTyping }: ChatInputProps) => {
+const INSTAGRAM_ACCEPT = 'image/png,image/jpeg,video/*,audio/*,.pdf'
+const WINDOW_TICK_MS = 60 * 1000
+
+const ChatInput = ({ lead, onTyping }: ChatInputProps) => {
+  const leadId = lead.id
   const [content, setContent] = useState('')
   const [uploading, setUploading] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
   const [templatesOpen, setTemplatesOpen] = useState(false)
   const [productsOpen, setProductsOpen] = useState(false)
   const [composeMenuOpen, setComposeMenuOpen] = useState(false)
+  const [now, setNow] = useState(() => new Date())
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const sendMessage = useSendMessage()
@@ -39,6 +50,18 @@ const ChatInput = ({ leadId, onTyping }: ChatInputProps) => {
   const companyId = useAuthStore((s) => s.company?.id)
   const isEvolution = whatsappStatus?.provider === 'evolution'
   const hasInstance = !isEvolution || !!profile?.default_whatsapp_instance
+
+  // Instagram DM: a janela de 24h conta a partir da ultima mensagem do contato.
+  const isInstagram = isInstagramConversation(lead)
+  const windowState = isInstagram ? instagramWindowState(lead.last_customer_message_at, now) : 'open'
+  const windowRemainingMs = isInstagram ? instagramWindowRemainingMs(lead.last_customer_message_at, now) : 0
+  const inputBlocked = isInstagram && windowState === 'closed'
+
+  useEffect(() => {
+    if (!isInstagram) return
+    const timer = setInterval(() => setNow(new Date()), WINDOW_TICK_MS)
+    return () => clearInterval(timer)
+  }, [isInstagram])
 
   const adjustHeight = useCallback(() => {
     const el = textareaRef.current
@@ -102,7 +125,7 @@ const ChatInput = ({ leadId, onTyping }: ChatInputProps) => {
 
   const handleSend = async () => {
     const text = content.trim()
-    if (!text || sendMessage.isPending) return
+    if (!text || sendMessage.isPending || inputBlocked) return
 
     setContent('')
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
@@ -119,7 +142,15 @@ const ChatInput = ({ leadId, onTyping }: ChatInputProps) => {
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (!file || !companyId) return
+    if (!file || !companyId || inputBlocked) return
+
+    // Instagram DM: formato e tamanho que a Meta aceita, antes de subir o arquivo.
+    const instagramError = isInstagram ? validateInstagramAttachment(file) : null
+    if (instagramError) {
+      toast.error(sendErrorMessage(instagramError))
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      return
+    }
 
     if (file.size > 25 * 1024 * 1024) {
       toast.error('Arquivo muito grande (max 25MB)')
@@ -164,7 +195,8 @@ const ChatInput = ({ leadId, onTyping }: ChatInputProps) => {
     }
   }
 
-  if (!hasInstance) {
+  // O gate de numero WhatsApp nao vale para conversa do Instagram.
+  if (!hasInstance && !isInstagram) {
     return (
       <div className="border-t bg-background p-3">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -180,6 +212,7 @@ const ChatInput = ({ leadId, onTyping }: ChatInputProps) => {
 
   return (
     <div className="border-t bg-background p-3">
+      {isInstagram && <InstagramWindowNotice state={windowState} remainingMs={windowRemainingMs} />}
       <div className="relative flex items-end gap-2">
         {!isRecording && (
           <>
@@ -233,6 +266,7 @@ const ChatInput = ({ leadId, onTyping }: ChatInputProps) => {
                     <button
                       type="button"
                       onClick={() => { setComposeMenuOpen(false); fileInputRef.current?.click() }}
+                      disabled={inputBlocked}
                       className={composeMenuItemClass}
                     >
                       <Paperclip className="h-4 w-4 shrink-0" />
@@ -260,7 +294,7 @@ const ChatInput = ({ leadId, onTyping }: ChatInputProps) => {
               size="icon"
               className="hidden h-8 w-8 text-muted-foreground hover:text-foreground sm:inline-flex"
               onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
+              disabled={uploading || inputBlocked}
               title="Anexar arquivo"
             >
               {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
@@ -269,13 +303,14 @@ const ChatInput = ({ leadId, onTyping }: ChatInputProps) => {
               ref={fileInputRef}
               type="file"
               className="hidden"
-              accept="image/*,audio/*,video/*,.pdf,.doc,.docx,.xls,.xlsx"
+              accept={isInstagram ? INSTAGRAM_ACCEPT : 'image/*,audio/*,video/*,.pdf,.doc,.docx,.xls,.xlsx'}
               onChange={handleFileUpload}
             />
           </>
         )}
 
-        <AudioRecorder leadId={leadId} onRecordingChange={setIsRecording} />
+        {/* Instagram DM: o gravador produz audio/webm, que a Meta recusa (Onda 2 converte). */}
+        {!isInstagram && <AudioRecorder leadId={leadId} onRecordingChange={setIsRecording} />}
 
         {!isRecording && (
           <>
@@ -288,15 +323,16 @@ const ChatInput = ({ leadId, onTyping }: ChatInputProps) => {
                 onTyping?.()
               }}
               onKeyDown={handleKeyDown}
-              placeholder="Digite uma mensagem..."
+              disabled={inputBlocked}
+              placeholder={inputBlocked ? 'Aguardando nova mensagem do contato' : 'Digite uma mensagem...'}
               rows={1}
-              className="flex-1 resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring input-clean"
+              className="flex-1 resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 input-clean"
             />
 
             <button
               onClick={handleSend}
-              disabled={!content.trim() || sendMessage.isPending}
-              title={whatsAppConnected === false ? 'WhatsApp nao conectado - mensagem sera salva como manual' : undefined}
+              disabled={!content.trim() || sendMessage.isPending || inputBlocked}
+              title={!isInstagram && whatsAppConnected === false ? 'WhatsApp nao conectado - mensagem sera salva como manual' : undefined}
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-all duration-150 hover:bg-primary/90 disabled:cursor-not-allowed"
             >
               {sendMessage.isPending ? (

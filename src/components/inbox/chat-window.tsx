@@ -49,7 +49,7 @@ const ChatWindow = ({ lead }: ChatWindowProps) => {
         isTyping={isTyping}
       />
 
-      <ChatInput leadId={lead.id} onTyping={sendTyping} />
+      <ChatInput lead={lead} onTyping={sendTyping} />
     </div>
   )
 }
