@@ -1,12 +1,8 @@
-import { useMemo } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { cn } from '@/lib/utils'
-import { buildActiveDealInfo } from '@/lib/active-deal-info'
-import { useDealsByLead } from '@/hooks/use-deals'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, Kanban, Phone, PanelRight } from 'lucide-react'
-import { useAccessiblePipelines } from '@/hooks/use-pipeline-access'
 import { useWhatsAppStatus } from '@/hooks/use-whatsapp-status'
 import { useIsPanelInline } from '@/hooks/use-panel-inline'
 import { useInboxStore } from '@/stores/inbox.store'
@@ -20,28 +16,12 @@ interface ChatHeaderProps {
 const ChatHeader = ({ lead }: ChatHeaderProps) => {
   const navigate = useNavigate()
   const location = useLocation()
-  const { data: pipelines } = useAccessiblePipelines()
   const { data: whatsappStatus } = useWhatsAppStatus()
   const { contactPanelOpen, toggleContactPanel } = useInboxStore()
   const panelIsInline = useIsPanelInline()
   const panelOpen = contactPanelOpen ?? panelIsInline
   const showInstanceBadge = whatsappStatus?.provider === 'evolution' || whatsappStatus?.provider === 'cloud_api'
   const avatarSrc = lead.avatar_url || undefined
-
-  // D9: o pipeline e do negocio, nao do contato. Usa a regra unica (R1) do
-  // `buildActiveDealInfo`: negocio ABERTO mais recente por `created_at`.
-  // Contato sem negocio aberto nao tem pipeline, e ai o badge some em vez de
-  // aparecer vazio, reaproveitando o mesmo caminho de "nao mostrar" que ja
-  // existe para empresa com um pipeline so.
-  const { data: leadDeals } = useDealsByLead(lead.id)
-  const activePipelineId = useMemo(
-    () => buildActiveDealInfo(leadDeals).pipelineByLeadId.get(lead.id) ?? null,
-    [leadDeals, lead.id],
-  )
-
-  const pipelineName = pipelines && pipelines.length > 1 && activePipelineId
-    ? pipelines.find((p) => p.id === activePipelineId)?.name
-    : null
 
   return (
     <div className="flex items-center gap-2 border-b px-3 py-3 lg:gap-3 lg:px-4">
@@ -69,10 +49,7 @@ const ChatHeader = ({ lead }: ChatHeaderProps) => {
         {lead.company_name && (
           <p className="text-[11px] text-muted-foreground/70 truncate">{lead.company_name}</p>
         )}
-        <p className="text-xs text-muted-foreground">
-          {lead.phone}
-          {pipelineName && <span className="ml-1.5 text-muted-foreground/60">· {pipelineName}</span>}
-        </p>
+        <p className="text-xs text-muted-foreground">{lead.phone}</p>
         {showInstanceBadge && lead.whatsapp_instance_name && (
           <p className="flex items-center gap-1 text-[10px] text-muted-foreground/60">
             <Phone className="h-2.5 w-2.5" />
