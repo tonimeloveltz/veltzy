@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth.store'
+import { useInboxStore } from '@/stores/inbox.store'
 import * as messagesService from '@/services/messages.service'
 import type { SendMessagePayload, Message } from '@/types/database'
 
@@ -109,9 +110,19 @@ export const useSendMessage = () => {
       }
       toast.error('Erro ao enviar mensagem')
     },
-    onSuccess: (_data, variables) => {
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['messages', variables.leadId] })
       queryClient.invalidateQueries({ queryKey: ['conversations'] })
+
+      // Cadencia: publica so a intencao. Quem decide se a faixa aparece e o
+      // CadenceNudgeBar, que precisa de dado assincrono (a cadencia do lead) e
+      // nao cabe aqui. getState() em vez de hook: o callback nao deve assinar o
+      // store e re-renderizar todo mundo que usa useSendMessage.
+      // Nao conta mensagens do dia aqui: neste instante a linha real do
+      // servidor ainda pode nao estar no cache, e contar seria corrida.
+      if (data?.delivery_status !== 'failed') {
+        useInboxStore.getState().requestCadenceNudge(variables.leadId)
+      }
     },
   })
 }

@@ -4,6 +4,7 @@ import { ChatHeader } from '@/components/inbox/chat-header'
 import { LeadDealsPanel } from '@/components/inbox/lead-deals-panel'
 import { MessageList } from '@/components/inbox/message-list'
 import { ChatInput } from '@/components/inbox/chat-input'
+import { CadenceNudgeBar } from '@/components/inbox/cadence-nudge-bar'
 import { AdContextCard } from '@/components/inbox/ad-context-card'
 import { useMessages, useMarkAsRead } from '@/hooks/use-messages'
 import { useTypingIndicator } from '@/hooks/use-typing-indicator'
@@ -48,6 +49,8 @@ const ChatWindow = ({ lead }: ChatWindowProps) => {
         isLoading={isLoading}
         isTyping={isTyping}
       />
+
+      <CadenceNudgeBar leadId={lead.id} />
 
       <ChatInput leadId={lead.id} onTyping={sendTyping} />
     </div>
