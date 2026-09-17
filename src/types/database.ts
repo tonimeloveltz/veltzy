@@ -445,6 +445,26 @@ export interface LeadWithLastMessage extends Lead {
   unread_count?: number
 }
 
+/**
+ * Evento de contato manual com um lead (veltzy.lead_contact_events).
+ *
+ * IMUTAVEL: a tabela nao tem policy nem GRANT de UPDATE, e nao tem updated_at.
+ * Corrigir um registro e apagar e registrar de novo. Nunca emitir .update():
+ * sem policy de UPDATE a RLS nao casa linha nenhuma e o update "passa" afetando
+ * zero linhas, sem erro -- falha silenciosa.
+ *
+ * `registered_by` e public.profiles.id (NAO auth.uid()), com ON DELETE SET NULL:
+ * vendedor que sai da empresa nao apaga o historico do lead.
+ */
+export interface LeadContactEvent {
+  id: string
+  company_id: string
+  lead_id: string
+  registered_by: string | null
+  contacted_at: string
+  created_at: string
+}
+
 export type AutomationTrigger = 'lead_created' | 'lead_stage_changed' | 'lead_temperature_changed' | 'message_received' | 'no_response' | 'deal_closed' | 'lead_lost'
 export type AutomationAction = 'send_message' | 'change_stage' | 'assign_lead' | 'add_tag' | 'remove_tag' | 'update_temperature' | 'send_webhook' | 'notify_team'
 export type NotificationType = 'new_lead' | 'lead_assigned' | 'new_message' | 'lead_transferred' | 'system' | 'copilot' | 'territory_conflict'
