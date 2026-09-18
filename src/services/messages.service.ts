@@ -46,6 +46,26 @@ export const sendMessage = async (companyId: string, payload: SendMessagePayload
   return data
 }
 
+/**
+ * Apaga TODAS as mensagens de uma conversa. O lead fica: continua no pipeline e
+ * em Contatos, so sai da inbox (useConversationList descarta lead sem mensagem).
+ *
+ * Devolve quantas linhas o banco apagou de fato, lidas do .select() do delete, e
+ * nao quantas se pediu: se a RLS barrar, o delete "passa" sem erro e apaga zero.
+ *
+ * Nao apaga nada no WhatsApp, e nao remove os anexos do bucket chat-attachments.
+ */
+export const deleteLeadMessages = async (companyId: string, leadId: string): Promise<number> => {
+  const { data, error } = await db()
+    .from('messages')
+    .delete()
+    .eq('lead_id', leadId)
+    .eq('company_id', companyId)
+    .select('id')
+  if (error) throw error
+  return data.length
+}
+
 export const markAsRead = async (companyId: string, leadId: string): Promise<void> => {
   const { error } = await db()
     .from('leads')
