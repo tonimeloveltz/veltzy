@@ -101,7 +101,7 @@ Escolhemos a Opção A (permitir os 3 providers). Como disparo em massa por cana
 
 ### Enforcement server-side (na edge de dispatch / enfileiramento)
 - **Throttle com jitter**: espaçamento bem maior que o transacional — default **30–90s randomizado** (não fixo), configurável. Aplicado no `scheduled_at` escalonado.
-- **Teto diário por instância/número**: limite de msgs/dia por instância (default conservador, ex. ~200/dia). Ao atingir, o restante reprograma pro dia seguinte. Conta envios do dia por instância.
+- **Teto diário por instância/número**: **50 msgs/dia por instância** (decisão do Toni — bem conservador, prioriza não-ban). Ao atingir, o restante reprograma pro dia seguinte. Conta envios do dia por instância. Escala com nº de instâncias da company; sobe na Fase 2 com warm-up.
 - **Janela de horário**: só agenda envio em horário comercial configurável (ex. 08–20 no fuso da company); fora disso, reprograma.
 - **Circuit breaker**: se a taxa de falha da campanha ultrapassar um limiar (ex. >30% num lote), **pausa a campanha** (`status=paused`) e sinaliza — sinal de instância limitada.
 - **Respeitar opt-out/block**: não enviar para lead que pediu saída / está bloqueado. ⚠️ **Codificadora: confirmar o que o Veltzy já tem** (status de lead / unsubscribe / block); se não houver, definimos o mínimo.
