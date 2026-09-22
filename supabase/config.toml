@@ -439,6 +439,12 @@ verify_jwt = false
 [functions.cloud-api-templates-proxy]
 verify_jwt = false
 
+# blast-dispatch (mkt-ativo): auth manual (getUser) igual as proxies; o front chama
+# so com Authorization Bearer, entao verify_jwt=false. O gate real e mkt_ativo_enabled
+# + role admin/manager dentro da function.
+[functions.blast-dispatch]
+verify_jwt = false
+
 [edge_runtime]
 enabled = true
 # Supported request policies: `oneshot`, `per_worker`.
