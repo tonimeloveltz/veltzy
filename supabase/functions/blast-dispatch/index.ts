@@ -2,13 +2,16 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders } from '../_shared/cors.ts'
 import { buildAudiencePlan } from '../_shared/blast-audience.ts'
 import { computeBlastSchedule, type ScheduleItem } from '../_shared/blast-schedule.ts'
+import { getTemplateBodyText, renderTemplateBody } from '../_shared/blast-render.ts'
 
-// blast-dispatch (mkt-ativo · SPEC §2a) — PARTE COMUM (Opcao pendente do Toni).
-// Faz: gate por-empresa (early-return, precedente sdr-ai) → resolve audiencia
-// (dentro da company, exclui opt-out) → cria blast_recipients → calcula o
-// scheduled_at anti-ban de cada item (§4bis). NAO enfileira nem envia: a etapa
-// final depende da decisao de envio (Opcao 1/2/3) e NAO toca o process-message-queue
-// (territorio da frente WAHA). verify_jwt=false + auth manual (padrao das proxies).
+// blast-dispatch (mkt-ativo · SPEC §2a/§3). Fluxo: gate por-empresa (early-return,
+// precedente sdr-ai) → resolve provider (cloud_api RECUSADO na Fase 1: HSM real =
+// proximo corte) → resolve audiencia (dentro da company, exclui opt-out) → cria
+// blast_recipients → calcula scheduled_at anti-ban (§4bis) → renderiza o BODY do
+// template como TEXTO por recipient → EXPANDE em message_queue (source='campaign')
+// gravando message_queue_id nos recipients → marca campanha. NAO toca o
+// process-message-queue (que ja tem ramo waha em develop) — ele pega a fila e envia
+// pelo provider da company. verify_jwt=false + auth manual (padrao das proxies).
 
 // Fuso da company: o Veltzy opera em America/Sao_Paulo (CLAUDE.md). Sem coluna de
 // tz por empresa hoje; BRT como default. TODO: tz por-company quando existir.
@@ -105,11 +108,40 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: `Campanha em status '${campaign.status}' nao pode ser disparada` }, corsHeaders, 409)
     }
 
+    // ---- Provider da company: Fase 1 = waha/evolution/(zapi) por TEXTO renderizado.
+    // cloud_api RECUSADO aqui (HSM real = sendTemplate + ramo cloud_api na fila = proximo corte).
+    // Leitura direta de active_whatsapp_provider (o consumidor process-message-queue resolve
+    // o envio real por-provider; aqui so preciso barrar cloud_api). ----
+    const { data: companyProvider } = await admin
+      .from('companies').select('active_whatsapp_provider').eq('id', companyId).single()
+    const provider = (companyProvider?.active_whatsapp_provider as string) ?? 'zapi'
+    if (provider === 'cloud_api') {
+      return jsonResponse({ skipped: true, reason: 'cloud_api_proximo_corte',
+        note: 'Disparo via Cloud API (HSM aprovado) sera liberado no proximo corte.' }, corsHeaders, 409)
+    }
+
+    // ---- Template: fonte do conteudo. Fase 1 envia o BODY renderizado como texto. ----
+    if (!campaign.template_id) {
+      return jsonResponse({ error: 'Campanha sem template_id' }, corsHeaders, 400)
+    }
+    const { data: template } = await veltzy
+      .from('whatsapp_templates')
+      .select('id, company_id, components, status')
+      .eq('id', campaign.template_id)
+      .single()
+    if (!template || template.company_id !== companyId) {
+      return jsonResponse({ error: 'Template nao encontrado' }, corsHeaders, 404)
+    }
+    const bodyText = getTemplateBodyText(template.components)
+    if (!bodyText) {
+      return jsonResponse({ error: 'Template sem componente BODY com texto' }, corsHeaders, 422)
+    }
+
     // ---- Audiencia: dentro da company, exclui opt-out, aplica o filtro ----
     const plan = buildAudiencePlan(campaign.audience_filter)
     let q = veltzy
       .from('leads')
-      .select('id, phone, whatsapp_instance_name')
+      .select('*')
       .eq('company_id', companyId)
       .eq('marketing_opt_out', false)
     if (plan.statusIn) q = q.in('status', plan.statusIn)
@@ -137,9 +169,8 @@ Deno.serve(async (req) => {
       .upsert(recipientRows, { onConflict: 'campaign_id,lead_id', ignoreDuplicates: true })
     if (recErr) return jsonResponse({ error: `Falha ao criar recipients: ${recErr.message}` }, corsHeaders, 500)
 
-    // ---- Calcula o escalonamento anti-ban (§4bis) — SO CALCULO, nao persiste na fila ----
-    // enforce=true assume caminho NAO-OFICIAL (o de risco que o §4bis cobre). A decisao
-    // final de provider (e portanto enforce oficial vs nao-oficial) e a etapa SEGURADA.
+    // ---- Escalonamento anti-ban (§4bis). enforce=true: Fase 1 so libera canal
+    // NAO-OFICIAL (waha/evolution/zapi), todos sob o piso anti-ban. ----
     const scheduleItems: ScheduleItem[] = audience.map((l: { whatsapp_instance_name: string | null }) => ({
       instanceKey: l.whatsapp_instance_name ?? 'default',
     }))
@@ -150,28 +181,53 @@ Deno.serve(async (req) => {
       tzOffsetMinutes: BRT_OFFSET_MINUTES,
     })
 
-    // Atualiza a contagem (informativo; nao muda status — isso e da etapa de enfileiramento).
-    await veltzy.from('blast_campaigns')
-      .update({ total_recipients: audience.length })
-      .eq('id', campaign_id)
+    // ---- EXPANDE em message_queue: um item por recipient, texto renderizado do
+    // template, scheduled_at do schedule anti-ban, source='campaign'. O consumidor
+    // (process-message-queue, ja com ramo waha) pega e envia pelo provider da company. ----
+    const variableMapping = (campaign.variable_mapping ?? {}) as Record<string, string>
+    const queueRows = audience.map((lead: Record<string, unknown>, i: number) => ({
+      company_id: companyId,
+      lead_id: lead.id as string,
+      content: renderTemplateBody(bodyText, variableMapping, lead),
+      message_type: 'text',
+      scheduled_at: schedule[i].scheduled_at,
+      source: 'campaign',
+      instance_name: (lead.whatsapp_instance_name as string) ?? null,
+    }))
+    const { data: inserted, error: queueErr } = await veltzy
+      .from('message_queue')
+      .insert(queueRows)
+      .select('id, lead_id')
+    if (queueErr) return jsonResponse({ error: `Falha ao enfileirar: ${queueErr.message}` }, corsHeaders, 500)
 
-    // ======================================================================
-    // ⏸ ETAPA SEGURADA (aguarda decisao do Toni — Opcao 1/2/3):
-    //   - resolver provider/template e o CONTEUDO a enfileirar
-    //   - INSERT em message_queue (source='campaign', scheduled_at do schedule[])
-    //     gravando message_queue_id em cada recipient
-    //   - marcar campanha 'queued'/'running'
-    //   NAO tocar o process-message-queue (territorio WAHA) sem coordenacao.
-    // ======================================================================
+    // Liga cada recipient ao item da fila (fonte do status) e marca 'queued'.
+    for (const item of inserted ?? []) {
+      await veltzy.from('blast_recipients')
+        .update({ message_queue_id: item.id, status: 'queued' })
+        .eq('campaign_id', campaign_id)
+        .eq('lead_id', item.lead_id)
+    }
+
+    // Marca a campanha: 'scheduled' se futura, 'queued' se imediata.
+    const isScheduled = campaign.scheduled_at && new Date(campaign.scheduled_at).getTime() > Date.now()
+    await veltzy.from('blast_campaigns')
+      .update({
+        status: isScheduled ? 'scheduled' : 'queued',
+        total_recipients: audience.length,
+        queued_count: inserted?.length ?? 0,
+        started_at: isScheduled ? null : new Date().toISOString(),
+      })
+      .eq('id', campaign_id)
 
     return jsonResponse({
       ok: true,
-      phase: 'common-only',
       gate: 'passed',
+      provider,
       recipients: audience.length,
-      schedule_preview: schedule.slice(0, 5),
-      schedule_count: schedule.length,
-      note: 'Parte comum: gate+audiencia+recipients+calculo anti-ban. Enfileiramento/envio SEGURADO ate decisao de envio.',
+      queued: inserted?.length ?? 0,
+      campaign_status: isScheduled ? 'scheduled' : 'queued',
+      schedule_preview: schedule.slice(0, 3),
+      note: 'Campanha expandida na message_queue; o process-message-queue envia via provider da company.',
     }, corsHeaders)
   } catch (err) {
     return jsonResponse({ error: (err as Error).message }, getCorsHeaders(req), 500)
