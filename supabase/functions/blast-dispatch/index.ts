@@ -144,7 +144,6 @@ Deno.serve(async (req) => {
       .select('*')
       .eq('company_id', companyId)
       .eq('marketing_opt_out', false)
-    if (plan.statusIn) q = q.in('status', plan.statusIn)
     if (plan.temperatureIn) q = q.in('temperature', plan.temperatureIn)
     if (plan.tagsOverlap) q = q.overlaps('tags', plan.tagsOverlap)
     if (plan.sourceEq) q = q.eq('source_id', plan.sourceEq)

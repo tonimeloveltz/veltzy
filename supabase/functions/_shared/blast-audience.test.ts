@@ -11,14 +11,12 @@ Deno.test('filtro nulo/undefined: mesmo comportamento seguro', () => {
   assertEquals(buildAudiencePlan(undefined), { companyScoped: true, excludeOptOut: true })
 })
 
-Deno.test('status/temperature/tags/source viram predicados quando presentes', () => {
+Deno.test('temperature/tags/source viram predicados quando presentes', () => {
   const plan = buildAudiencePlan({
-    status: ['open', 'qualifying'],
     temperature: ['hot', 'warm'],
     tags: ['vip'],
     source_id: 'src-123',
   })
-  assertEquals(plan.statusIn, ['open', 'qualifying'])
   assertEquals(plan.temperatureIn, ['hot', 'warm'])
   assertEquals(plan.tagsOverlap, ['vip'])
   assertEquals(plan.sourceEq, 'src-123')
@@ -28,19 +26,17 @@ Deno.test('status/temperature/tags/source viram predicados quando presentes', ()
 
 Deno.test('arrays vazios ou com lixo sao omitidos (nao viram predicado)', () => {
   const plan = buildAudiencePlan({
-    status: [],
     temperature: ['', '  '],
     tags: [123 as unknown as string, ''],
     source_id: '   ',
   })
-  assertEquals(plan.statusIn, undefined)
   assertEquals(plan.temperatureIn, undefined)
   assertEquals(plan.tagsOverlap, undefined)
   assertEquals(plan.sourceEq, undefined)
 })
 
-Deno.test('pipeline_id/stage_id sao ignorados na Fase 1 (nao entram no plano)', () => {
-  const plan = buildAudiencePlan({ pipeline_id: 'p-1', stage_id: 's-1' } as never)
+Deno.test('status/pipeline_id/stage_id ignorados na Fase 1 (vivem/dependem de deals)', () => {
+  const plan = buildAudiencePlan({ status: ['open'], pipeline_id: 'p-1', stage_id: 's-1' } as never)
   assertEquals(plan, { companyScoped: true, excludeOptOut: true })
 })
 

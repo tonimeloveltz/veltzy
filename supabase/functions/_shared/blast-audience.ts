@@ -2,21 +2,21 @@
 // query de veltzy.leads. Logica PURA e testavel: valida/normaliza o filtro e diz
 // QUAIS predicados aplicar; a edge aplica o plano no query builder do Supabase.
 //
-// Fase 1: filtros diretos do lead (status, temperature, tags, source_id).
-// pipeline/stage envolvem join com veltzy.deals (o stage real vive no deal, nao no
-// lead) — fora da parte comum; anotado como pendencia coordenada.
+// Fase 1: filtros diretos do lead que EXISTEM na tabela (temperature, tags, source_id).
+// ⚠️ `status` do lead (new|qualifying|open|deal|lost) NAO e coluna de veltzy.leads —
+// o status comercial vive em veltzy.deals (migracao de multiplos pipelines). Logo
+// `status` (assim como pipeline/stage) fica pra Fase 2 via join com deals — filtrar
+// por ele aqui quebraria a query (coluna inexistente).
 
 export interface AudienceFilter {
-  status?: string[]
   temperature?: string[]
   tags?: string[]
   source_id?: string
-  // pipeline_id / stage_id: Fase 1+ (join com deals) — ignorados aqui de proposito.
+  // status / pipeline_id / stage_id: Fase 2 (vivem/dependem de veltzy.deals) — ignorados.
   [key: string]: unknown
 }
 
 export interface AudiencePlan {
-  statusIn?: string[]
   temperatureIn?: string[]
   tagsOverlap?: string[] // lead.tags && filtro (qualquer tag em comum)
   sourceEq?: string
@@ -38,9 +38,6 @@ const cleanStrings = (v: unknown): string[] | undefined => {
 export function buildAudiencePlan(filter: AudienceFilter | null | undefined): AudiencePlan {
   const f = filter ?? {}
   const plan: AudiencePlan = { companyScoped: true, excludeOptOut: true }
-
-  const statusIn = cleanStrings(f.status)
-  if (statusIn) plan.statusIn = statusIn
 
   const temperatureIn = cleanStrings(f.temperature)
   if (temperatureIn) plan.temperatureIn = temperatureIn
