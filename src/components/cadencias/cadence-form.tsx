@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Plus, Trash2, Loader2 } from 'lucide-react'
 import { useCreateCadence } from '@/hooks/use-cadences'
 import { useCampaignTemplates } from '@/hooks/use-campaigns'
+import { useAuthStore } from '@/stores/auth.store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -20,9 +21,10 @@ interface StepDraft {
   config: Record<string, unknown>
 }
 
-const ACTIONS: { value: CadenceStepAction; label: string }[] = [
+const ACTIONS: { value: CadenceStepAction; label: string; aiOnly?: boolean }[] = [
   { value: 'send_message', label: 'Enviar mensagem' },
   { value: 'send_template', label: 'Enviar template' },
+  { value: 'generate_ai', label: 'Gerar mensagem com IA', aiOnly: true },
   { value: 'wait', label: 'Aguardar (delay)' },
   { value: 'add_tag', label: 'Adicionar tag' },
   { value: 'remove_tag', label: 'Remover tag' },
@@ -49,6 +51,8 @@ export function CadenceForm({ open, onOpenChange }: Props) {
 
   const { data: templates } = useCampaignTemplates()
   const createCadence = useCreateCadence()
+  const aiEnabled = useAuthStore((s) => s.company?.features?.ai_msg_enabled) === true
+  const actionOptions = ACTIONS.filter((a) => !a.aiOnly || aiEnabled)
 
   const reset = () => {
     setName(''); setStartMode('manual'); setTriggerEvent('lead_created'); setTriggerStageIds([]); setCancelOnStage(false)
@@ -132,7 +136,7 @@ export function CadenceForm({ open, onOpenChange }: Props) {
                   <span className="text-xs text-muted-foreground">#{i + 1}</span>
                   <Select value={s.action_type} onValueChange={(v) => setStep(i, { action_type: v as CadenceStepAction, config: {} })}>
                     <SelectTrigger className="flex-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>{ACTIONS.map((a) => <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>)}</SelectContent>
+                    <SelectContent>{actionOptions.map((a) => <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>)}</SelectContent>
                   </Select>
                   {steps.length > 1 && (
                     <Button variant="ghost" size="icon" onClick={() => setSteps((p) => p.filter((_, idx) => idx !== i))}>
@@ -144,6 +148,13 @@ export function CadenceForm({ open, onOpenChange }: Props) {
                 {s.action_type === 'send_message' && (
                   <Input placeholder="Conteúdo da mensagem" value={String(s.config.content ?? '')}
                     onChange={(e) => setStepConfig(i, 'content', e.target.value)} />
+                )}
+                {s.action_type === 'generate_ai' && (
+                  <div className="space-y-1">
+                    <Input placeholder="Instrução para a IA (ex: convide o lead pra uma demo)" value={String(s.config.prompt ?? '')}
+                      onChange={(e) => setStepConfig(i, 'prompt', e.target.value)} />
+                    <p className="text-xs text-amber-600">⚡ Gera a mensagem com IA por contato — consome crédito de IA da empresa (custo).</p>
+                  </div>
                 )}
                 {s.action_type === 'send_template' && (
                   <Select value={String(s.config.template_id ?? '')} onValueChange={(v) => setStepConfig(i, 'template_id', v)}>

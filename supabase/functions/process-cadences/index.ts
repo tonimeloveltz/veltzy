@@ -3,6 +3,7 @@ import { isCronAuthorized, cronUnauthorized } from '../_shared/cron-auth.ts'
 import { getCorsHeaders } from '../_shared/cors.ts'
 import { decideCadenceAction, type CadenceStepLite } from '../_shared/cadence-engine.ts'
 import { getTemplateBodyText, renderTemplateBody, resolveTemplateParams } from '../_shared/blast-render.ts'
+import { HubClient } from '../_shared/hub-client.ts'
 
 // process-cadences (mkt-ativo Corte B): cron que AVANÇA os cadence_runs ativos e
 // vencidos (next_run_at<=now). Para cada run: decide (cadence-engine) → cancela
@@ -203,6 +204,44 @@ async function executeStep(
         .from('deals').select('id').eq('lead_id', lead.id).eq('status', 'open')
         .order('created_at', { ascending: false }).limit(1).maybeSingle()
       if (deal) await veltzy.from('deals').update({ stage_id: cfg.stage_id }).eq('id', deal.id)
+      break
+    }
+    case 'generate_ai': {
+      // GATE DE CUSTO: só chama a IA se a empresa optou (ai_msg_enabled). Off = pula
+      // o passo (não chama o Hub), custo ZERO. É adicional ao gate mkt_ativo_enabled.
+      const { data: company } = await publicDb.from('companies').select('features').eq('id', companyId).single()
+      if (((company?.features ?? {}) as Record<string, unknown>).ai_msg_enabled !== true) {
+        console.log(`[process-cadences] generate_ai pulado (ai_not_enabled) company=${companyId}`)
+        break
+      }
+      // Gera a msg via gateway do Hub (feature EXATA cadence_ai_message; chave só no Hub).
+      // HubClient lança HubError em LIMIT_EXCEEDED/TENANT_DISABLED (não-retryable) → sobe
+      // pro catch do run (failRun): para o passo, marca failed, SEM retry e SEM enviar msg.
+      const hub = new HubClient()
+      const res = await hub.complete({
+        company_id: companyId,
+        product: 'veltzy',
+        feature: 'cadence_ai_message',
+        lead_id: lead.id,
+        messages: [
+          { role: 'system', content: 'Voce gera UMA mensagem de WhatsApp curta e cordial para um lead, em pt-BR, sem markdown nem aspas. Responda so a mensagem.' },
+          { role: 'user', content: `Contexto do lead: nome=${lead.name ?? ''}. Instrucao: ${String(cfg.prompt ?? '')}` },
+        ],
+        max_tokens: Number(cfg.max_tokens ?? 150),
+        temperature: Number(cfg.temperature ?? 0.7),
+      })
+      if (!res.ok || !res.data?.content) {
+        throw new Error(`IA sem conteudo (${res.error?.code ?? 'no_content'})`)
+      }
+      await veltzy.from('message_queue').insert({
+        company_id: companyId,
+        lead_id: lead.id,
+        content: res.data.content,
+        message_type: 'text',
+        scheduled_at: now.toISOString(),
+        source: 'cadence',
+        instance_name: lead.whatsapp_instance_name ?? null,
+      })
       break
     }
   }

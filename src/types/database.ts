@@ -17,6 +17,8 @@ export interface CompanyFeatures {
   max_leads: number
   /** mkt-ativo (disparo em massa). Ausente = false (gate trata). Fonte unica = companies.features. */
   mkt_ativo_enabled?: boolean
+  /** IA nas cadências (gerar mensagem via Hub). Gate de custo, adicional ao mkt_ativo_enabled. */
+  ai_msg_enabled?: boolean
 }
 
 // ---- mkt-ativo (disparo em massa / campanhas) ----
@@ -77,7 +79,7 @@ export interface BlastRecipient {
 
 // ---- mkt-ativo Corte B (cadências / drip) ----
 export type CadenceStepAction =
-  | 'send_message' | 'send_template' | 'wait' | 'add_tag' | 'remove_tag' | 'change_stage'
+  | 'send_message' | 'send_template' | 'wait' | 'add_tag' | 'remove_tag' | 'change_stage' | 'generate_ai'
 export type CadenceRunStatus = 'active' | 'completed' | 'cancelled' | 'failed'
 export type CadenceTriggerEvent =
   | 'lead_created' | 'lead_stage_changed' | 'lead_temperature_changed'
