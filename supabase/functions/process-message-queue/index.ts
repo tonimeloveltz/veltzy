@@ -3,6 +3,7 @@ import { isCronAuthorized, cronUnauthorized } from '../_shared/cron-auth.ts'
 import { getWhatsAppConfig, getActiveProvider } from '../_shared/whatsapp-config.ts'
 import { createProvider } from '../_shared/whatsapp-factory.ts'
 import type { WhatsAppConfig } from '../_shared/whatsapp-provider.ts'
+import { resolveOutboundCloudApiNumber } from '../_shared/cloud-api-resolve.ts'
 
 import { getCorsHeaders } from '../_shared/cors.ts'
 
@@ -29,7 +30,7 @@ Deno.serve(async (req) => {
 
     const { data: items } = await supabase
       .from('message_queue')
-      .select('id, company_id, lead_id, content, message_type, file_url, instance_name')
+      .select('id, company_id, lead_id, content, message_type, file_url, instance_name, metadata')
       .eq('status', 'pending')
       .lte('scheduled_at', now)
       .order('scheduled_at', { ascending: true })
@@ -49,7 +50,7 @@ Deno.serve(async (req) => {
       try {
         const { data: lead } = await supabase
           .from('leads')
-          .select('phone')
+          .select('phone, cloud_api_number_id')
           .eq('id', item.lead_id)
           .single()
 
@@ -115,6 +116,52 @@ Deno.serve(async (req) => {
             })
           } catch (err) {
             console.error('[process-message-queue] Evolution send failed:', err)
+            deliveryStatus = 'failed'
+          }
+        } else if (activeProvider === 'cloud_api') {
+          // Cloud API oficial: resolve o numero (vinculo do lead -> default da empresa,
+          // reusa resolveOutboundCloudApiNumber do whatsapp-send). Se message_type='template'
+          // (campanha HSM), envia via sendTemplate (metadata: name/language/params); senao texto.
+          const outbound = await resolveOutboundCloudApiNumber(supabase, {
+            cloud_api_number_id: (lead.cloud_api_number_id as string | null) ?? null,
+            company_id: item.company_id,
+          })
+          if (!outbound) {
+            await supabase
+              .from('message_queue')
+              .update({ status: 'failed', error_message: 'Nenhum numero Cloud API configurado' })
+              .eq('id', item.id)
+            failed++
+            continue
+          }
+
+          try {
+            const provider = createProvider('cloud_api')
+            if (item.message_type === 'template') {
+              const meta = (item.metadata ?? {}) as { template_name?: string; language?: string; params?: string[] }
+              if (!meta.template_name || !meta.language) {
+                throw new Error('Item de template sem template_name/language no metadata')
+              }
+              await provider.sendTemplate!({
+                phone: lead.phone,
+                phoneNumberId: outbound.phoneNumberId,
+                companyId: item.company_id,
+                templateName: meta.template_name,
+                language: meta.language,
+                params: meta.params ?? [],
+              })
+            } else {
+              await provider.sendMessage({} as WhatsAppConfig, {
+                phone: lead.phone,
+                content: item.content,
+                type: msgType,
+                mediaUrl: item.file_url ?? undefined,
+                phoneNumberId: outbound.phoneNumberId,
+                companyId: item.company_id,
+              })
+            }
+          } catch (err) {
+            console.error('[process-message-queue] Cloud API send failed:', err)
             deliveryStatus = 'failed'
           }
         } else {

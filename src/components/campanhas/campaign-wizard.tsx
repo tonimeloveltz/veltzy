@@ -35,6 +35,7 @@ interface Props {
 export function CampaignWizard({ open, onOpenChange }: Props) {
   const provider = useAuthStore((s) => s.company?.active_whatsapp_provider)
   const isNonOfficial = provider != null && provider !== OFFICIAL_PROVIDER
+  const isCloudApi = provider === OFFICIAL_PROVIDER
 
   const [step, setStep] = useState(1)
   const [name, setName] = useState('')
@@ -71,8 +72,10 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
     })
   }
 
-  const canNext1 = name.trim() !== '' && templateId !== ''
-  const canSend = (audienceCount ?? 0) > 0 && !busy
+  // Cloud API oficial só entrega template APROVADO — bloqueia a seleção de não-APPROVED.
+  const templateNotApproved = isCloudApi && !!selectedTemplate && selectedTemplate.status !== 'APPROVED'
+  const canNext1 = name.trim() !== '' && templateId !== '' && !templateNotApproved
+  const canSend = (audienceCount ?? 0) > 0 && !busy && !templateNotApproved
 
   const buildMapping = (): Record<string, string> => {
     const out: Record<string, string> = {}
@@ -125,6 +128,11 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
                 <p className="mb-1 text-xs font-medium text-muted-foreground">Prévia</p>
                 {bodyText}
               </div>
+            )}
+            {templateNotApproved && (
+              <p className="text-sm text-red-600">
+                Este template não está aprovado (status: {selectedTemplate?.status}). O canal oficial (Cloud API) só envia templates aprovados pela Meta.
+              </p>
             )}
           </div>
         )}
@@ -215,6 +223,19 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
                     O WhatsApp pode banir o número em disparo em massa. Para proteger, aplicamos automaticamente:
                     espaçamento de 30–90s entre envios, teto de 50/dia por número e janela das 08h às 20h.
                     Prefira público que já interagiu e comece com volume baixo.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {isCloudApi && (
+              <div className="flex gap-2 rounded-md border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm">
+                <Check className="h-4 w-4 shrink-0 text-emerald-600" />
+                <div className="space-y-1">
+                  <p className="font-medium text-emerald-700">Envio por canal oficial (Cloud API)</p>
+                  <p className="text-emerald-700/90">
+                    Disparo via template aprovado pela Meta. Sem os limites anti-ban do canal não-oficial —
+                    seguem as regras da Meta por categoria/qualidade do template.
                   </p>
                 </div>
               </div>
