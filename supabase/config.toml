@@ -393,6 +393,11 @@ verify_jwt = false
 [functions.run-automations]
 verify_jwt = false
 
+# START por evento das cadencias (mkt-ativo Corte B). Service-to-service (chamada
+# pelo lead-inbound-handler ao lado do run-automations), igual ao run-automations.
+[functions.start-cadences]
+verify_jwt = false
+
 [functions.instagram-send]
 verify_jwt = true
 
@@ -410,6 +415,10 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.process-message-queue]
+verify_jwt = false
+
+# Cron do mkt-ativo (Corte B): avanca cadence_runs vencidos. Auth por cron-secret/service key.
+[functions.process-cadences]
 verify_jwt = false
 
 [functions.send-task-reminders]

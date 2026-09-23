@@ -359,16 +359,28 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
   // Automacoes: dispara para TODOS os sources (webhook incluso).
   // skipSideEffects (echoes/history): nao disparar automacao.
   if (!skipSideEffects) {
+    const trigger = isNewLead ? 'lead_created' : 'message_received'
     try {
       fetch(`${params.supabaseUrl}/functions/v1/run-automations`, {
         method: 'POST',
         headers: fnHeaders,
         body: JSON.stringify({
-          trigger: isNewLead ? 'lead_created' : 'message_received',
+          trigger,
           leadId: lead.id,
           companyId: params.companyId,
           triggerData: { messageContent: params.content, source: params.source },
         }),
+      }).catch(() => {})
+    } catch { /* best-effort */ }
+
+    // mkt-ativo Corte B: START por EVENTO das cadencias, ADITIVO e ao LADO do
+    // run-automations (nao toca o core). Gate mkt_ativo_enabled e idempotencia ficam
+    // na propria start-cadences. best-effort (nao bloqueia o inbound).
+    try {
+      fetch(`${params.supabaseUrl}/functions/v1/start-cadences`, {
+        method: 'POST',
+        headers: fnHeaders,
+        body: JSON.stringify({ trigger, leadId: lead.id, companyId: params.companyId }),
       }).catch(() => {})
     } catch { /* best-effort */ }
   }
