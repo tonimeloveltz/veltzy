@@ -15,6 +15,62 @@ export interface CompanyFeatures {
   automation_rules: boolean
   max_users: number
   max_leads: number
+  /** mkt-ativo (disparo em massa). Ausente = false (gate trata). Fonte unica = companies.features. */
+  mkt_ativo_enabled?: boolean
+}
+
+// ---- mkt-ativo (disparo em massa / campanhas) ----
+export type BlastCampaignStatus =
+  | 'draft' | 'scheduled' | 'queued' | 'running' | 'completed' | 'failed' | 'paused' | 'cancelled'
+export type BlastRecipientStatus = 'pending' | 'queued' | 'sent' | 'failed' | 'skipped'
+
+/** Filtro de audiencia da campanha (Fase 1: campos que existem em veltzy.leads). */
+export interface AudienceFilter {
+  temperature?: LeadTemperature[]
+  tags?: string[]
+  source_id?: string
+}
+
+/** Override anti-ban por-campanha (§4bis). Ausente = defaults de sistema. */
+export interface ThrottleConfig {
+  delay_min?: number
+  delay_max?: number
+  daily_cap?: number
+  window_start?: number
+  window_end?: number
+}
+
+export interface BlastCampaign {
+  id: string
+  company_id: string
+  name: string
+  template_id: string | null
+  variable_mapping: Record<string, string>
+  audience_filter: AudienceFilter
+  throttle_config: ThrottleConfig | null
+  status: BlastCampaignStatus
+  scheduled_at: string | null
+  started_at: string | null
+  completed_at: string | null
+  total_recipients: number
+  queued_count: number
+  sent_count: number
+  failed_count: number
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface BlastRecipient {
+  id: string
+  campaign_id: string
+  lead_id: string | null
+  phone: string | null
+  status: BlastRecipientStatus
+  message_queue_id: string | null
+  error_message: string | null
+  sent_at: string | null
+  created_at: string
 }
 
 /** Allowlist de categorias de conexao WhatsApp (Hub-owned, Veltzy le via RLS). */
@@ -35,6 +91,7 @@ export interface Company {
   features: CompanyFeatures
   settings: Record<string, unknown>
   whatsapp_categories: WhatsAppCategories | null
+  active_whatsapp_provider: WhatsAppProviderType | null
   is_active: boolean
   created_at: string
   updated_at: string
