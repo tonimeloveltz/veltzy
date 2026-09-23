@@ -8,7 +8,7 @@ const HOUR_MS = 3_600_000
 const DAY_MS = 86_400_000
 
 export interface CadenceStepLite {
-  action_type: 'send_message' | 'send_template' | 'wait' | 'add_tag' | 'remove_tag' | 'change_stage'
+  action_type: 'send_message' | 'send_template' | 'wait' | 'add_tag' | 'remove_tag' | 'change_stage' | 'generate_ai'
   config: Record<string, unknown>
 }
 export interface CadenceRunLite {

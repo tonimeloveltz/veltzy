@@ -68,6 +68,8 @@ Deno.serve(async (req) => {
           current_step: 0,
           status: 'active',
           next_run_at: nowIso,
+          // snapshot do stage no START (stageChanged): stage do deal aberto recente agora.
+          initial_stage_id: (openDeal?.stage_id as string | null) ?? null,
         }, { onConflict: 'cadence_id,lead_id', ignoreDuplicates: true, count: 'exact' })
       if (!error && count) started += count
     }

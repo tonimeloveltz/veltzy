@@ -67,6 +67,9 @@ export interface CreateCampaignInput {
   variable_mapping: Record<string, string>
   audience_filter: AudienceFilter
   scheduled_at?: string | null
+  followup_cadence_id?: string | null
+  followup_mode?: 'none' | 'immediate' | 'no_reply'
+  followup_delay_days?: number
 }
 
 export const createCampaign = async (
@@ -84,6 +87,9 @@ export const createCampaign = async (
       audience_filter: input.audience_filter,
       status: input.scheduled_at ? 'scheduled' : 'draft',
       scheduled_at: input.scheduled_at ?? null,
+      followup_cadence_id: input.followup_cadence_id ?? null,
+      followup_mode: input.followup_mode ?? 'none',
+      followup_delay_days: input.followup_delay_days ?? 0,
       created_by: createdBy,
     })
     .select()

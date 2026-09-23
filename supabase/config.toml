@@ -421,6 +421,10 @@ verify_jwt = false
 [functions.process-cadences]
 verify_jwt = false
 
+# Cron do mkt-ativo (Fase 2): reconcilia recipients, completa campanha e dispara follow-up→cadencia.
+[functions.process-blast-followups]
+verify_jwt = false
+
 [functions.send-task-reminders]
 verify_jwt = false
 
