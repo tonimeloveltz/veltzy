@@ -7,6 +7,7 @@ import { useContacts, type ContactRow } from '@/hooks/use-contacts'
 import { useLeadSources } from '@/hooks/use-lead-sources'
 import { useExportLeads } from '@/hooks/use-export-leads'
 import { useRoles } from '@/hooks/use-roles'
+import { useAuthStore } from '@/stores/auth.store'
 import { leadTemperatureConfig } from '@/lib/lead-config'
 import { LeadSourceBadge } from '@/components/pipeline/lead-source-badge'
 import { ImportLeadsModal } from '@/components/pipeline/import-leads-modal'
@@ -97,7 +98,12 @@ const ContatosPage = () => {
   // `leads` so aceita admin da empresa / super_admin. Sem isso a coluna de
   // selecao existiria para quem nao pode fazer nada com ela.
   const canBulkDelete = isAdmin
-  const colCount = canBulkDelete ? 7 : 6
+  // mkt-ativo: quem tem a feature pode selecionar contatos p/ adicionar à cadência
+  // (START manual), mesmo sem poder excluir. A coluna de seleção + a barra aparecem
+  // se qualquer uma das ações estiver disponível.
+  const mktAtivo = useAuthStore((s) => s.company?.features?.mkt_ativo_enabled) === true
+  const canSelect = canBulkDelete || mktAtivo
+  const colCount = canSelect ? 7 : 6
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
@@ -196,8 +202,8 @@ const ContatosPage = () => {
         </div>
 
         {/* BULK ACTION BAR */}
-        {canBulkDelete && selectedIds.size > 0 && (
-          <ContactsBulkActionBar selectedIds={selectedIds} onClear={clearSelection} />
+        {canSelect && selectedIds.size > 0 && (
+          <ContactsBulkActionBar selectedIds={selectedIds} onClear={clearSelection} canDelete={canBulkDelete} />
         )}
 
         {/* TABELA */}
@@ -206,7 +212,7 @@ const ContatosPage = () => {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border/30">
-                  {canBulkDelete && (
+                  {canSelect && (
                     <th className={cn(thClass, 'text-left w-[3%]')}>
                       <Checkbox
                         checked={allSelected ? true : someSelected ? 'indeterminate' : false}
@@ -279,7 +285,7 @@ const ContatosPage = () => {
                         selectedIds.has(c.id) && 'bg-primary/5',
                       )}
                     >
-                      {canBulkDelete && (
+                      {canSelect && (
                         <td className={tdClass} onClick={(e) => e.stopPropagation()}>
                           <Checkbox
                             checked={selectedIds.has(c.id)}
