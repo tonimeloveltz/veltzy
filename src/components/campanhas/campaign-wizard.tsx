@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/auth.store'
 import { useCampaignTemplates, useAudienceCount, useCreateCampaign, useDispatchCampaign } from '@/hooks/use-campaigns'
 import { leadTemperatureConfig } from '@/lib/lead-config'
 import { getTemplateBody, extractVariables } from '@/lib/template-render'
+import { StageMultiSelect } from '@/components/mkt-ativo/stage-multi-select'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -41,6 +42,7 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
   const [name, setName] = useState('')
   const [templateId, setTemplateId] = useState('')
   const [temperatures, setTemperatures] = useState<Set<LeadTemperature>>(new Set())
+  const [stageIds, setStageIds] = useState<string[]>([])
   // varMapping[n] = 'lead.x' ou, se fixo, o proprio texto.
   const [varMapping, setVarMapping] = useState<Record<string, string>>({})
 
@@ -49,10 +51,12 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
   const bodyText = selectedTemplate ? getTemplateBody(selectedTemplate.components) : ''
   const variables = useMemo(() => extractVariables(bodyText), [bodyText])
 
-  const audienceFilter: AudienceFilter = useMemo(
-    () => (temperatures.size ? { temperature: [...temperatures] } : {}),
-    [temperatures],
-  )
+  const audienceFilter: AudienceFilter = useMemo(() => {
+    const f: AudienceFilter = {}
+    if (temperatures.size) f.temperature = [...temperatures]
+    if (stageIds.length) f.stage_id = stageIds
+    return f
+  }, [temperatures, stageIds])
   const { data: audienceCount, isFetching: countLoading } = useAudienceCount(audienceFilter, open && step >= 2)
 
   const createCampaign = useCreateCampaign()
@@ -60,7 +64,7 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
   const busy = createCampaign.isPending || dispatchCampaign.isPending
 
   const reset = () => {
-    setStep(1); setName(''); setTemplateId(''); setTemperatures(new Set()); setVarMapping({})
+    setStep(1); setName(''); setTemplateId(''); setTemperatures(new Set()); setStageIds([]); setVarMapping({})
   }
   const close = () => { onOpenChange(false); setTimeout(reset, 200) }
 
@@ -161,6 +165,11 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
                 })}
               </div>
               <p className="text-xs text-muted-foreground">Sem seleção = todos os contatos elegíveis.</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Etapa do funil (opcional)</Label>
+              <StageMultiSelect value={stageIds} onChange={setStageIds} />
+              <p className="text-xs text-muted-foreground">Considera a etapa do negócio aberto mais recente do contato.</p>
             </div>
             <div className="flex items-center gap-2 rounded-md border bg-muted/40 p-3 text-sm">
               <Users className="h-4 w-4 text-muted-foreground" />

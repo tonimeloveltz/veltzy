@@ -42,10 +42,22 @@ Deno.serve(async (req) => {
     const { data: lead } = await veltzy.from('leads').select('*').eq('id', leadId).single()
     if (!lead) return json({ error: 'Lead nao encontrado' }, corsHeaders, 404)
 
+    // Enriquece o lead com stage_id do deal ABERTO mais recente (o stage vive em deals,
+    // não em leads) para conditions com field='stage_id'. Espelha o run-automations.
+    const { data: openDeal } = await veltzy
+      .from('deals')
+      .select('stage_id')
+      .eq('lead_id', leadId)
+      .eq('status', 'open')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    const leadForConditions = { ...(lead as Record<string, unknown>), stage_id: openDeal?.stage_id ?? null }
+
     const nowIso = new Date().toISOString()
     let started = 0
     for (const cadence of cadences) {
-      if (!leadMatchesConditions(cadence.trigger_conditions as CadenceCondition[], lead as Record<string, unknown>)) continue
+      if (!leadMatchesConditions(cadence.trigger_conditions as CadenceCondition[], leadForConditions)) continue
       // Idempotente: UNIQUE(cadence_id, lead_id) — não reinscreve lead já na cadência.
       const { error, count } = await veltzy
         .from('cadence_runs')

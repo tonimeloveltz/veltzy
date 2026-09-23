@@ -29,6 +29,8 @@ export interface AudienceFilter {
   temperature?: LeadTemperature[]
   tags?: string[]
   source_id?: string
+  /** Etapa: stage_id do deal aberto mais recente (resolvido na edge via deals). */
+  stage_id?: string[]
 }
 
 /** Override anti-ban por-campanha (§4bis). Ausente = defaults de sistema. */
