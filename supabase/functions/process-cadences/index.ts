@@ -35,10 +35,21 @@ Deno.serve(async (req) => {
       return json({ processed: 0 }, corsHeaders)
     }
 
-    let advanced = 0, cancelled = 0, completed = 0, executed = 0, failed = 0
+    let advanced = 0, cancelled = 0, completed = 0, executed = 0, failed = 0, skipped = 0
+    // Gate mkt_ativo_enabled por-empresa (à prova de bypass; cache p/ evitar N+1).
+    const flagCache = new Map<string, boolean>()
+    const isMktAtivoOn = async (companyId: string): Promise<boolean> => {
+      if (flagCache.has(companyId)) return flagCache.get(companyId)!
+      const { data } = await publicDb.from('companies').select('features').eq('id', companyId).single()
+      const on = ((data?.features ?? {}) as Record<string, unknown>).mkt_ativo_enabled === true
+      flagCache.set(companyId, on)
+      return on
+    }
 
     for (const run of runs) {
       try {
+        // Feature desligada p/ a empresa: não processa (não envia). Run fica parado até religar.
+        if (!(await isMktAtivoOn(run.company_id))) { skipped++; continue }
         const { data: cadence } = await veltzy
           .from('cadences')
           .select('id, is_enabled, cancel_on_stage_change')
@@ -101,7 +112,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    return json({ processed: runs.length, advanced, executed, cancelled, completed, failed }, corsHeaders)
+    return json({ processed: runs.length, advanced, executed, cancelled, completed, failed, skipped }, corsHeaders)
   } catch (err) {
     console.error('[process-cadences] error:', err)
     return json({ error: (err as Error).message }, corsHeaders, 500)
