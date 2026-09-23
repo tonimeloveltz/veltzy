@@ -47,3 +47,20 @@ export function renderTemplateBody(
   const mapping = variableMapping ?? {}
   return bodyText.replace(/\{\{\s*(\d+)\s*\}\}/g, (_m, idx: string) => resolveValue(mapping[idx], lead))
 }
+
+/**
+ * Resolve os PARAMETROS posicionais de um template (Cloud API HSM), em ordem
+ * crescente das variaveis {{n}} do body. Diferente de renderTemplateBody (que
+ * devolve texto), aqui devolve o ARRAY de valores — o payload de template da Meta
+ * leva os parametros separados, nao o texto final. Indice sem mapping → ''.
+ */
+export function resolveTemplateParams(
+  bodyText: string,
+  variableMapping: Record<string, string> | null | undefined,
+  lead: Record<string, unknown>,
+): string[] {
+  const mapping = variableMapping ?? {}
+  const indices = new Set<string>()
+  for (const m of bodyText.matchAll(/\{\{\s*(\d+)\s*\}\}/g)) indices.add(m[1])
+  return [...indices].sort((a, b) => Number(a) - Number(b)).map((idx) => resolveValue(mapping[idx], lead))
+}

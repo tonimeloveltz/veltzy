@@ -2,7 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders } from '../_shared/cors.ts'
 import { buildAudiencePlan } from '../_shared/blast-audience.ts'
 import { computeBlastSchedule, type ScheduleItem } from '../_shared/blast-schedule.ts'
-import { getTemplateBodyText, renderTemplateBody } from '../_shared/blast-render.ts'
+import { getTemplateBodyText, renderTemplateBody, resolveTemplateParams } from '../_shared/blast-render.ts'
 
 // blast-dispatch (mkt-ativo · SPEC §2a/§3). Fluxo: gate por-empresa (early-return,
 // precedente sdr-ai) → resolve provider (cloud_api RECUSADO na Fase 1: HSM real =
@@ -108,29 +108,29 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: `Campanha em status '${campaign.status}' nao pode ser disparada` }, corsHeaders, 409)
     }
 
-    // ---- Provider da company: Fase 1 = waha/evolution/(zapi) por TEXTO renderizado.
-    // cloud_api RECUSADO aqui (HSM real = sendTemplate + ramo cloud_api na fila = proximo corte).
-    // Leitura direta de active_whatsapp_provider (o consumidor process-message-queue resolve
-    // o envio real por-provider; aqui so preciso barrar cloud_api). ----
+    // ---- Provider da company. Corte A: cloud_api LIBERADO (modo template HSM).
+    // Leitura direta de active_whatsapp_provider (o consumidor resolve o envio real por-provider). ----
     const { data: companyProvider } = await admin
       .from('companies').select('active_whatsapp_provider').eq('id', companyId).single()
     const provider = (companyProvider?.active_whatsapp_provider as string) ?? 'zapi'
-    if (provider === 'cloud_api') {
-      return jsonResponse({ skipped: true, reason: 'cloud_api_proximo_corte',
-        note: 'Disparo via Cloud API (HSM aprovado) sera liberado no proximo corte.' }, corsHeaders, 409)
-    }
+    const isCloudApi = provider === 'cloud_api'
 
-    // ---- Template: fonte do conteudo. Fase 1 envia o BODY renderizado como texto. ----
+    // ---- Template: fonte do conteudo. cloud_api = template HSM (params separados);
+    // waha/evolution = BODY renderizado como texto. ----
     if (!campaign.template_id) {
       return jsonResponse({ error: 'Campanha sem template_id' }, corsHeaders, 400)
     }
     const { data: template } = await veltzy
       .from('whatsapp_templates')
-      .select('id, company_id, components, status')
+      .select('id, company_id, name, language, components, status')
       .eq('id', campaign.template_id)
       .single()
     if (!template || template.company_id !== companyId) {
       return jsonResponse({ error: 'Template nao encontrado' }, corsHeaders, 404)
+    }
+    // Cloud API oficial: a Meta so entrega template APROVADO. Recusa cedo se nao estiver.
+    if (isCloudApi && template.status !== 'APPROVED') {
+      return jsonResponse({ error: `Template '${template.name}' nao esta APPROVED (status: ${template.status}). Cloud API exige template aprovado.`, reason: 'template_not_approved' }, corsHeaders, 422)
     }
     const bodyText = getTemplateBodyText(template.components)
     if (!bodyText) {
@@ -168,31 +168,45 @@ Deno.serve(async (req) => {
       .upsert(recipientRows, { onConflict: 'campaign_id,lead_id', ignoreDuplicates: true })
     if (recErr) return jsonResponse({ error: `Falha ao criar recipients: ${recErr.message}` }, corsHeaders, 500)
 
-    // ---- Escalonamento anti-ban (§4bis). enforce=true: Fase 1 so libera canal
-    // NAO-OFICIAL (waha/evolution/zapi), todos sob o piso anti-ban. ----
+    // ---- Escalonamento (§4bis). enforce=true (nao-oficial waha/evolution/zapi) aplica o
+    // piso anti-ban; cloud_api OFICIAL nao (enforce=false = espacamento leve, limites da Meta). ----
     const scheduleItems: ScheduleItem[] = audience.map((l: { whatsapp_instance_name: string | null }) => ({
       instanceKey: l.whatsapp_instance_name ?? 'default',
     }))
     const schedule = computeBlastSchedule(scheduleItems, {
       throttle: (campaign.throttle_config ?? null) as Parameters<typeof computeBlastSchedule>[1]['throttle'],
-      enforce: true,
+      enforce: !isCloudApi,
       now: new Date(campaign.scheduled_at ? new Date(campaign.scheduled_at) : new Date()),
       tzOffsetMinutes: BRT_OFFSET_MINUTES,
     })
 
-    // ---- EXPANDE em message_queue: um item por recipient, texto renderizado do
-    // template, scheduled_at do schedule anti-ban, source='campaign'. O consumidor
-    // (process-message-queue, ja com ramo waha) pega e envia pelo provider da company. ----
+    // ---- EXPANDE em message_queue (source='campaign'), um item por recipient. O consumidor
+    // (process-message-queue) envia pelo provider da company. cloud_api = message_type='template'
+    // + metadata (name/language/params resolvidos por-recipient); demais = texto renderizado. ----
     const variableMapping = (campaign.variable_mapping ?? {}) as Record<string, string>
-    const queueRows = audience.map((lead: Record<string, unknown>, i: number) => ({
-      company_id: companyId,
-      lead_id: lead.id as string,
-      content: renderTemplateBody(bodyText, variableMapping, lead),
-      message_type: 'text',
-      scheduled_at: schedule[i].scheduled_at,
-      source: 'campaign',
-      instance_name: (lead.whatsapp_instance_name as string) ?? null,
-    }))
+    const queueRows = audience.map((lead: Record<string, unknown>, i: number) => {
+      const base = {
+        company_id: companyId,
+        lead_id: lead.id as string,
+        // content sempre carrega o texto renderizado (historico/inbox), mesmo no template.
+        content: renderTemplateBody(bodyText, variableMapping, lead),
+        scheduled_at: schedule[i].scheduled_at,
+        source: 'campaign',
+        instance_name: (lead.whatsapp_instance_name as string) ?? null,
+      }
+      if (isCloudApi) {
+        return {
+          ...base,
+          message_type: 'template',
+          metadata: {
+            template_name: template.name,
+            language: template.language,
+            params: resolveTemplateParams(bodyText, variableMapping, lead),
+          },
+        }
+      }
+      return { ...base, message_type: 'text' }
+    })
     const { data: inserted, error: queueErr } = await veltzy
       .from('message_queue')
       .insert(queueRows)

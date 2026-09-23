@@ -1,5 +1,5 @@
 import { assertEquals } from 'jsr:@std/assert@1'
-import { getTemplateBodyText, renderTemplateBody } from './blast-render.ts'
+import { getTemplateBodyText, renderTemplateBody, resolveTemplateParams } from './blast-render.ts'
 
 Deno.test('getTemplateBodyText: pega o BODY, ignora HEADER/FOOTER', () => {
   const components = [
@@ -52,4 +52,28 @@ Deno.test('render: tolera espacos dentro das chaves {{ 1 }}', () => {
 
 Deno.test('render: mapping nulo → todos os placeholders viram vazio', () => {
   assertEquals(renderTemplateBody('a{{1}}b', null, {}), 'ab')
+})
+
+Deno.test('resolveTemplateParams: array em ordem crescente das variaveis', () => {
+  const params = resolveTemplateParams(
+    'Ola {{1}}, aproveite {{2}}!',
+    { '1': 'lead.name', '2': 'Black Friday' },
+    { name: 'Maria' },
+  )
+  assertEquals(params, ['Maria', 'Black Friday'])
+})
+
+Deno.test('resolveTemplateParams: sem variaveis → array vazio', () => {
+  assertEquals(resolveTemplateParams('texto fixo', { '1': 'lead.name' }, { name: 'X' }), [])
+})
+
+Deno.test('resolveTemplateParams: indice sem mapping / campo nulo → string vazia na posicao', () => {
+  assertEquals(resolveTemplateParams('{{1}} {{2}}', { '1': 'lead.name' }, { name: null }), ['', ''])
+})
+
+Deno.test('resolveTemplateParams: ordem segue o indice, nao a ocorrencia', () => {
+  assertEquals(
+    resolveTemplateParams('{{2}} antes de {{1}}', { '1': 'A', '2': 'B' }, {}),
+    ['A', 'B'],
+  )
 })
