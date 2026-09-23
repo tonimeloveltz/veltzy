@@ -1,6 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders } from '../_shared/cors.ts'
-import { buildAudiencePlan } from '../_shared/blast-audience.ts'
+import { buildAudiencePlan, leadIdsInStages } from '../_shared/blast-audience.ts'
 import { computeBlastSchedule, type ScheduleItem } from '../_shared/blast-schedule.ts'
 import { getTemplateBodyText, renderTemplateBody, resolveTemplateParams } from '../_shared/blast-render.ts'
 
@@ -147,6 +147,22 @@ Deno.serve(async (req) => {
     if (plan.temperatureIn) q = q.in('temperature', plan.temperatureIn)
     if (plan.tagsOverlap) q = q.overlaps('tags', plan.tagsOverlap)
     if (plan.sourceEq) q = q.eq('source_id', plan.sourceEq)
+
+    // Segmentação por ETAPA (critério A estrito): resolve os lead_ids cujo deal ABERTO
+    // mais recente está num dos stages e restringe a audiência a eles.
+    if (plan.stageIn) {
+      const { data: openDeals, error: dealsErr } = await veltzy
+        .from('deals')
+        .select('lead_id, stage_id, created_at')
+        .eq('company_id', companyId)
+        .eq('status', 'open')
+      if (dealsErr) return jsonResponse({ error: `Falha ao resolver etapas: ${dealsErr.message}` }, corsHeaders, 500)
+      const stageLeadIds = leadIdsInStages(openDeals ?? [], plan.stageIn)
+      if (stageLeadIds.length === 0) {
+        return jsonResponse({ ok: true, recipients: 0, note: 'Nenhum lead na(s) etapa(s) selecionada(s)' }, corsHeaders)
+      }
+      q = q.in('id', stageLeadIds)
+    }
 
     const { data: leads, error: leadsErr } = await q
     if (leadsErr) return jsonResponse({ error: `Falha ao resolver audiencia: ${leadsErr.message}` }, corsHeaders, 500)
