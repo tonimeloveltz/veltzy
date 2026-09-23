@@ -26,7 +26,7 @@ Deno.serve(async (req) => {
     const now = new Date()
     const { data: runs } = await veltzy
       .from('cadence_runs')
-      .select('id, cadence_id, lead_id, company_id, current_step, started_at')
+      .select('id, cadence_id, lead_id, company_id, current_step, started_at, initial_stage_id')
       .eq('status', 'active')
       .lte('next_run_at', now.toISOString())
       .order('next_run_at', { ascending: true })
@@ -72,17 +72,32 @@ Deno.serve(async (req) => {
           .single()
         if (!lead) { await failRun(veltzy, run.id, 'lead_missing'); failed++; continue }
 
-        // Sinais de cancelamento. opt-out e resposta = obrigatórios; stage = fase 2 (flag pronto).
+        // Sinais de cancelamento. opt-out e resposta = obrigatórios.
         const { count: replyCount } = await veltzy
           .from('messages')
           .select('id', { count: 'exact', head: true })
           .eq('lead_id', run.lead_id)
           .eq('sender_type', 'lead')
           .gt('created_at', run.started_at)
+
+        // stageChanged (Fase 2): compara o stage do deal aberto recente com o snapshot
+        // do START (initial_stage_id). Baseline LAZY: se o run nasceu sem snapshot
+        // (ex. start manual do front), grava agora e NÃO considera mudança neste tick.
+        const { data: curDeal } = await veltzy
+          .from('deals').select('stage_id').eq('lead_id', run.lead_id).eq('status', 'open')
+          .order('created_at', { ascending: false }).limit(1).maybeSingle()
+        const currentStage = (curDeal?.stage_id as string | null) ?? null
+        let stageChanged = false
+        if (run.initial_stage_id == null) {
+          await veltzy.from('cadence_runs').update({ initial_stage_id: currentStage }).eq('id', run.id)
+        } else {
+          stageChanged = currentStage !== run.initial_stage_id
+        }
+
         const signals = {
           optOut: !!lead.marketing_opt_out,
           leadResponded: (replyCount ?? 0) > 0,
-          stageChanged: false, // TODO Fase 2: detectar mudança de stage (deals) desde started_at
+          stageChanged,
         }
 
         const decision = decideCadenceAction(

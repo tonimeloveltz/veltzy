@@ -3,6 +3,7 @@ import { AlertTriangle, Check, Loader2, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth.store'
 import { useCampaignTemplates, useAudienceCount, useCreateCampaign, useDispatchCampaign } from '@/hooks/use-campaigns'
+import { useCadences } from '@/hooks/use-cadences'
 import { leadTemperatureConfig } from '@/lib/lead-config'
 import { getTemplateBody, extractVariables } from '@/lib/template-render'
 import { StageMultiSelect } from '@/components/mkt-ativo/stage-multi-select'
@@ -45,6 +46,11 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
   const [stageIds, setStageIds] = useState<string[]>([])
   // varMapping[n] = 'lead.x' ou, se fixo, o proprio texto.
   const [varMapping, setVarMapping] = useState<Record<string, string>>({})
+  // Follow-up pós-campanha (Fase 2): '' = nenhum; senão cadência + modo/delay.
+  const [followupCadenceId, setFollowupCadenceId] = useState('')
+  const [followupMode, setFollowupMode] = useState<'immediate' | 'no_reply'>('immediate')
+  const [followupDays, setFollowupDays] = useState(3)
+  const { data: cadences } = useCadences()
 
   const { data: templates } = useCampaignTemplates()
   const selectedTemplate = templates?.find((t) => t.id === templateId)
@@ -65,6 +71,7 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
 
   const reset = () => {
     setStep(1); setName(''); setTemplateId(''); setTemperatures(new Set()); setStageIds([]); setVarMapping({})
+    setFollowupCadenceId(''); setFollowupMode('immediate'); setFollowupDays(3)
   }
   const close = () => { onOpenChange(false); setTimeout(reset, 200) }
 
@@ -94,6 +101,9 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
         template_id: templateId,
         variable_mapping: buildMapping(),
         audience_filter: audienceFilter,
+        followup_cadence_id: followupCadenceId || null,
+        followup_mode: followupCadenceId ? followupMode : 'none',
+        followup_delay_days: followupCadenceId && followupMode === 'no_reply' ? followupDays : 0,
       })
       await dispatchCampaign.mutateAsync(campaign.id)
       close()
@@ -249,6 +259,38 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
                 </div>
               </div>
             )}
+
+            {/* Follow-up pós-campanha (opcional): ao terminar, inscreve numa cadência. */}
+            <div className="space-y-1.5 rounded-md border p-3">
+              <Label>Follow-up (opcional)</Label>
+              <Select value={followupCadenceId || 'none'} onValueChange={(v) => setFollowupCadenceId(v === 'none' ? '' : v)}>
+                <SelectTrigger><SelectValue placeholder="Sem follow-up" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sem follow-up</SelectItem>
+                  {(cadences ?? []).filter((c) => c.is_enabled).map((c) => (
+                    <SelectItem key={c.id} value={c.id}>Iniciar cadência: {c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {followupCadenceId && (
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <button type="button" onClick={() => setFollowupMode('immediate')}
+                    className={cn('rounded-full border px-3 py-1 text-sm', followupMode === 'immediate' ? 'border-primary bg-primary/10 text-primary' : 'border-input text-muted-foreground')}>
+                    Ao concluir
+                  </button>
+                  <button type="button" onClick={() => setFollowupMode('no_reply')}
+                    className={cn('rounded-full border px-3 py-1 text-sm', followupMode === 'no_reply' ? 'border-primary bg-primary/10 text-primary' : 'border-input text-muted-foreground')}>
+                    Sem resposta após
+                  </button>
+                  {followupMode === 'no_reply' && (
+                    <span className="flex items-center gap-1 text-sm">
+                      <Input type="number" min={1} className="w-16" value={String(followupDays)}
+                        onChange={(e) => setFollowupDays(Number(e.target.value))} /> dias
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
