@@ -12,7 +12,8 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import type { CadenceStepAction, CadenceTriggerEvent } from '@/types/database'
+import { StageMultiSelect } from '@/components/mkt-ativo/stage-multi-select'
+import type { CadenceStepAction, CadenceTriggerEvent, CadenceCondition } from '@/types/database'
 
 interface StepDraft {
   action_type: CadenceStepAction
@@ -42,6 +43,7 @@ export function CadenceForm({ open, onOpenChange }: Props) {
   const [name, setName] = useState('')
   const [startMode, setStartMode] = useState<'manual' | 'event'>('manual')
   const [triggerEvent, setTriggerEvent] = useState<CadenceTriggerEvent>('lead_created')
+  const [triggerStageIds, setTriggerStageIds] = useState<string[]>([])
   const [cancelOnStage, setCancelOnStage] = useState(false)
   const [steps, setSteps] = useState<StepDraft[]>([{ action_type: 'send_message', config: {} }])
 
@@ -49,7 +51,7 @@ export function CadenceForm({ open, onOpenChange }: Props) {
   const createCadence = useCreateCadence()
 
   const reset = () => {
-    setName(''); setStartMode('manual'); setTriggerEvent('lead_created'); setCancelOnStage(false)
+    setName(''); setStartMode('manual'); setTriggerEvent('lead_created'); setTriggerStageIds([]); setCancelOnStage(false)
     setSteps([{ action_type: 'send_message', config: {} }])
   }
   const close = () => { onOpenChange(false); setTimeout(reset, 200) }
@@ -66,7 +68,9 @@ export function CadenceForm({ open, onOpenChange }: Props) {
       await createCadence.mutateAsync({
         name: name.trim(),
         trigger_event: startMode === 'event' ? triggerEvent : null,
-        trigger_conditions: [], // editor de condições = evolução futura (backend já suporta)
+        trigger_conditions: (startMode === 'event' && triggerStageIds.length > 0
+          ? [{ field: 'stage_id', operator: 'in', value: triggerStageIds }]
+          : []) as CadenceCondition[],
         cancel_on_stage_change: cancelOnStage,
         steps: steps.map((s) => ({ action_type: s.action_type, config: s.config })),
       })
@@ -99,12 +103,18 @@ export function CadenceForm({ open, onOpenChange }: Props) {
               </button>
             </div>
             {startMode === 'event' && (
-              <Select value={triggerEvent} onValueChange={(v) => setTriggerEvent(v as CadenceTriggerEvent)}>
-                <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {TRIGGER_EVENTS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <>
+                <Select value={triggerEvent} onValueChange={(v) => setTriggerEvent(v as CadenceTriggerEvent)}>
+                  <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {TRIGGER_EVENTS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <div className="mt-2 space-y-1.5">
+                  <Label>Só nestas etapas (condição opcional)</Label>
+                  <StageMultiSelect value={triggerStageIds} onChange={setTriggerStageIds} />
+                </div>
+              </>
             )}
           </div>
 
