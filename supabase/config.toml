@@ -412,6 +412,10 @@ verify_jwt = false
 [functions.process-message-queue]
 verify_jwt = false
 
+# Cron do mkt-ativo (Corte B): avanca cadence_runs vencidos. Auth por cron-secret/service key.
+[functions.process-cadences]
+verify_jwt = false
+
 [functions.send-task-reminders]
 verify_jwt = false
 
