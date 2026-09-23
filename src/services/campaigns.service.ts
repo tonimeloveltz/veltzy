@@ -5,6 +5,7 @@ import type {
   BlastRecipient,
 } from '@/types/database'
 import type { WhatsAppTemplate } from '@/types/whatsapp-template'
+import { leadIdsInStages } from '@/lib/stage-audience'
 
 /** Campanha com o template embedado (nome/status) para a lista. */
 export interface CampaignWithTemplate extends BlastCampaign {
@@ -46,6 +47,15 @@ export const countAudience = async (companyId: string, filter: AudienceFilter): 
   if (filter.temperature?.length) q = q.in('temperature', filter.temperature)
   if (filter.tags?.length) q = q.overlaps('tags', filter.tags)
   if (filter.source_id) q = q.eq('source_id', filter.source_id)
+  // Etapa: resolve os lead_ids pelo deal aberto mais recente (mesmo critério da edge),
+  // p/ a contagem ao vivo bater com o disparo real.
+  if (filter.stage_id?.length) {
+    const { data: openDeals } = await veltzy()
+      .from('deals').select('lead_id, stage_id, created_at').eq('company_id', companyId).eq('status', 'open')
+    const stageLeadIds = leadIdsInStages(openDeals ?? [], filter.stage_id)
+    if (stageLeadIds.length === 0) return 0
+    q = q.in('id', stageLeadIds)
+  }
   const { count, error } = await q
   if (error) throw error
   return count ?? 0
