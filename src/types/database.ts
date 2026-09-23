@@ -73,6 +73,57 @@ export interface BlastRecipient {
   created_at: string
 }
 
+// ---- mkt-ativo Corte B (cadências / drip) ----
+export type CadenceStepAction =
+  | 'send_message' | 'send_template' | 'wait' | 'add_tag' | 'remove_tag' | 'change_stage'
+export type CadenceRunStatus = 'active' | 'completed' | 'cancelled' | 'failed'
+export type CadenceTriggerEvent =
+  | 'lead_created' | 'lead_stage_changed' | 'lead_temperature_changed'
+  | 'message_received' | 'no_response' | 'deal_closed' | 'lead_lost'
+
+export interface CadenceCondition {
+  field: string
+  operator: 'eq' | 'neq' | 'gt' | 'lt' | 'contains' | 'in'
+  value: unknown
+}
+
+export interface Cadence {
+  id: string
+  company_id: string
+  name: string
+  is_enabled: boolean
+  cancel_on_stage_change: boolean
+  trigger_event: CadenceTriggerEvent | null
+  trigger_conditions: CadenceCondition[]
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CadenceStep {
+  id: string
+  cadence_id: string
+  step_order: number
+  action_type: CadenceStepAction
+  config: Record<string, unknown>
+  created_at: string
+}
+
+export interface CadenceRun {
+  id: string
+  cadence_id: string
+  lead_id: string
+  company_id: string
+  current_step: number
+  status: CadenceRunStatus
+  next_run_at: string
+  cancel_reason: string | null
+  started_at: string
+  completed_at: string | null
+  created_at: string
+  updated_at: string
+}
+
 /** Allowlist de categorias de conexao WhatsApp (Hub-owned, Veltzy le via RLS). */
 export interface WhatsAppCategories {
   official: boolean
