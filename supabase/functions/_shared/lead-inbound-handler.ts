@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { resolvePipelineByOrigin, type OriginIdentifiers, type ResolvedPipeline } from './resolve-pipeline-by-origin.ts'
+import { isOptOutMessage } from './optout-detect.ts'
 
 // --- Tipos ---
 
@@ -263,6 +264,20 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
   // Duplicata: pular todos os efeitos colaterais (transcricao, SDR, notificacao)
   if (isDuplicate) {
     return { leadId: lead.id, isNewLead }
+  }
+
+  // mkt-ativo: OPT-OUT automatico. Se o contato (inbound real, senderType='lead')
+  // mandou uma keyword de saida (SAIR/PARE/CANCELAR...), marca marketing_opt_out.
+  // ADITIVO: nao altera transcricao/SDR/automacoes/cadencias abaixo; o blast-dispatch
+  // e o process-cadences ja EXCLUEM marketing_opt_out=true, entao passa a valer em tudo.
+  // Nao envia confirmacao (quem pede SAIR quer silencio; o registro e a prova de compliance).
+  const senderIsLead = (params.senderType ?? 'lead') === 'lead'
+  if (!skipSideEffects && senderIsLead && isOptOutMessage(params.content)) {
+    await supabase
+      .from('leads')
+      .update({ marketing_opt_out: true, opt_out_at: new Date().toISOString() })
+      .eq('id', lead.id)
+      .eq('marketing_opt_out', false) // idempotente: so marca na 1a vez
   }
 
   // 6. Transcricao de audio (async, nao bloqueia)
