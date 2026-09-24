@@ -66,6 +66,32 @@ export const deleteLeadMessages = async (companyId: string, leadId: string): Pro
   return data.length
 }
 
+/**
+ * Edita o texto de uma mensagem ja enviada, no WhatsApp E no banco.
+ *
+ * Passa pela edge function de proposito: veltzy.messages nao tem policy de
+ * UPDATE para authenticated, entao um .update() daqui apagaria zero linhas
+ * calado. E so a edge function tem a chave do Hub para falar com o provider.
+ *
+ * Se o provider recusar, a edge function NAO grava: o banco tem que refletir o
+ * que esta no aparelho do lead.
+ */
+export const editMessage = async (
+  companyId: string,
+  messageId: string,
+  content: string,
+): Promise<Message> => {
+  const { data, error } = await supabase.functions.invoke('whatsapp-edit', {
+    body: { messageId, content, companyId },
+  })
+  if (error) {
+    // O corpo do erro traz a frase util ("passou de 15 minutos", etc).
+    const detail = await (error as { context?: Response }).context?.json?.().catch(() => null)
+    throw new Error(detail?.error ?? 'Erro ao editar mensagem')
+  }
+  return data as Message
+}
+
 export const markAsRead = async (companyId: string, leadId: string): Promise<void> => {
   const { error } = await db()
     .from('leads')
