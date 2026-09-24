@@ -492,6 +492,16 @@ export interface Message {
   instance_name: string | null
   delivery_status: DeliveryStatus
   delivery_error: string | null
+  /**
+   * Provider que de fato enviou/recebeu esta mensagem. null nas mensagens
+   * anteriores ao carimbo no whatsapp-send. E por ele que a UI decide se
+   * oferece editar: Cloud API e Z-API nao editam.
+   */
+  whatsapp_provider: WhatsAppProviderType | null
+  /** Quando a mensagem foi editada no WhatsApp. null = nunca editada. */
+  edited_at: string | null
+  /** Texto do primeiro envio, gravado so na primeira edicao. */
+  original_content: string | null
   is_scheduled: boolean
   scheduled_at: string | null
   is_read: boolean

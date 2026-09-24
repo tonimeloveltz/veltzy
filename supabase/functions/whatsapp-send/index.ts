@@ -165,7 +165,12 @@ Deno.serve(async (req) => {
       // Evolution usa instanceName; WAHA usa sessionName (mesmo valor resolvido).
       try {
         const provider = createProvider(activeProvider)
-        await provider.sendMessage({} as import('../_shared/whatsapp-provider.ts').WhatsAppConfig, {
+        // Capturar o retorno e o que torna a mensagem editavel depois: sem
+        // external_id nao existe id no provider para o whatsapp-edit usar.
+        // Seguro para o indice unico (company_id, external_id) porque os
+        // webhooks do Hub descartam fromMe, entao o outbound nao volta pelo
+        // inbound. Nao mexer nesse filtro.
+        const result = await provider.sendMessage({} as import('../_shared/whatsapp-provider.ts').WhatsAppConfig, {
           phone: lead.phone,
           content: payload.content,
           type: msgType,
@@ -174,6 +179,7 @@ Deno.serve(async (req) => {
           ...(activeProvider === 'waha' ? { sessionName: instanceName } : { instanceName }),
           companyId,
         })
+        externalId = result.externalId ?? null
       } catch (err) {
         console.error(`[whatsapp-send] ${activeProvider} send failed:`, err)
         deliveryStatus = 'failed'
@@ -254,6 +260,9 @@ Deno.serve(async (req) => {
         delivery_status: deliveryStatus,
         delivery_error: deliveryError,
         external_id: externalId,
+        // Carimba QUEM enviou. E por ela que o whatsapp-edit edita pelo provider
+        // do envio, mesmo que o lead mude de provider depois.
+        whatsapp_provider: activeProvider,
       })
       .select()
       .single()
