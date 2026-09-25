@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/select'
 import { LeadTagsInput } from '@/components/pipeline/lead-tags-input'
 import { LeadDealsPanel } from '@/components/inbox/lead-deals-panel'
+import { LeadCadencePanel } from '@/components/inbox/lead-cadence-panel'
 import { CreateTaskModal } from '@/components/tarefas/create-task-modal'
 import { useUpdateLead } from '@/hooks/use-leads'
 import { useLeadSources } from '@/hooks/use-lead-sources'
@@ -400,6 +401,9 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
 
         {/* Deals */}
         <LeadDealsPanel leadId={lead.id} leadName={lead.name} />
+
+        {/* Cadencia */}
+        <LeadCadencePanel leadId={lead.id} />
 
         {/* Observations - auto-save */}
         <div className="px-4 py-4 border-b space-y-2">

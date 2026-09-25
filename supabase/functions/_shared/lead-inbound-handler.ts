@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { resolvePipelineByOrigin, type OriginIdentifiers, type ResolvedPipeline } from './resolve-pipeline-by-origin.ts'
+import { isOptOutMessage } from './optout-detect.ts'
 
 // --- Tipos ---
 
@@ -265,6 +266,20 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
     return { leadId: lead.id, isNewLead }
   }
 
+  // mkt-ativo: OPT-OUT automatico. Se o contato (inbound real, senderType='lead')
+  // mandou uma keyword de saida (SAIR/PARE/CANCELAR...), marca marketing_opt_out.
+  // ADITIVO: nao altera transcricao/SDR/automacoes/cadencias abaixo; o blast-dispatch
+  // e o process-cadences ja EXCLUEM marketing_opt_out=true, entao passa a valer em tudo.
+  // Nao envia confirmacao (quem pede SAIR quer silencio; o registro e a prova de compliance).
+  const senderIsLead = (params.senderType ?? 'lead') === 'lead'
+  if (!skipSideEffects && senderIsLead && isOptOutMessage(params.content)) {
+    await supabase
+      .from('leads')
+      .update({ marketing_opt_out: true, opt_out_at: new Date().toISOString() })
+      .eq('id', lead.id)
+      .eq('marketing_opt_out', false) // idempotente: so marca na 1a vez
+  }
+
   // 6. Transcricao de audio (async, nao bloqueia)
   // Roteada pela edge ai-transcribe do Hub, que detem a chave, decide acesso
   // (check_ai_access) e loga o custo por empresa. Nota: usa fileUrl original
@@ -359,16 +374,28 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
   // Automacoes: dispara para TODOS os sources (webhook incluso).
   // skipSideEffects (echoes/history): nao disparar automacao.
   if (!skipSideEffects) {
+    const trigger = isNewLead ? 'lead_created' : 'message_received'
     try {
       fetch(`${params.supabaseUrl}/functions/v1/run-automations`, {
         method: 'POST',
         headers: fnHeaders,
         body: JSON.stringify({
-          trigger: isNewLead ? 'lead_created' : 'message_received',
+          trigger,
           leadId: lead.id,
           companyId: params.companyId,
           triggerData: { messageContent: params.content, source: params.source },
         }),
+      }).catch(() => {})
+    } catch { /* best-effort */ }
+
+    // mkt-ativo Corte B: START por EVENTO das cadencias, ADITIVO e ao LADO do
+    // run-automations (nao toca o core). Gate mkt_ativo_enabled e idempotencia ficam
+    // na propria start-cadences. best-effort (nao bloqueia o inbound).
+    try {
+      fetch(`${params.supabaseUrl}/functions/v1/start-cadences`, {
+        method: 'POST',
+        headers: fnHeaders,
+        body: JSON.stringify({ trigger, leadId: lead.id, companyId: params.companyId }),
       }).catch(() => {})
     } catch { /* best-effort */ }
   }

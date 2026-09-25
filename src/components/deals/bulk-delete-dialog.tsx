@@ -13,7 +13,7 @@ interface BulkDeleteDialogProps {
   onClose: () => void
   leadIds: string[]
   onSuccess: () => void
-  mode?: 'leads' | 'deals'
+  mode?: 'leads' | 'deals' | 'contacts'
 }
 
 export const BulkDeleteDialog = ({ open, onClose, leadIds, onSuccess, mode = 'leads' }: BulkDeleteDialogProps) => {
@@ -24,8 +24,9 @@ export const BulkDeleteDialog = ({ open, onClose, leadIds, onSuccess, mode = 'le
   }
 
   // Em 'deals' os ids sao de deal: o caminho de leads apagaria o contato, nao
-  // o negocio, caso algum id viesse a casar.
-  const bulkDeleteLeads = useBulkDelete(done)
+  // o negocio, caso algum id viesse a casar. 'contacts' e o MESMO caminho de
+  // 'leads' (contato = lead), so muda o nome que o usuario le.
+  const bulkDeleteLeads = useBulkDelete(done, mode === 'contacts' ? 'Contatos' : 'Leads')
   const bulkDeleteDeals = useBulkDeleteDeals(done)
   const bulkDelete = mode === 'deals' ? bulkDeleteDeals : bulkDeleteLeads
 
@@ -35,7 +36,7 @@ export const BulkDeleteDialog = ({ open, onClose, leadIds, onSuccess, mode = 'le
   }
 
   const handleDelete = async () => {
-    if (confirmText !== 'EXCLUIR') return
+    if (!isConfirmed) return
     if (mode === 'deals') {
       await bulkDeleteDeals.mutateAsync({ dealIds: leadIds })
     } else {
@@ -43,8 +44,12 @@ export const BulkDeleteDialog = ({ open, onClose, leadIds, onSuccess, mode = 'le
     }
   }
 
-  const isConfirmed = confirmText === 'EXCLUIR'
-  const label = mode === 'deals' ? 'negócio' : 'lead'
+  // Contatos confirma so no botao: o aviso do cascade ja e a barreira, e a
+  // selecao em lote ali e explicita (checkbox por linha). Negocios e leads
+  // seguem exigindo digitar EXCLUIR - comportamento ja em producao.
+  const requiresTyping = mode !== 'contacts'
+  const isConfirmed = !requiresTyping || confirmText === 'EXCLUIR'
+  const label = mode === 'deals' ? 'negócio' : mode === 'contacts' ? 'contato' : 'lead'
 
   return (
     <AlertDialog open={open} onOpenChange={(v) => !v && handleClose()}>
@@ -55,20 +60,25 @@ export const BulkDeleteDialog = ({ open, onClose, leadIds, onSuccess, mode = 'le
           </AlertDialogTitle>
           <AlertDialogDescription>
             Esta acao nao pode ser desfeita. Todos os dados dos {label}s selecionados serao removidos permanentemente.
+            {/* `deals.lead_id` e ON DELETE CASCADE: apagar o contato apaga os
+                negocios dele junto. Quem clica precisa saber disso ANTES. */}
+            {mode === 'contacts' && ' Os negócios vinculados a esses contatos também serão excluídos.'}
           </AlertDialogDescription>
         </AlertDialogHeader>
 
-        <div className="space-y-2">
-          <p className="text-sm text-muted-foreground">
-            Digite <span className="font-mono font-bold text-foreground">EXCLUIR</span> para confirmar:
-          </p>
-          <Input
-            value={confirmText}
-            onChange={(e) => setConfirmText(e.target.value)}
-            placeholder="EXCLUIR"
-            autoComplete="off"
-          />
-        </div>
+        {requiresTyping && (
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              Digite <span className="font-mono font-bold text-foreground">EXCLUIR</span> para confirmar:
+            </p>
+            <Input
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              placeholder="EXCLUIR"
+              autoComplete="off"
+            />
+          </div>
+        )}
 
         <AlertDialogFooter>
           <Button variant="outline" onClick={handleClose} disabled={bulkDelete.isPending}>

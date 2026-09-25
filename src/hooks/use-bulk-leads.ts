@@ -3,7 +3,7 @@ import { useAuthStore } from '@/stores/auth.store'
 import { toast } from 'sonner'
 import * as leadsService from '@/services/leads.service'
 import * as dealsService from '@/services/deals.service'
-import { invalidateDealDependentQueries } from '@/lib/query-keys'
+import { invalidateDealDependentQueries, invalidateLeadDependentQueries } from '@/lib/query-keys'
 import { exportToCsv, exportToPdf, exportToXlsx } from '@/lib/export-leads'
 import type { LeadWithDetails } from '@/types/database'
 
@@ -110,7 +110,15 @@ export const useBulkUnarchiveDeals = (onSuccess?: () => void) => {
   })
 }
 
-export const useBulkDelete = (onSuccess?: () => void) => {
+/**
+ * Exclusao em lote de LEADS (= contatos). Apagar o lead leva junto os negocios
+ * dele: `deals.lead_id` e ON DELETE CASCADE. Por isso a invalidacao cobre
+ * tambem deals e as metricas que dependem deles, e nao so ['leads'].
+ *
+ * `entityLabel` so muda o texto do toast: a tela de Contatos chama o mesmo
+ * caminho, e "Leads excluidos" ali seria um nome que o usuario nao ve na UI.
+ */
+export const useBulkDelete = (onSuccess?: () => void, entityLabel: 'Leads' | 'Contatos' = 'Leads') => {
   const companyId = useAuthStore((s) => s.company?.id)
   const user = useAuthStore((s) => s.user)
   const queryClient = useQueryClient()
@@ -122,13 +130,13 @@ export const useBulkDelete = (onSuccess?: () => void) => {
       await leadsService.bulkDelete(companyId, leadIds, user.id)
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['dashboard-leads'] })
-      queryClient.invalidateQueries({ queryKey: ['leads'] })
-      toast.success('Leads excluidos permanentemente')
+      invalidateLeadDependentQueries(queryClient)
+      queryClient.invalidateQueries({ queryKey: ['contacts'] })
+      toast.success(`${entityLabel} excluídos permanentemente`)
       onSuccess?.()
     },
     onError: () => {
-      toast.error('Erro ao excluir leads')
+      toast.error(`Erro ao excluir ${entityLabel.toLowerCase()}`)
     },
   })
 }

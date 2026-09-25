@@ -7,15 +7,18 @@ import { useContacts, type ContactRow } from '@/hooks/use-contacts'
 import { useLeadSources } from '@/hooks/use-lead-sources'
 import { useExportLeads } from '@/hooks/use-export-leads'
 import { useRoles } from '@/hooks/use-roles'
+import { useAuthStore } from '@/stores/auth.store'
 import { leadTemperatureConfig } from '@/lib/lead-config'
 import { LeadSourceBadge } from '@/components/pipeline/lead-source-badge'
 import { ImportLeadsModal } from '@/components/pipeline/import-leads-modal'
 import { NewContactModal } from '@/components/contacts/new-contact-modal'
+import { ContactsBulkActionBar } from '@/components/contacts/contacts-bulk-action-bar'
 import { IdentityCell } from '@/components/shared/identity-cell'
 import { SortButton } from '@/components/shared/sort-button'
 import { useTableSort } from '@/hooks/use-table-sort'
 import { sortRows, type SortValue } from '@/lib/table-sort'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -63,6 +66,7 @@ const ContatosPage = () => {
   const [importModalOpen, setImportModalOpen] = useState(false)
   const [newContactOpen, setNewContactOpen] = useState(false)
   const [editContact, setEditContact] = useState<ContactRow | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -89,6 +93,37 @@ const ContatosPage = () => {
     () => (sort ? sortRows(rows, contactSortAccessors[sort.key], sort.direction) : rows),
     [rows, sort],
   )
+
+  // Excluir contato e a unica acao em lote da tela, e a policy de DELETE em
+  // `leads` so aceita admin da empresa / super_admin. Sem isso a coluna de
+  // selecao existiria para quem nao pode fazer nada com ela.
+  const canBulkDelete = isAdmin
+  // mkt-ativo: quem tem a feature pode selecionar contatos p/ adicionar à cadência
+  // (START manual), mesmo sem poder excluir. A coluna de seleção + a barra aparecem
+  // se qualquer uma das ações estiver disponível.
+  const mktAtivo = useAuthStore((s) => s.company?.features?.mkt_ativo_enabled) === true
+  const canSelect = canBulkDelete || mktAtivo
+  const colCount = canSelect ? 7 : 6
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  // Selecao "todos" opera sobre as linhas visiveis (respeita busca e filtros).
+  const toggleSelectAll = () => {
+    const allVisibleSelected = sortedRows.length > 0 && sortedRows.every((c) => selectedIds.has(c.id))
+    setSelectedIds(allVisibleSelected ? new Set() : new Set(sortedRows.map((c) => c.id)))
+  }
+
+  const clearSelection = () => setSelectedIds(new Set())
+
+  const allSelected = sortedRows.length > 0 && sortedRows.every((c) => selectedIds.has(c.id))
+  const someSelected = !allSelected && sortedRows.some((c) => selectedIds.has(c.id))
 
   return (
     <div className="min-h-full p-4 sm:p-6">
@@ -166,13 +201,26 @@ const ContatosPage = () => {
           </div>
         </div>
 
+        {/* BULK ACTION BAR */}
+        {canSelect && selectedIds.size > 0 && (
+          <ContactsBulkActionBar selectedIds={selectedIds} onClear={clearSelection} canDelete={canBulkDelete} />
+        )}
+
         {/* TABELA */}
         <div className="glass-card rounded-xl p-5">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border/30">
-                  <th className={cn(thClass, 'text-left w-[25%]')}>
+                  {canSelect && (
+                    <th className={cn(thClass, 'text-left w-[3%]')}>
+                      <Checkbox
+                        checked={allSelected ? true : someSelected ? 'indeterminate' : false}
+                        onCheckedChange={toggleSelectAll}
+                      />
+                    </th>
+                  )}
+                  <th className={cn(thClass, 'text-left w-[22%]')}>
                     <span className="inline-flex items-center gap-1">
                       Contato
                       <SortButton columnKey="contato" label="Contato" sort={sort} onToggle={toggle} />
@@ -209,14 +257,14 @@ const ContatosPage = () => {
                 {isLoading && (
                   [1, 2, 3, 4, 5].map((i) => (
                     <tr key={i} className="border-b border-border/10">
-                      <td colSpan={7} className="py-3"><Skeleton className="h-7 w-full" /></td>
+                      <td colSpan={colCount} className="py-3"><Skeleton className="h-7 w-full" /></td>
                     </tr>
                   ))
                 )}
 
                 {isError && !isLoading && (
                   <tr>
-                    <td colSpan={7} className={cn(tdClass, 'py-12')}>
+                    <td colSpan={colCount} className={cn(tdClass, 'py-12')}>
                       <div className="flex flex-col items-center justify-center gap-3">
                         <AlertCircle className="h-8 w-8 text-destructive" />
                         <p className="text-sm text-muted-foreground">Erro ao carregar contatos</p>
@@ -232,8 +280,20 @@ const ContatosPage = () => {
                     <tr
                       key={c.id}
                       onClick={() => setEditContact(c)}
-                      className="border-b border-border/10 last:border-0 hover:bg-muted/20 transition-smooth cursor-pointer"
+                      className={cn(
+                        'border-b border-border/10 last:border-0 hover:bg-muted/20 transition-smooth cursor-pointer',
+                        selectedIds.has(c.id) && 'bg-primary/5',
+                      )}
                     >
+                      {canSelect && (
+                        <td className={tdClass} onClick={(e) => e.stopPropagation()}>
+                          <Checkbox
+                            checked={selectedIds.has(c.id)}
+                            onCheckedChange={() => toggleSelect(c.id)}
+                          />
+                        </td>
+                      )}
+
                       {/* Contato (identidade rica: nome + telefone no subtitulo) */}
                       <td className={cn(tdClass)}>
                         <IdentityCell
@@ -293,7 +353,7 @@ const ContatosPage = () => {
 
                 {!isLoading && !isError && rows.length === 0 && (
                   <tr>
-                    <td colSpan={7} className={cn(tdClass, 'py-12 text-center text-sm text-muted-foreground')}>
+                    <td colSpan={colCount} className={cn(tdClass, 'py-12 text-center text-sm text-muted-foreground')}>
                       Nenhum contato encontrado
                     </td>
                   </tr>

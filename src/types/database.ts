@@ -15,6 +15,117 @@ export interface CompanyFeatures {
   automation_rules: boolean
   max_users: number
   max_leads: number
+  /** mkt-ativo (disparo em massa). Ausente = false (gate trata). Fonte unica = companies.features. */
+  mkt_ativo_enabled?: boolean
+  /** IA nas cadências (gerar mensagem via Hub). Gate de custo, adicional ao mkt_ativo_enabled. */
+  ai_msg_enabled?: boolean
+}
+
+// ---- mkt-ativo (disparo em massa / campanhas) ----
+export type BlastCampaignStatus =
+  | 'draft' | 'scheduled' | 'queued' | 'running' | 'completed' | 'failed' | 'paused' | 'cancelled'
+export type BlastRecipientStatus = 'pending' | 'queued' | 'sent' | 'failed' | 'skipped'
+
+/** Filtro de audiencia da campanha (Fase 1: campos que existem em veltzy.leads). */
+export interface AudienceFilter {
+  temperature?: LeadTemperature[]
+  tags?: string[]
+  source_id?: string
+  /** Etapa: stage_id do deal aberto mais recente (resolvido na edge via deals). */
+  stage_id?: string[]
+}
+
+/** Override anti-ban por-campanha (§4bis). Ausente = defaults de sistema. */
+export interface ThrottleConfig {
+  delay_min?: number
+  delay_max?: number
+  daily_cap?: number
+  window_start?: number
+  window_end?: number
+}
+
+export interface BlastCampaign {
+  id: string
+  company_id: string
+  name: string
+  template_id: string | null
+  variable_mapping: Record<string, string>
+  audience_filter: AudienceFilter
+  throttle_config: ThrottleConfig | null
+  status: BlastCampaignStatus
+  scheduled_at: string | null
+  started_at: string | null
+  completed_at: string | null
+  total_recipients: number
+  queued_count: number
+  sent_count: number
+  failed_count: number
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface BlastRecipient {
+  id: string
+  campaign_id: string
+  lead_id: string | null
+  phone: string | null
+  status: BlastRecipientStatus
+  message_queue_id: string | null
+  error_message: string | null
+  sent_at: string | null
+  created_at: string
+}
+
+// ---- mkt-ativo Corte B (cadências / drip) ----
+export type CadenceStepAction =
+  | 'send_message' | 'send_template' | 'wait' | 'add_tag' | 'remove_tag' | 'change_stage' | 'generate_ai'
+export type CadenceRunStatus = 'active' | 'completed' | 'cancelled' | 'failed'
+export type CadenceTriggerEvent =
+  | 'lead_created' | 'lead_stage_changed' | 'lead_temperature_changed'
+  | 'message_received' | 'no_response' | 'deal_closed' | 'lead_lost'
+
+export interface CadenceCondition {
+  field: string
+  operator: 'eq' | 'neq' | 'gt' | 'lt' | 'contains' | 'in'
+  value: unknown
+}
+
+export interface Cadence {
+  id: string
+  company_id: string
+  name: string
+  is_enabled: boolean
+  cancel_on_stage_change: boolean
+  trigger_event: CadenceTriggerEvent | null
+  trigger_conditions: CadenceCondition[]
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CadenceStep {
+  id: string
+  cadence_id: string
+  step_order: number
+  action_type: CadenceStepAction
+  config: Record<string, unknown>
+  created_at: string
+}
+
+export interface CadenceRun {
+  id: string
+  cadence_id: string
+  lead_id: string
+  company_id: string
+  current_step: number
+  status: CadenceRunStatus
+  next_run_at: string
+  cancel_reason: string | null
+  started_at: string
+  completed_at: string | null
+  created_at: string
+  updated_at: string
 }
 
 /** Allowlist de categorias de conexao WhatsApp (Hub-owned, Veltzy le via RLS). */
@@ -35,6 +146,7 @@ export interface Company {
   features: CompanyFeatures
   settings: Record<string, unknown>
   whatsapp_categories: WhatsAppCategories | null
+  active_whatsapp_provider: WhatsAppProviderType | null
   is_active: boolean
   created_at: string
   updated_at: string
@@ -443,6 +555,26 @@ export interface LeadWithLastMessage extends Lead {
   lead_sources?: LeadSourceRecord | null
   last_message?: Pick<Message, 'content' | 'sender_type' | 'created_at' | 'message_type'> | null
   unread_count?: number
+}
+
+/**
+ * Evento de contato manual com um lead (veltzy.lead_contact_events).
+ *
+ * IMUTAVEL: a tabela nao tem policy nem GRANT de UPDATE, e nao tem updated_at.
+ * Corrigir um registro e apagar e registrar de novo. Nunca emitir .update():
+ * sem policy de UPDATE a RLS nao casa linha nenhuma e o update "passa" afetando
+ * zero linhas, sem erro -- falha silenciosa.
+ *
+ * `registered_by` e public.profiles.id (NAO auth.uid()), com ON DELETE SET NULL:
+ * vendedor que sai da empresa nao apaga o historico do lead.
+ */
+export interface LeadContactEvent {
+  id: string
+  company_id: string
+  lead_id: string
+  registered_by: string | null
+  contacted_at: string
+  created_at: string
 }
 
 export type AutomationTrigger = 'lead_created' | 'lead_stage_changed' | 'lead_temperature_changed' | 'message_received' | 'no_response' | 'deal_closed' | 'lead_lost'

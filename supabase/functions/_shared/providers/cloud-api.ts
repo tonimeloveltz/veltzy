@@ -3,6 +3,7 @@ import type {
   WhatsAppConfig,
   SendMessagePayload,
   SendMessageResult,
+  SendTemplatePayload,
   StatusResult,
   QrCodeResult,
   ChatEntry,
@@ -70,6 +71,50 @@ export class CloudApiHubProvider implements WhatsAppProvider {
     }
 
     return { externalId: (data as { wamid?: string }).wamid }
+  }
+
+  // Envio de template HSM (canal oficial). Endpoint NOVO do Hub (cloud-api-send-template,
+  // isolado do send-message de prod). Veltzy nao fala com a Graph direto: passa
+  // phone_number_id + template + params resolvidos; o Hub resolve o token da WABA.
+  async sendTemplate(payload: SendTemplatePayload): Promise<SendMessageResult> {
+    const components = payload.params.length > 0
+      ? [{ type: 'body', parameters: payload.params.map((text) => ({ type: 'text', text })) }]
+      : []
+
+    const body = {
+      company_id: payload.companyId,
+      phone_number_id: payload.phoneNumberId,
+      to: payload.phone,
+      template: { name: payload.templateName, language: payload.language, components },
+    }
+
+    const res = await fetch(`${this.hubUrl}/functions/v1/cloud-api-send-template`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': this.hubServiceKey,
+        'Authorization': `Bearer ${this.hubServiceKey}`,
+        'x-veltzy-company-id': payload.companyId,
+      },
+      body: JSON.stringify(body),
+    })
+
+    const data = await res.json().catch(() => ({}))
+
+    if (!res.ok) {
+      // Erro do Hub: { error: { code, message, details, fbtrace_id } } (mesmo shape do send-message).
+      const e = ((data as { error?: Record<string, unknown> })?.error ?? {}) as Record<string, unknown>
+      const parts = [
+        e.code != null ? `[${e.code}]` : null,
+        e.message ?? null,
+        e.details ?? null,
+        e.fbtrace_id ? `fbtrace=${e.fbtrace_id}` : null,
+      ].filter(Boolean)
+      throw new Error(parts.join(' | ') || `Cloud API send-template failed (${res.status})`)
+    }
+
+    // Contrato: { message_id, status }
+    return { externalId: (data as { message_id?: string }).message_id }
   }
 
   async getStatus(_config: WhatsAppConfig): Promise<StatusResult> {

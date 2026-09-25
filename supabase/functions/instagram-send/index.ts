@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 import { getCorsHeaders } from '../_shared/cors.ts'
+import { lerSegredo, instagramTokenSecretName } from '../_shared/vault-secret.ts'
 
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req)
@@ -36,8 +37,12 @@ Deno.serve(async (req) => {
     const { data: lead } = await supabase.from('leads').select('instagram_id').eq('id', leadId).eq('company_id', companyId).single()
     if (!lead?.instagram_id) return new Response(JSON.stringify({ error: 'No Instagram ID' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
-    const { data: connection } = await supabase.from('instagram_connections').select('access_token, page_id').eq('company_id', companyId).single()
+    const { data: connection } = await supabase.from('instagram_connections').select('page_id').eq('company_id', companyId).single()
     if (!connection) return new Response(JSON.stringify({ error: 'No connection' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+
+    // A7: o access_token nao mora mais na coluna — vem do Vault por empresa.
+    const accessToken = await lerSegredo(supabasePublic, instagramTokenSecretName(companyId))
+    if (!accessToken) return new Response(JSON.stringify({ error: 'No connection' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
     await fetch(`https://graph.facebook.com/v18.0/${connection.page_id}/messages`, {
       method: 'POST',
@@ -45,7 +50,7 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         recipient: { id: lead.instagram_id },
         message: { text: content },
-        access_token: connection.access_token,
+        access_token: accessToken,
       }),
     })
 

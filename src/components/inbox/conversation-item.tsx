@@ -3,6 +3,8 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Clock } from 'lucide-react'
 import { timeAgo } from '@/lib/time'
 import { leadDisplayName } from '@/lib/phone'
+import { DeleteConversationButton } from '@/components/inbox/delete-conversation-button'
+import { useRoles } from '@/hooks/use-roles'
 import type { LeadWithLastMessage } from '@/types/database'
 
 interface ConversationItemProps {
@@ -55,64 +57,81 @@ const ConversationItem = ({ lead, isSelected, onClick }: ConversationItemProps) 
   const lastTime = lead.last_message?.created_at ?? lead.updated_at
   const waitingMinutes = getWaitingMinutes(lead)
   const isWarning = waitingMinutes !== null && waitingMinutes >= 15 && !lead.sla_breached
+  const hasUnread = (lead.unread_count ?? 0) > 0
+  const { isManager } = useRoles()
 
   return (
-    <button
-      onClick={onClick}
-      className={cn(
-        'flex w-full items-start gap-3 px-3 py-3 text-left transition-smooth border-l-4',
-        isSelected
-          ? 'bg-primary/10 border-l-primary'
-          : lead.sla_breached
-            ? 'border-l-destructive bg-destructive/5 hover:bg-destructive/10'
-            : 'border-l-transparent hover:bg-muted/50'
-      )}
-    >
-      <div className="relative shrink-0">
-        <Avatar className="h-10 w-10">
-          <AvatarImage src={avatarSrc} alt={lead.name ?? ''} />
-          <AvatarFallback className="text-xs bg-secondary">
-            {leadDisplayName(lead.name, lead.phone).slice(0, 2).toUpperCase()}
-          </AvatarFallback>
-        </Avatar>
-        <span
-          className={cn('absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background', statusDot[lead.conversation_status])}
-        />
-      </div>
+    <div className="relative group">
+      <button
+        onClick={onClick}
+        className={cn(
+          'flex w-full items-start gap-3 px-3 py-3 text-left transition-smooth border-l-4',
+          isSelected
+            ? 'bg-primary/10 border-l-primary'
+            : lead.sla_breached
+              ? 'border-l-destructive bg-destructive/5 hover:bg-destructive/10'
+              : 'border-l-transparent hover:bg-muted/50'
+        )}
+      >
+        <div className="relative shrink-0">
+          <Avatar className="h-10 w-10">
+            <AvatarImage src={avatarSrc} alt={lead.name ?? ''} />
+            <AvatarFallback className="text-xs bg-secondary">
+              {leadDisplayName(lead.name, lead.phone).slice(0, 2).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+          <span
+            className={cn('absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background', statusDot[lead.conversation_status])}
+          />
+        </div>
 
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-sm font-medium truncate">{leadDisplayName(lead.name, lead.phone)}</p>
-          <div className="flex items-center gap-1 shrink-0">
-            {lead.sla_breached && (
-              <Clock className="h-3 w-3 text-destructive" />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-medium truncate">{leadDisplayName(lead.name, lead.phone)}</p>
+            <div className="flex items-center gap-1 shrink-0">
+              {lead.sla_breached && (
+                <Clock className="h-3 w-3 text-destructive" />
+              )}
+              <span className={cn(
+                'text-[10px]',
+                lead.sla_breached ? 'text-destructive font-medium' :
+                isWarning ? 'text-yellow-600 font-medium' :
+                'text-muted-foreground',
+              )}>
+                {timeAgo(lastTime)}
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-1">
+            <p className="text-xs text-muted-foreground truncate flex-1">{messagePreview(lead)}</p>
+            {lead.whatsapp_instance_name && (
+              <span className="text-[9px] text-muted-foreground/60 bg-muted px-1 py-0.5 rounded shrink-0">
+                ...{lead.whatsapp_instance_name.slice(-4)}
+              </span>
             )}
-            <span className={cn(
-              'text-[10px]',
-              lead.sla_breached ? 'text-destructive font-medium' :
-              isWarning ? 'text-yellow-600 font-medium' :
-              'text-muted-foreground',
-            )}>
-              {timeAgo(lastTime)}
-            </span>
           </div>
         </div>
-        <div className="flex items-center gap-1">
-          <p className="text-xs text-muted-foreground truncate flex-1">{messagePreview(lead)}</p>
-          {lead.whatsapp_instance_name && (
-            <span className="text-[9px] text-muted-foreground/60 bg-muted px-1 py-0.5 rounded shrink-0">
-              ...{lead.whatsapp_instance_name.slice(-4)}
-            </span>
-          )}
-        </div>
-      </div>
 
-      {(lead.unread_count ?? 0) > 0 && (
-        <span className="mt-1 flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
-          {lead.unread_count}
-        </span>
+        {hasUnread ? (
+          <span className="mt-[18px] flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
+            {lead.unread_count}
+          </span>
+        ) : isManager ? (
+          // Sem bolinha, reserva a mesma coluna que ela ocuparia: o "x" fica
+          // sempre no mesmo canto, e o horario/preview nao passam por baixo dele.
+          <span className="mt-[18px] h-5 w-5 shrink-0" aria-hidden />
+        ) : null}
+      </button>
+
+      {/* So admin/manager apagam. Em toda conversa, com ou sem nao lidas. */}
+      {isManager && (
+        <DeleteConversationButton
+          leadId={lead.id}
+          leadName={leadDisplayName(lead.name, lead.phone)}
+          unreadCount={lead.unread_count ?? 0}
+        />
       )}
-    </button>
+    </div>
   )
 }
 

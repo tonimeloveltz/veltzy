@@ -32,6 +32,17 @@ export interface SendMessageResult {
   externalId?: string
 }
 
+// Envio de template HSM (Cloud API oficial). So o provider cloud_api implementa;
+// a mensagem sai como type=template (aceita fora da janela de 24h, ao contrario de texto).
+export interface SendTemplatePayload {
+  phone: string           // E.164 destinatario
+  phoneNumberId: string   // numero Meta (Cloud API) resolvido
+  companyId: string
+  templateName: string    // nome do template APROVADO na Meta
+  language: string        // ex. pt_BR
+  params: string[]        // valores resolvidos das variaveis {{1}},{{2}}... do BODY
+}
+
 export interface StatusResult {
   connected: boolean
   phoneNumber?: string
@@ -51,6 +62,8 @@ export interface ChatEntry {
 
 export interface WhatsAppProvider {
   sendMessage(config: WhatsAppConfig, payload: SendMessagePayload): Promise<SendMessageResult>
+  /** Envio de template HSM (opcional; so cloud_api implementa). */
+  sendTemplate?(payload: SendTemplatePayload): Promise<SendMessageResult>
   getStatus(config: WhatsAppConfig): Promise<StatusResult>
   getQrCode(config: WhatsAppConfig): Promise<QrCodeResult>
   disconnect(config: WhatsAppConfig): Promise<void>

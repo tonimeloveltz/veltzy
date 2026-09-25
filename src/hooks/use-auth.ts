@@ -10,16 +10,17 @@ export const useAuth = () => {
 
   const signIn = async (email: string, password: string) => {
     try {
-      const data = await authService.signIn(email, password)
-      const userId = data.user?.id ?? null
+      await authService.signIn(email, password)
       // Audit fora do caminho critico: nao bloqueia o login e roda no proximo
       // tick, longe do pico de refresh/loadUserData, sem chamada de auth extra.
+      // O tick tambem garante que a sessao nova ja esta no client, porque quem
+      // preenche o user_id agora e o auth.uid() do token que acompanha a RPC.
       setTimeout(() => {
-        void logAuditEvent('login_success', { method: 'email' }, undefined, userId)
+        void logAuditEvent('login_success', { method: 'email' })
       }, 0)
     } catch (err) {
       setTimeout(() => {
-        void logAuditEvent('login_failed', { email, method: 'email' }, undefined, null)
+        void logAuditEvent('login_failed', { email, method: 'email' })
       }, 0)
       throw err
     }

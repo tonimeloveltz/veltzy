@@ -14,6 +14,8 @@ import {
   Users,
   User,
   Zap,
+  Megaphone,
+  Workflow,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useIsMobile } from '@/hooks/use-mobile'
@@ -89,6 +91,8 @@ const SidebarContent = ({ onNavigate }: SidebarContentProps) => {
     { label: 'Contatos', href: '/contatos', icon: Contact },
     { label: 'Tarefas', href: '/tarefas', icon: ListTodo },
     { label: 'SDR IA', href: '/sdr-ia', icon: Zap, visible: (canAccessAdmin || isManager) && isSdrAgentV2 },
+    { label: 'Campanhas', href: '/campanhas', icon: Megaphone, visible: (canAccessAdmin || isManager) && !!company?.features?.mkt_ativo_enabled },
+    { label: 'Cadências', href: '/cadencias', icon: Workflow, visible: (canAccessAdmin || isManager) && !!company?.features?.mkt_ativo_enabled },
     { label: 'Gestão', href: '/gestao', icon: Users, visible: canAccessGestao },
     { label: 'Admin', href: '/admin', icon: Shield, visible: canAccessAdmin },
     { label: 'Super Admin', href: '/super-admin', icon: Crown, visible: isSuperAdmin },

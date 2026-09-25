@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 import { getCorsHeaders } from '../_shared/cors.ts'
+import { guardarSegredo, instagramTokenSecretName } from '../_shared/vault-secret.ts'
 
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req)
@@ -27,6 +28,8 @@ Deno.serve(async (req) => {
     }
 
     const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { db: { schema: 'veltzy' } })
+    // A7: client no schema public (service_role) para os wrappers do Vault.
+    const supabasePublic = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
 
     if (action === 'authorize') {
       const appId = Deno.env.get('INSTAGRAM_APP_ID')
@@ -50,12 +53,15 @@ Deno.serve(async (req) => {
       const igRes = await fetch(`https://graph.facebook.com/v18.0/${page.id}?fields=instagram_business_account&access_token=${page.access_token}`)
       const igData = await igRes.json()
 
+      // A7: o access_token vai para o Vault, nao para a coluna. Grava o segredo
+      // ANTES do upsert — se o Vault falhar, nao deixa uma conexao sem token.
+      await guardarSegredo(supabasePublic, instagramTokenSecretName(companyId), page.access_token)
+
       await supabase.from('instagram_connections').upsert({
         company_id: companyId,
         page_id: page.id,
         page_name: page.name,
         instagram_account_id: igData.instagram_business_account?.id ?? '',
-        access_token: page.access_token,
       }, { onConflict: 'company_id' })
 
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })

@@ -172,10 +172,10 @@ enable_anonymous_sign_ins = false
 # Allow/disallow testing manual linking of accounts
 enable_manual_linking = false
 # Passwords shorter than this value will be rejected as weak. Minimum 6, recommended 8 or more.
-minimum_password_length = 6
+minimum_password_length = 8
 # Passwords that do not meet the following requirements will be rejected as weak. Supported values
 # are: `letters_digits`, `lower_upper_letters_digits`, `lower_upper_letters_digits_symbols`
-password_requirements = ""
+password_requirements = "lower_upper_letters_digits"
 
 # Configure passkey sign-ins.
 # [auth.passkey]
@@ -393,6 +393,11 @@ verify_jwt = false
 [functions.run-automations]
 verify_jwt = false
 
+# START por evento das cadencias (mkt-ativo Corte B). Service-to-service (chamada
+# pelo lead-inbound-handler ao lado do run-automations), igual ao run-automations.
+[functions.start-cadences]
+verify_jwt = false
+
 [functions.instagram-send]
 verify_jwt = true
 
@@ -410,6 +415,14 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.process-message-queue]
+verify_jwt = false
+
+# Cron do mkt-ativo (Corte B): avanca cadence_runs vencidos. Auth por cron-secret/service key.
+[functions.process-cadences]
+verify_jwt = false
+
+# Cron do mkt-ativo (Fase 2): reconcilia recipients, completa campanha e dispara follow-up→cadencia.
+[functions.process-blast-followups]
 verify_jwt = false
 
 [functions.send-task-reminders]
@@ -437,6 +450,12 @@ verify_jwt = false
 # so com Authorization Bearer (sem apikey), entao verify_jwt fica false como o irmao.
 # Sufixo -proxy pra nao colidir com cloud-api-templates do Hub (mesmo Central).
 [functions.cloud-api-templates-proxy]
+verify_jwt = false
+
+# blast-dispatch (mkt-ativo): auth manual (getUser) igual as proxies; o front chama
+# so com Authorization Bearer, entao verify_jwt=false. O gate real e mkt_ativo_enabled
+# + role admin/manager dentro da function.
+[functions.blast-dispatch]
 verify_jwt = false
 
 [edge_runtime]

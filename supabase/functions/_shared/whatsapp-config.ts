@@ -2,12 +2,12 @@ import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import type { WhatsAppConfig, WhatsAppProviderType } from './whatsapp-provider.ts'
 
 /**
- * Retorna o provider ativo da empresa: 'zapi' | 'evolution' | 'cloud_api'
+ * Retorna o provider ativo da empresa: 'zapi' | 'evolution' | 'cloud_api' | 'waha'
  */
 export async function getActiveProvider(
   supabase: SupabaseClient,
   companyId: string,
-): Promise<'zapi' | 'evolution' | 'cloud_api'> {
+): Promise<'zapi' | 'evolution' | 'cloud_api' | 'waha'> {
   const { data } = await supabase
     .from('companies')
     .select('active_whatsapp_provider')
@@ -15,7 +15,10 @@ export async function getActiveProvider(
     .single()
 
   const provider = (data?.active_whatsapp_provider as string) ?? 'zapi'
-  if (provider !== 'zapi' && provider !== 'evolution' && provider !== 'cloud_api') {
+  // Sem 'waha' aqui, empresa em waha caia no fallback 'zapi' -> whatsapp-send
+  // roteava pro ramo else -> source='manual' (envio silencioso) para leads com
+  // whatsapp_provider NULL (manuais/antigos). Gemeo edge do fix #186.
+  if (provider !== 'zapi' && provider !== 'evolution' && provider !== 'cloud_api' && provider !== 'waha') {
     console.warn(`[getActiveProvider] Valor inesperado para active_whatsapp_provider: '${provider}' (company_id=${companyId}). Fallback para 'zapi'.`)
     return 'zapi'
   }
