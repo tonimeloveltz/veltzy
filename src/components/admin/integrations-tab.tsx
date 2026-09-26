@@ -12,6 +12,7 @@ import { PaymentIntegrations } from '@/components/admin/payment-integrations'
 import { WhatsAppNumbersList } from '@/components/admin/whatsapp-numbers-list'
 import { useLeadSources } from '@/hooks/use-lead-sources'
 import { usePipelines } from '@/hooks/use-pipelines'
+import { useWhatsAppNumbers } from '@/hooks/use-whatsapp-numbers'
 import {
   useWebhookIntegrations,
   useCreateWebhookIntegration,
@@ -165,17 +166,22 @@ const WebhookCard = ({
 const CreateWebhookForm = ({ onClose }: { onClose: () => void }) => {
   const { data: sources } = useLeadSources()
   const { data: pipelines } = usePipelines()
+  const { data: numbers } = useWhatsAppNumbers()
   const createMutation = useCreateWebhookIntegration()
 
   const [sourceId, setSourceId] = useState('')
   const [pipelineId, setPipelineId] = useState('')
   const [preset, setPreset] = useState<WebhookPreset>('generic')
+  const [sendInstance, setSendInstance] = useState('')
+
+  // Números WAHA conectados = candidatos a "número de resposta" da boas-vindas.
+  const wahaConnected = (numbers ?? []).filter((n) => n.provider === 'waha' && n.status === 'connected')
 
   const canSave = sourceId && pipelineId
 
   const handleSave = async () => {
     if (!canSave) return
-    await createMutation.mutateAsync({ sourceId, pipelineId, preset })
+    await createMutation.mutateAsync({ sourceId, pipelineId, preset, sendInstance: sendInstance || undefined })
     onClose()
   }
 
@@ -219,6 +225,24 @@ const CreateWebhookForm = ({ onClose }: { onClose: () => void }) => {
               </SelectContent>
             </Select>
           </div>
+        </div>
+
+        <div className="space-y-1">
+          <Label className="text-xs">Número de resposta (WAHA) — opcional</Label>
+          <Select value={sendInstance || 'none'} onValueChange={(v) => setSendInstance(v === 'none' ? '' : v)}>
+            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Sem número de resposta" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Sem número de resposta</SelectItem>
+              {wahaConnected.map((n) => (
+                <SelectItem key={n.ref} value={n.ref}>{n.displayNumber ?? n.ref} ({n.ref})</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {wahaConnected.length === 0 ? (
+            <p className="text-[10px] text-muted-foreground">Nenhum número WAHA conectado ainda. Deixe vazio e defina depois de parear o número (a boas-vindas por automação só envia com um número de saída).</p>
+          ) : (
+            <p className="text-[10px] text-muted-foreground">Número pelo qual a mensagem de boas-vindas (automação) responde os leads desta origem.</p>
+          )}
         </div>
 
         {preset && (

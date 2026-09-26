@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 import { getCorsHeaders } from '../_shared/cors.ts'
+import { decideAutomationSend } from '../_shared/webhook-welcome-instance.ts'
 
 interface Condition {
   field: string
@@ -73,6 +74,33 @@ Deno.serve(async (req) => {
       .maybeSingle()
 
     const leadForRules = { ...lead, stage_id: activeDeal?.stage_id ?? null }
+
+    // Provider ativo da company: define se o item de send_whatsapp precisa de
+    // instance_name explicito (WAHA/Evolution) ou se o consumidor resolve sozinho
+    // (zapi por company / cloud_api numero default).
+    const { data: companyRow } = await supabasePublic
+      .from('companies')
+      .select('active_whatsapp_provider')
+      .eq('id', companyId)
+      .single()
+    const activeProvider = (companyRow?.active_whatsapp_provider as string | null) ?? 'zapi'
+
+    // Numero de resposta da ORIGEM do lead: config.send_instance da source_integration
+    // ativa da origem (lead.source_id). Lead de webhook nasce sem whatsapp_instance_name;
+    // a origem define por qual numero a boas-vindas responde.
+    let sourceSendInstance: string | null = null
+    if (lead.source_id) {
+      const { data: si } = await supabase
+        .from('source_integrations')
+        .select('config')
+        .eq('company_id', companyId)
+        .eq('source_id', lead.source_id)
+        .eq('is_active', true)
+        .limit(1)
+        .maybeSingle()
+      const cfg = (si?.config ?? {}) as Record<string, unknown>
+      sourceSendInstance = (typeof cfg.send_instance === 'string' ? cfg.send_instance : null)
+    }
 
     let executed = 0
 
@@ -153,7 +181,18 @@ Deno.serve(async (req) => {
               source: 'manual',
             })
             break
-          case 'send_whatsapp':
+          case 'send_whatsapp': {
+            // Resolve o numero de saida: instancia do lead > numero de resposta da origem.
+            // Nao-oficial (WAHA/Evolution) sem numero → falha EXPLICITA (nao enfileira item
+            // fadado ao 'No session' opaco do consumidor). zapi/cloud_api resolvem sozinhos.
+            const decision = decideAutomationSend({
+              provider: activeProvider,
+              leadInstanceName: (lead.whatsapp_instance_name as string | null) ?? null,
+              sourceSendInstance,
+            })
+            if (decision.blocked) {
+              throw new Error(decision.reason ?? 'send_whatsapp: numero de saida nao resolvido')
+            }
             // Insere na fila com delay escalonado para rate limit
             await supabase.from('message_queue').insert({
               company_id: companyId,
@@ -163,8 +202,10 @@ Deno.serve(async (req) => {
               file_url: (actionData.file_url as string) ?? null,
               scheduled_at: new Date(Date.now() + executed * 3000).toISOString(),
               source: 'automation',
+              instance_name: decision.instanceName,
             })
             break
+          }
         }
 
         await supabase.from('automation_logs').insert({

@@ -88,8 +88,14 @@ export const createWebhookIntegration = async (
   sourceId: string,
   pipelineId: string,
   preset: WebhookPreset,
+  sendInstance?: string,
 ): Promise<SourceIntegration> => {
   const token = crypto.randomUUID()
+
+  // config.send_instance = numero/sessao de saida da boas-vindas por automacao (FB/IG
+  // Lead Ads). Opcional: vazio ate parear o numero (envio nao-oficial falha explicito).
+  const config: Record<string, unknown> = { preset }
+  if (sendInstance) config.send_instance = sendInstance
 
   // Criar source_integration
   const { data, error } = await veltzy()
@@ -98,7 +104,7 @@ export const createWebhookIntegration = async (
       company_id: companyId,
       source_id: sourceId,
       integration_type: 'webhook' as IntegrationType,
-      config: { preset },
+      config,
       webhook_token: token,
       is_active: true,
     })

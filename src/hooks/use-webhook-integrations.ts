@@ -17,8 +17,8 @@ export const useCreateWebhookIntegration = () => {
   const queryClient = useQueryClient()
   const companyId = useAuthStore((s) => s.company?.id)
   return useMutation({
-    mutationFn: (input: { sourceId: string; pipelineId: string; preset: WebhookPreset }) =>
-      service.createWebhookIntegration(companyId!, input.sourceId, input.pipelineId, input.preset),
+    mutationFn: (input: { sourceId: string; pipelineId: string; preset: WebhookPreset; sendInstance?: string }) =>
+      service.createWebhookIntegration(companyId!, input.sourceId, input.pipelineId, input.preset, input.sendInstance),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['webhook-integrations'] })
       toast.success('Webhook criado com sucesso')
