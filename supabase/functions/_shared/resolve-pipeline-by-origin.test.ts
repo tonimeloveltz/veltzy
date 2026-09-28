@@ -3,7 +3,12 @@ import { pickByWeight, RoutingRule, WEIGHT } from './resolve-pipeline-by-origin.
 
 // Helper: monta regra com defaults (ativa).
 function rule(partial: Partial<RoutingRule> & Pick<RoutingRule, 'match_type' | 'match_value' | 'pipeline_id'>): RoutingRule {
-  return { id: `rule-${partial.pipeline_id}-${partial.match_type}`, is_active: true, ...partial }
+  return {
+    id: `rule-${partial.pipeline_id}-${partial.match_type}`,
+    is_active: true,
+    pipeline_is_active: true,
+    ...partial,
+  }
 }
 
 Deno.test('pickByWeight: mais especifico vence: ad_id > campaign_id > utm_campaign > instance > webhook_source', () => {
@@ -88,6 +93,30 @@ Deno.test('pickByWeight: match_value com virgula/parenteses (UTM) casa por igual
   assertEquals(pickByWeight(rules, { utmCampaign: utm })?.pipeline_id, 'p-utm')
   // valor diferente nao casa
   assertEquals(pickByWeight(rules, { utmCampaign: 'promo,verao' }), null)
+})
+
+Deno.test('pickByWeight: regra mais especifica com pipeline desativado cede para a proxima', () => {
+  const rules: RoutingRule[] = [
+    rule({ match_type: 'ad_id', match_value: 'ad-1', pipeline_id: 'p-desativado', pipeline_is_active: false }),
+    rule({ match_type: 'instance', match_value: 'inst-1', pipeline_id: 'p-ativo' }),
+  ]
+  assertEquals(pickByWeight(rules, { adId: 'ad-1', instanceName: 'inst-1' })?.pipeline_id, 'p-ativo')
+})
+
+Deno.test('pickByWeight: unica regra que casa aponta para pipeline desativado -> null (cai no padrao)', () => {
+  const rules: RoutingRule[] = [
+    rule({ match_type: 'instance', match_value: 'inst-1', pipeline_id: 'p-desativado', pipeline_is_active: false }),
+  ]
+  assertEquals(pickByWeight(rules, { instanceName: 'inst-1' }), null)
+})
+
+Deno.test('pickByWeight: regra ativa com pipeline desativado e ignorada como regra inativa', () => {
+  const rules: RoutingRule[] = [
+    rule({ match_type: 'instance', match_value: 'inst-1', pipeline_id: 'p-ativa' }),
+    rule({ match_type: 'ad_id', match_value: 'ad-1', pipeline_id: 'p-desativado', pipeline_is_active: false }),
+  ]
+  // a regra em si esta ativa; so o pipeline de destino nao
+  assertEquals(pickByWeight(rules, { adId: 'ad-1', instanceName: 'inst-1' })?.pipeline_id, 'p-ativa')
 })
 
 Deno.test('WEIGHT: ordem de especificidade esperada', () => {
