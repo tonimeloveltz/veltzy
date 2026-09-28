@@ -272,7 +272,7 @@ const PipelineBoard = () => {
           fireOnly={fireOnly}
           onToggleFireOnly={() => setFireOnly((v) => !v)}
           leads={filteredLeadsForHeader as never}
-          pipelineName={pipelines && pipelines.length > 1 ? pipelines.find((p) => p.id === activePipelineId)?.name : undefined}
+          pipelineName={pipelines?.find((p) => p.id === activePipelineId)?.name}
         />
       </div>
 

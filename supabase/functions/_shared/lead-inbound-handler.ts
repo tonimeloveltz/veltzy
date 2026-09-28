@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { resolvePipelineByOrigin, type OriginIdentifiers, type ResolvedPipeline } from './resolve-pipeline-by-origin.ts'
+import { buildDealName } from './deal-name.ts'
 import { isOptOutMessage } from './optout-detect.ts'
 
 // --- Tipos ---
@@ -784,7 +785,7 @@ async function createDealForLead(
       await supabase.from('deals').insert({
         company_id: params.companyId,
         lead_id: lead.id,
-        name: `Negocio - ${pipeline.name}`,
+        name: buildDealName(lead.name ?? params.phone),
         pipeline_id: pipeline.id,
         stage_id: firstStage.id,
         status: 'open',
@@ -806,7 +807,7 @@ async function createDealForLead(
       await supabase.from('deals').insert({
         company_id: params.companyId,
         lead_id: lead.id,
-        name: `Negocio - ${pipeline.name}`,
+        name: buildDealName(lead.name ?? params.phone),
         pipeline_id: pipeline.id,
         stage_id: firstStage.id,
         status: 'open',
@@ -834,7 +835,7 @@ async function createDealForLead(
       const { data: newDeal } = await supabase.from('deals').insert({
         company_id: params.companyId,
         lead_id: lead.id,
-        name: `Negocio - ${pipeline.name}`,
+        name: buildDealName(lead.name ?? params.phone),
         pipeline_id: pipeline.id,
         stage_id: firstStage.id,
         status: 'pending_assignment',
@@ -858,7 +859,7 @@ async function createDealForLead(
       await supabase.from('deals').insert({
         company_id: params.companyId,
         lead_id: lead.id,
-        name: `Negocio - ${pipeline.name}`,
+        name: buildDealName(lead.name ?? params.phone),
         pipeline_id: pipeline.id,
         stage_id: firstStage.id,
         status: 'open',
