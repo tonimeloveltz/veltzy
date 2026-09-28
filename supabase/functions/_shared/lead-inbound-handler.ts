@@ -62,6 +62,12 @@ export interface InboundParams {
    *  migration, so a importacao de history falha, o inbound normal segue intacto.
    *  O caller de history passa isHistory e skipSideEffects juntos. Default false. */
   isHistory?: boolean
+  /** Campos de cadastro vindos de webhook (FB/IG Lead Ads). Gravados SÓ-SE-VIERAM
+   *  (backfill quando o lead ainda está vazio; nunca sobrescreve com null). tags = merge. */
+  email?: string | null
+  instagram?: string | null
+  company?: string | null
+  tags?: string[]
 }
 
 export interface InboundResult {
@@ -105,7 +111,7 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
   // 1. Buscar lead existente
   let { data: lead } = await supabase
     .from('leads')
-    .select('id, assigned_to, avatar_url, name, whatsapp_instance_name, cloud_api_number_id, whatsapp_provider')
+    .select('id, assigned_to, avatar_url, name, whatsapp_instance_name, cloud_api_number_id, whatsapp_provider, email, instagram_handle, company_name, tags')
     .eq('company_id', params.companyId)
     .eq('phone', params.phone)
     .maybeSingle()
@@ -139,6 +145,26 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
     await supabase.from('leads')
       .update({ whatsapp_provider: params.whatsappProvider })
       .eq('id', lead.id)
+  }
+
+  // Backfill de cadastro vindo de webhook (FB/IG Lead Ads): grava SÓ-SE-VEIO e só
+  // quando o lead existente ainda está vazio (não sobrescreve dado já preenchido);
+  // tags = MERGE (união, sem remover). Aditivo — não toca inbounds sem esses campos.
+  if (lead) {
+    // deno-lint-ignore no-explicit-any
+    const leadUpd: Record<string, any> = {}
+    // deno-lint-ignore no-explicit-any
+    const cur = lead as any
+    if (params.email && !cur.email) leadUpd.email = params.email
+    if (params.instagram && !cur.instagram_handle) leadUpd.instagram_handle = params.instagram
+    if (params.company && !cur.company_name) leadUpd.company_name = params.company
+    if (params.tags && params.tags.length > 0) {
+      const merged = Array.from(new Set([...(cur.tags ?? []), ...params.tags])).filter(Boolean)
+      if (merged.length !== (cur.tags?.length ?? 0)) leadUpd.tags = merged
+    }
+    if (Object.keys(leadUpd).length > 0) {
+      await supabase.from('leads').update(leadUpd).eq('id', lead.id)
+    }
   }
 
   const isNewLead = !lead
@@ -418,7 +444,7 @@ async function createLead(
   params: InboundParams,
   resolved: ResolvedPipeline,
   sourceId: string | null,
-): Promise<{ id: string; assigned_to: string | null; avatar_url: string | null; name: string | null; whatsapp_instance_name: string | null; cloud_api_number_id: string | null; whatsapp_provider: string | null } | null> {
+): Promise<{ id: string; assigned_to: string | null; avatar_url: string | null; name: string | null; whatsapp_instance_name: string | null; cloud_api_number_id: string | null; whatsapp_provider: string | null; email: string | null; instagram_handle: string | null; company_name: string | null; tags: string[] | null } | null> {
   // Pipeline e source_id ja resolvidos UMA vez no handler (RF6): sem calculo proprio aqui.
   // `resolved.pipelineId` nao e mais gravado no contato (Onda 4): ele vai para o
   // negocio, em createDealForLead.
@@ -504,8 +530,13 @@ async function createLead(
       whatsapp_instance_name: params.instanceName,
       cloud_api_number_id: params.cloudApiNumberId ?? null,
       whatsapp_provider: params.whatsappProvider ?? null,
+      // Cadastro vindo de webhook (FB/IG Lead Ads): só grava o que veio (null se ausente).
+      email: params.email ?? null,
+      instagram_handle: params.instagram ?? null,
+      company_name: params.company ?? null,
+      tags: params.tags && params.tags.length > 0 ? params.tags : null,
     })
-    .select('id, assigned_to, avatar_url, name, whatsapp_instance_name, cloud_api_number_id, whatsapp_provider')
+    .select('id, assigned_to, avatar_url, name, whatsapp_instance_name, cloud_api_number_id, whatsapp_provider, email, instagram_handle, company_name, tags')
     .single()
 
   return newLead
