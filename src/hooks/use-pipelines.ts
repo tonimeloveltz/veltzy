@@ -73,6 +73,35 @@ export const useDeletePipeline = () => {
   })
 }
 
+export const useInactivePipelines = () => {
+  const companyId = useAuthStore((s) => s.company?.id)
+
+  // Prefixo ['pipelines']: criar, desativar e reordenar ja invalidam esta lista.
+  return useQuery({
+    queryKey: ['pipelines', companyId, 'inactive'],
+    queryFn: () => pipelinesService.getInactivePipelines(companyId!),
+    enabled: !!companyId,
+  })
+}
+
+export const useReactivatePipeline = () => {
+  const queryClient = useQueryClient()
+  const companyId = useAuthStore((s) => s.company?.id)
+
+  return useMutation({
+    mutationFn: (pipelineId: string) =>
+      pipelinesService.reactivatePipeline(companyId!, pipelineId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pipelines'] })
+      queryClient.invalidateQueries({ queryKey: ['pipeline-deal-counts'] })
+      toast.success('Pipeline reativado')
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || 'Erro ao reativar pipeline')
+    },
+  })
+}
+
 export const useReorderPipelines = () => {
   const queryClient = useQueryClient()
   const companyId = useAuthStore((s) => s.company?.id)
