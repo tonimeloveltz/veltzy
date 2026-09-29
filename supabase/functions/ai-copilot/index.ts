@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { HubClient, HubError } from '../_shared/hub-client.ts'
+import { parseSalesPulse } from './parse-sales-pulse.ts'
 
 import { getCorsHeaders } from '../_shared/cors.ts'
 
@@ -216,7 +217,9 @@ Seja especifico: cite nomes, valores e prazos reais. Maximo 3 alertas e 3 acoes.
             { role: 'user', content: dataContext },
           ],
           temperature: 0.7,
-          max_tokens: 500,
+          // 500 cortava o JSON no meio (3 alertas + 3 acoes com nomes, valores e
+          // UUIDs em pt-BR ja chegam perto disso). A folga custa so o que for gerado.
+          max_tokens: 1200,
         })
       } catch (err) {
         // Gate do gateway: empresa sem IA habilitada (is_ai_enabled=false) ou
@@ -230,12 +233,20 @@ Seja especifico: cite nomes, valores e prazos reais. Maximo 3 alertas e 3 acoes.
         throw err
       }
 
-      const content = hubResp.data?.content ?? '{}'
-      let parsed
-      try {
-        parsed = JSON.parse(content)
-      } catch {
-        parsed = { situacao: content, alertas: [], acoes: [] }
+      const parsed = parseSalesPulse(hubResp.data?.content)
+      if (!parsed) {
+        // Nunca devolver o texto cru como `situacao`: o card exibiria o JSON.
+        // { ok:false } faz o front cair no fallback heuristico.
+        console.error('[ai-copilot] sales-pulse invalido:', JSON.stringify({
+          finish_reason: hubResp.data?.finish_reason,
+          model: hubResp.data?.model,
+          completion_tokens: hubResp.data?.usage?.completion_tokens,
+          content_length: hubResp.data?.content?.length ?? 0,
+        }))
+        return new Response(
+          JSON.stringify({ ok: false, error: { code: 'INVALID_AI_RESPONSE', message: 'Resposta da IA fora do formato' } }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json; charset=utf-8' } },
+        )
       }
 
       return new Response(JSON.stringify(parsed), {
