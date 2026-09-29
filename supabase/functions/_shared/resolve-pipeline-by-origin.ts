@@ -13,6 +13,7 @@ export interface RoutingRule {
   match_type: MatchType
   match_value: string
   is_active: boolean
+  pipeline_is_active: boolean // is_active do pipeline de destino
 }
 
 /** Identificadores de origem coletados do inbound (so os disponiveis vem preenchidos). */
@@ -62,6 +63,9 @@ export function pickByWeight(rules: RoutingRule[], ids: OriginIdentifiers): Rout
   const matched = rules.filter(
     (r) =>
       r.is_active &&
+      // Desativar o pipeline nao mexe nas regras dele: sem isto o negocio cairia
+      // num pipeline que ninguem ve. Ignorada, a regra cede para a proxima ou o padrao.
+      r.pipeline_is_active &&
       candidates.some((c) => c.type === r.match_type && c.value === r.match_value),
   )
   if (matched.length === 0) return null
@@ -106,9 +110,9 @@ export async function resolvePipelineByOrigin(
   companyId: string,
   ids: OriginIdentifiers,
 ): Promise<ResolvedPipeline> {
-  const { data: rules, error } = await supabase
+  const { data: rows, error } = await supabase
     .from('pipeline_routing_rules')
-    .select('id, pipeline_id, match_type, match_value, is_active')
+    .select('id, pipeline_id, match_type, match_value, is_active, pipelines:pipeline_id(is_active)')
     .eq('company_id', companyId)
     .eq('is_active', true)
 
@@ -116,7 +120,24 @@ export async function resolvePipelineByOrigin(
     console.error('[resolve-pipeline] Error fetching routing rules:', JSON.stringify(error))
   }
 
-  const winner = pickByWeight((rules ?? []) as RoutingRule[], ids)
+  // Embed to-one: tipado como array, mas em runtime vem objeto (FK unica).
+  // O filtro por pipeline ativo fica em pickByWeight, onde e testado.
+  const rules: RoutingRule[] = (rows ?? []).map((row: Record<string, unknown>) => {
+    const embed = row.pipelines as { is_active: boolean } | { is_active: boolean }[] | null
+    const pipeline = Array.isArray(embed) ? embed[0] : embed
+    return {
+      id: row.id as string,
+      pipeline_id: row.pipeline_id as string,
+      match_type: row.match_type as MatchType,
+      match_value: row.match_value as string,
+      is_active: row.is_active as boolean,
+      // Sem embed (nao deveria: FK NOT NULL com CASCADE) conta como inativo:
+      // melhor cair no padrao do que num pipeline que nao se enxerga.
+      pipeline_is_active: pipeline?.is_active === true,
+    }
+  })
+
+  const winner = pickByWeight(rules, ids)
   if (winner) {
     return { pipelineId: winner.pipeline_id, ruleId: winner.id, matchType: winner.match_type }
   }

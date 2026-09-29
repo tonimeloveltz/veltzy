@@ -1,7 +1,28 @@
 import { veltzy } from '@/lib/supabase'
 import type { Pipeline } from '@/types/database'
 
-export const getPipelines = async (companyId: string): Promise<Pipeline[]> => {
+// A unique `(company_id, slug)` vale tambem para os inativos: um pipeline
+// desativado continua ocupando o nome.
+const throwReadableUniqueError = (error: { code?: string } | null) => {
+  if (error?.code === '23505') {
+    throw new Error('Já existe um pipeline com esse nome. Se ele estiver desativado, reative em "Desativados".')
+  }
+}
+
+const getNextPosition = async (companyId: string): Promise<number> => {
+  const { data: existing } = await veltzy()
+    .from('pipelines')
+    .select('position')
+    .eq('company_id', companyId)
+    .eq('is_active', true)
+    .order('position', { ascending: false })
+    .limit(1)
+    .single()
+
+  return (existing?.position ?? -1) + 1
+}
+
+export const getPipelines =async (companyId: string): Promise<Pipeline[]> => {
   const { data, error } = await veltzy()
     .from('pipelines')
     .select('*')
@@ -39,22 +60,14 @@ export const createPipeline = async (
   companyId: string,
   input: { name: string; slug: string; color: string }
 ): Promise<Pipeline> => {
-  const { data: existing } = await veltzy()
-    .from('pipelines')
-    .select('position')
-    .eq('company_id', companyId)
-    .eq('is_active', true)
-    .order('position', { ascending: false })
-    .limit(1)
-    .single()
-
-  const position = (existing?.position ?? -1) + 1
+  const position = await getNextPosition(companyId)
 
   const { data, error } = await veltzy()
     .from('pipelines')
     .insert({ ...input, company_id: companyId, position })
     .select()
     .single()
+  throwReadableUniqueError(error)
   if (error) throw error
 
   const defaultStages = [
@@ -86,6 +99,7 @@ export const updatePipeline = async (
     .eq('company_id', companyId)
     .select()
     .single()
+  throwReadableUniqueError(error)
   if (error) throw error
   return data
 }
@@ -120,6 +134,35 @@ export const deletePipeline = async (companyId: string, pipelineId: string): Pro
     .eq('id', pipelineId)
     .eq('company_id', companyId)
   if (error) throw error
+}
+
+export const getInactivePipelines = async (companyId: string): Promise<Pipeline[]> => {
+  const { data, error } = await veltzy()
+    .from('pipelines')
+    .select('*')
+    .eq('company_id', companyId)
+    .eq('is_active', false)
+    .order('name')
+  if (error) throw error
+  return data
+}
+
+// Volta para o fim da lista: a posicao antiga pode colidir com a de um pipeline
+// criado depois. Etapas, SDR e regras nunca foram apagados e voltam como estavam.
+export const reactivatePipeline = async (companyId: string, pipelineId: string): Promise<Pipeline> => {
+  const position = await getNextPosition(companyId)
+  const { data, error } = await veltzy()
+    .from('pipelines')
+    .update({ is_active: true, position })
+    .eq('id', pipelineId)
+    .eq('company_id', companyId)
+    .eq('is_active', false)
+    .select()
+    .maybeSingle()
+  if (error) throw error
+  // RLS barrando ou pipeline ja ativo: o update nao aceita linha e nao da erro.
+  if (!data) throw new Error('Não foi possível reativar o pipeline')
+  return data
 }
 
 export const reorderPipelines = async (

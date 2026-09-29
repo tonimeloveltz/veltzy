@@ -13,9 +13,12 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { ColorPicker } from '@/components/shared/color-picker'
+import { InactivePipelinesSection } from '@/components/admin/inactive-pipelines-section'
+import { ReactivatePipelineDialog } from '@/components/admin/reactivate-pipeline-dialog'
 import {
   usePipelines, useCreatePipeline, useUpdatePipeline,
   useDeletePipeline, useReorderPipelines, useSetDefaultPipeline,
+  useInactivePipelines, useReactivatePipeline,
 } from '@/hooks/use-pipelines'
 import { useAuthStore } from '@/stores/auth.store'
 import { veltzy } from '@/lib/supabase'
@@ -44,10 +47,11 @@ const SortablePipelineRow = ({ pipeline, isSelected, onSelect, dealCount }: Sort
 
   const handleBlur = () => {
     if (name !== pipeline.name || color !== pipeline.color) {
-      updatePipeline.mutate({
-        pipelineId: pipeline.id,
-        data: { name, color, slug: slugify(name) },
-      })
+      // Rename rejeitado (ex.: nome de um desativado) volta o input ao nome real.
+      updatePipeline.mutate(
+        { pipelineId: pipeline.id, data: { name, color, slug: slugify(name) } },
+        { onError: () => setName(pipeline.name) },
+      )
     }
   }
 
@@ -109,7 +113,7 @@ const SortablePipelineRow = ({ pipeline, isSelected, onSelect, dealCount }: Sort
           className="h-6 w-6 text-destructive/60 hover:text-destructive shrink-0"
           onClick={(e) => {
             e.stopPropagation()
-            if (confirm(`Desativar "${pipeline.name}"?`)) deletePipeline.mutate(pipeline.id)
+            if (confirm(`Desativar "${pipeline.name}"? Você pode reativar depois em "Desativados".`)) deletePipeline.mutate(pipeline.id)
           }}
         >
           <span className="text-xs">x</span>
@@ -157,8 +161,11 @@ const PipelineListManager = ({ selectedPipelineId, onSelectPipeline }: PipelineL
   })
   const createPipeline = useCreatePipeline()
   const reorderPipelines = useReorderPipelines()
+  const { data: inactivePipelines } = useInactivePipelines()
+  const reactivatePipeline = useReactivatePipeline()
   const [newName, setNewName] = useState('')
   const [newColor, setNewColor] = useState('#6366f1')
+  const [conflict, setConflict] = useState<Pipeline | null>(null)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -181,9 +188,23 @@ const PipelineListManager = ({ selectedPipelineId, onSelectPipeline }: PipelineL
 
   const handleAdd = async () => {
     if (!newName.trim()) return
+    // O desativado ainda ocupa o slug: oferecer reativar em vez de estourar a unique.
+    const inactive = inactivePipelines?.find((p) => p.slug === slugify(newName))
+    if (inactive) {
+      setConflict(inactive)
+      return
+    }
     const result = await createPipeline.mutateAsync({ name: newName, slug: slugify(newName), color: newColor })
     setNewName('')
     onSelectPipeline(result.id)
+  }
+
+  const handleReactivateConflict = async () => {
+    if (!conflict) return
+    await reactivatePipeline.mutateAsync(conflict.id)
+    setConflict(null)
+    setNewName('')
+    onSelectPipeline(conflict.id)
   }
 
   return (
@@ -222,7 +243,16 @@ const PipelineListManager = ({ selectedPipelineId, onSelectPipeline }: PipelineL
             {createPipeline.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
           </Button>
         </div>
+
+        <InactivePipelinesSection pipelines={inactivePipelines ?? []} onReactivated={onSelectPipeline} />
       </CardContent>
+
+      <ReactivatePipelineDialog
+        pipeline={conflict}
+        onClose={() => setConflict(null)}
+        onConfirm={handleReactivateConflict}
+        isPending={reactivatePipeline.isPending}
+      />
     </Card>
   )
 }

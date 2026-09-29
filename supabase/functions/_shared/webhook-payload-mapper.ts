@@ -15,6 +15,10 @@ export interface MappedPayload {
   phone: string
   name: string | null
   email: string | null
+  /** @Instagram do contato (FB/IG Lead Ads). Opcional — só presets que trazem. */
+  instagram?: string | null
+  /** Nome da empresa do contato. Opcional — só presets que trazem. */
+  company?: string | null
   tags: string[]
   observations: string | null
   // Campanha estruturada (RF4): flui para o roteamento por origem e para as colunas de origem do deal.
@@ -68,14 +72,37 @@ function mapGeneric(data: RawPayload): MappedPayload {
  * Payload ja achatado: { full_name, phone_number, email, ... }
  * NAO suporta payload nativo do Meta (leadgen_id + Graph API).
  */
+// Qualificações do form (múltipla escolha) → TAGS estruturadas. O Make manda o valor
+// CRU da opção; aqui viram "Fat: {x}" etc. (mais robusto que o Make formatar strings).
+// Só entram as que vieram (valor não-vazio). O texto completo fica em observations.
+const QUALIFICATION_TAGS: Array<{ key: string; label: string }> = [
+  { key: 'faturamento', label: 'Fat' },
+  { key: 'papel', label: 'Papel' },
+  { key: 'funcionarios', label: 'Func' },
+  { key: 'gargalo', label: 'Gargalo' },
+]
+function buildQualificationTags(data: RawPayload): string[] {
+  const out: string[] = []
+  for (const { key, label } of QUALIFICATION_TAGS) {
+    const v = str(data[key])
+    if (v) out.push(`${label}: ${v}`)
+  }
+  return out
+}
+
 function mapMetaLeadAds(data: RawPayload): MappedPayload {
   return {
     phone: str(data.phone_number ?? data.phone ?? data.telefone ?? ''),
     name: str(data.full_name ?? data.name ?? data.nome ?? null),
     email: str(data.email ?? null),
-    tags: toStringArray(data.tags ?? ['meta-ads']),
-    // strip dos campos de campanha do knownKeys pra nao duplicarem estruturado + texto.
+    instagram: str(data.instagram ?? data.instagram_handle ?? data.arroba ?? null),
+    company: str(data.company ?? data.company_name ?? data.empresa ?? null),
+    // tags = base (do payload ou 'meta-ads') + tag de expert (se veio no array) + qualificações.
+    tags: [...toStringArray(data.tags ?? ['meta-ads']), ...buildQualificationTags(data)],
+    // Strip do knownKeys: campos que viram COLUNA estruturada (contato) + campanha, pra nao
+    // duplicar. Qualificações NAO entram no strip → aparecem em observations (texto completo).
     observations: buildObservations(data, ['full_name', 'phone_number', 'email', 'name', 'phone', 'tags',
+      'instagram', 'instagram_handle', 'arroba', 'company', 'company_name', 'empresa',
       'campaign_id', 'adset_id', 'ad_id', 'form_id', 'utm_campaign', 'utm_source', 'utm_medium', 'gclid']),
     utmCampaign: str(data.utm_campaign ?? null),
     campaignId: str(data.campaign_id ?? null),

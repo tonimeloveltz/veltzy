@@ -721,6 +721,9 @@ export type WebhookPreset = 'meta_lead_ads' | 'google_lead_form' | 'rd_station' 
 
 export interface WebhookIntegrationConfig {
   preset: WebhookPreset
+  /** Número/sessão WAHA de saída da boas-vindas por automação (FB/IG Lead Ads).
+   *  Vazio = sem número definido (envio não-oficial falha explícito até parear). */
+  send_instance?: string
 }
 
 export interface WebhookInboundLog {
