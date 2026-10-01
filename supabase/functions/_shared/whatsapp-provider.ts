@@ -27,6 +27,17 @@ export interface SendMessagePayload {
   companyId?: string      // Evolution/Cloud API/WAHA: tenant (m2m com o Hub)
 }
 
+export interface EditMessagePayload {
+  phone: string
+  /** id da mensagem no provider (messages.external_id). */
+  externalId: string
+  /** novo texto. */
+  content: string
+  instanceName?: string   // Evolution
+  sessionName?: string    // WAHA
+  companyId?: string
+}
+
 export interface SendMessageResult {
   /** id do provider para a mensagem enviada (wamid no Cloud API). undefined nos providers que nao retornam. */
   externalId?: string
@@ -64,6 +75,8 @@ export interface WhatsAppProvider {
   sendMessage(config: WhatsAppConfig, payload: SendMessagePayload): Promise<SendMessageResult>
   /** Envio de template HSM (opcional; so cloud_api implementa). */
   sendTemplate?(payload: SendTemplatePayload): Promise<SendMessageResult>
+  /** So Evolution e WAHA. Cloud API e Z-API nao expoem edicao, por isso opcional. */
+  editMessage?(config: WhatsAppConfig, payload: EditMessagePayload): Promise<void>
   getStatus(config: WhatsAppConfig): Promise<StatusResult>
   getQrCode(config: WhatsAppConfig): Promise<QrCodeResult>
   disconnect(config: WhatsAppConfig): Promise<void>

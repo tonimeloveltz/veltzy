@@ -3,6 +3,7 @@ import type {
   WhatsAppConfig,
   SendMessagePayload,
   SendMessageResult,
+  EditMessagePayload,
   StatusResult,
   QrCodeResult,
   ChatEntry,
@@ -63,6 +64,24 @@ export class WahaHubProvider implements WhatsAppProvider {
     }) as { external_id?: string } | null
 
     return result?.external_id ? { externalId: result.external_id } : {}
+  }
+
+  /**
+   * Edita o texto de uma mensagem ja enviada. So texto: a WAHA edita legenda de
+   * midia por outro caminho, e o gate de message_type fica no whatsapp-edit.
+   */
+  async editMessage(_config: WhatsAppConfig, payload: EditMessagePayload): Promise<void> {
+    if (!payload.sessionName) {
+      throw new Error('session_name obrigatorio para WAHA provider')
+    }
+
+    await this.callHub('waha-edit-message', {
+      session_name: payload.sessionName,
+      company_id: payload.companyId ?? _config.company_id,
+      to: payload.phone,
+      message_id: payload.externalId,
+      text: payload.content,
+    })
   }
 
   async getStatus(_config: WhatsAppConfig): Promise<StatusResult> {

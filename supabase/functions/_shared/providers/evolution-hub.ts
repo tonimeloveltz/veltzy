@@ -3,6 +3,7 @@ import type {
   WhatsAppConfig,
   SendMessagePayload,
   SendMessageResult,
+  EditMessagePayload,
   StatusResult,
   QrCodeResult,
   ChatEntry,
@@ -51,16 +52,37 @@ export class EvolutionHubProvider implements WhatsAppProvider {
 
     const isMedia = payload.type !== 'text' && payload.mediaUrl
 
-    await this.callHub('evolution-send-message', {
+    // O Hub ja devolve message_id (evoData.key?.id). Sem capturar aqui nao ha
+    // external_id gravado, e sem external_id nao ha o que editar depois.
+    const result = await this.callHub('evolution-send-message', {
       instance_name: instanceName,
       company_id: payload.companyId ?? _config.company_id,
       to: payload.phone,
       message: isMedia
         ? { media: { type: payload.type, url: payload.mediaUrl, caption: payload.content } }
         : { text: payload.content },
-    })
+    }) as { message_id?: string } | null
 
-    return {}
+    return result?.message_id ? { externalId: result.message_id } : {}
+  }
+
+  /**
+   * Edita o texto de uma mensagem ja enviada. So texto: a propria Evolution tem
+   * TODO aberto para updateMessage em midia; o gate de message_type fica no
+   * whatsapp-edit.
+   */
+  async editMessage(_config: WhatsAppConfig, payload: EditMessagePayload): Promise<void> {
+    if (!payload.instanceName) {
+      throw new Error('instance_name obrigatorio para Evolution provider')
+    }
+
+    await this.callHub('evolution-edit-message', {
+      instance_name: payload.instanceName,
+      company_id: payload.companyId ?? _config.company_id,
+      to: payload.phone,
+      message_id: payload.externalId,
+      text: payload.content,
+    })
   }
 
   async getStatus(_config: WhatsAppConfig): Promise<StatusResult> {
