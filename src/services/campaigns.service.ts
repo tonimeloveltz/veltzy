@@ -118,3 +118,45 @@ export const getRecipients = async (campaignId: string): Promise<BlastRecipient[
   if (error) throw error
   return (data ?? []) as unknown as BlastRecipient[]
 }
+
+/** Uma campanha com o template embedado. Multi-tenant no codigo (company_id) alem do RLS. */
+export const getCampaignById = async (
+  companyId: string,
+  id: string,
+): Promise<CampaignWithTemplate | null> => {
+  const { data, error } = await veltzy()
+    .from('blast_campaigns')
+    .select('*, template:template_id(id, name, status)')
+    .eq('company_id', companyId)
+    .eq('id', id)
+    .maybeSingle()
+  if (error) throw error
+  return (data as unknown as CampaignWithTemplate) ?? null
+}
+
+/** Recipient com nome do lead e o item da fila (content renderizado + status). */
+export interface RecipientDetail extends BlastRecipient {
+  lead: { name: string | null } | null
+  queue: {
+    content: string | null
+    status: string | null
+    sent_at: string | null
+    error_message: string | null
+  } | null
+}
+
+/**
+ * Recipients da campanha com embedding: lead(name) + message_queue(content, status, ...).
+ * FKs (lead_id->leads, message_queue_id->message_queue) habilitam os aliases do PostgREST.
+ */
+export const getCampaignRecipientsDetailed = async (
+  campaignId: string,
+): Promise<RecipientDetail[]> => {
+  const { data, error } = await veltzy()
+    .from('blast_recipients')
+    .select('*, lead:lead_id(name), queue:message_queue_id(content, status, sent_at, error_message)')
+    .eq('campaign_id', campaignId)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return (data ?? []) as unknown as RecipientDetail[]
+}

@@ -14,6 +14,25 @@ export const useCampaigns = () => {
   })
 }
 
+export const useCampaign = (id: string | undefined) => {
+  const companyId = useAuthStore((s) => s.company?.id)
+  return useQuery({
+    queryKey: ['campaign', companyId, id],
+    queryFn: () => campaignsService.getCampaignById(companyId!, id!),
+    enabled: !!companyId && !!id,
+    staleTime: 15_000,
+  })
+}
+
+export const useCampaignRecipients = (id: string | undefined) => {
+  return useQuery({
+    queryKey: ['campaign-recipients', id],
+    queryFn: () => campaignsService.getCampaignRecipientsDetailed(id!),
+    enabled: !!id,
+    staleTime: 10_000,
+  })
+}
+
 export const useCampaignTemplates = () => {
   const companyId = useAuthStore((s) => s.company?.id)
   return useQuery({
