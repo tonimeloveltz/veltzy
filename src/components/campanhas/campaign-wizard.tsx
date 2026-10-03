@@ -4,9 +4,11 @@ import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth.store'
 import { useCampaignTemplates, useAudienceCount, useCreateCampaign, useDispatchCampaign } from '@/hooks/use-campaigns'
 import { useCadences } from '@/hooks/use-cadences'
+import { useLeadSources } from '@/hooks/use-lead-sources'
 import { leadTemperatureConfig } from '@/lib/lead-config'
 import { getTemplateBody, extractVariables } from '@/lib/template-render'
 import { StageMultiSelect } from '@/components/mkt-ativo/stage-multi-select'
+import { LeadTagsInput } from '@/components/pipeline/lead-tags-input'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -44,6 +46,10 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
   const [templateId, setTemplateId] = useState('')
   const [temperatures, setTemperatures] = useState<Set<LeadTemperature>>(new Set())
   const [stageIds, setStageIds] = useState<string[]>([])
+  const [tags, setTags] = useState<string[]>([])
+  const [sourceId, setSourceId] = useState('all')
+  // Agendamento (opcional): '' = enviar agora; senão datetime-local futuro → status 'scheduled'.
+  const [scheduledAt, setScheduledAt] = useState('')
   // varMapping[n] = 'lead.x' ou, se fixo, o proprio texto.
   const [varMapping, setVarMapping] = useState<Record<string, string>>({})
   // Follow-up pós-campanha (Fase 2): '' = nenhum; senão cadência + modo/delay.
@@ -51,6 +57,7 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
   const [followupMode, setFollowupMode] = useState<'immediate' | 'no_reply'>('immediate')
   const [followupDays, setFollowupDays] = useState(3)
   const { data: cadences } = useCadences()
+  const { data: leadSources } = useLeadSources()
 
   const { data: templates } = useCampaignTemplates()
   const selectedTemplate = templates?.find((t) => t.id === templateId)
@@ -61,8 +68,10 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
     const f: AudienceFilter = {}
     if (temperatures.size) f.temperature = [...temperatures]
     if (stageIds.length) f.stage_id = stageIds
+    if (tags.length) f.tags = tags
+    if (sourceId && sourceId !== 'all') f.source_id = sourceId
     return f
-  }, [temperatures, stageIds])
+  }, [temperatures, stageIds, tags, sourceId])
   const { data: audienceCount, isFetching: countLoading } = useAudienceCount(audienceFilter, open && step >= 2)
 
   const createCampaign = useCreateCampaign()
@@ -71,6 +80,7 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
 
   const reset = () => {
     setStep(1); setName(''); setTemplateId(''); setTemperatures(new Set()); setStageIds([]); setVarMapping({})
+    setTags([]); setSourceId('all'); setScheduledAt('')
     setFollowupCadenceId(''); setFollowupMode('immediate'); setFollowupDays(3)
   }
   const close = () => { onOpenChange(false); setTimeout(reset, 200) }
@@ -86,7 +96,10 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
   // Cloud API oficial só entrega template APROVADO — bloqueia a seleção de não-APPROVED.
   const templateNotApproved = isCloudApi && !!selectedTemplate && selectedTemplate.status !== 'APPROVED'
   const canNext1 = name.trim() !== '' && templateId !== '' && !templateNotApproved
-  const canSend = (audienceCount ?? 0) > 0 && !busy && !templateNotApproved
+  // Agendamento: se preenchido, precisa ser no futuro.
+  const scheduledInPast = scheduledAt !== '' && new Date(scheduledAt).getTime() <= Date.now()
+  const isScheduled = scheduledAt !== '' && !scheduledInPast
+  const canSend = (audienceCount ?? 0) > 0 && !busy && !templateNotApproved && !scheduledInPast
 
   const buildMapping = (): Record<string, string> => {
     const out: Record<string, string> = {}
@@ -101,6 +114,7 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
         template_id: templateId,
         variable_mapping: buildMapping(),
         audience_filter: audienceFilter,
+        scheduled_at: isScheduled ? new Date(scheduledAt).toISOString() : null,
         followup_cadence_id: followupCadenceId || null,
         followup_mode: followupCadenceId ? followupMode : 'none',
         followup_delay_days: followupCadenceId && followupMode === 'no_reply' ? followupDays : 0,
@@ -181,6 +195,23 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
               <StageMultiSelect value={stageIds} onChange={setStageIds} />
               <p className="text-xs text-muted-foreground">Considera a etapa do negócio aberto mais recente do contato.</p>
             </div>
+            <div className="space-y-1.5">
+              <Label>Origem (opcional)</Label>
+              <Select value={sourceId} onValueChange={setSourceId}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as origens</SelectItem>
+                  {(leadSources ?? []).map((s) => (
+                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Tags (opcional)</Label>
+              <LeadTagsInput value={tags} onChange={setTags} />
+              <p className="text-xs text-muted-foreground">Inclui contatos com qualquer uma das tags.</p>
+            </div>
             <div className="flex items-center gap-2 rounded-md border bg-muted/40 p-3 text-sm">
               <Users className="h-4 w-4 text-muted-foreground" />
               {countLoading ? (
@@ -231,6 +262,21 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
               <div className="flex justify-between py-0.5"><span className="text-muted-foreground">Campanha</span><span className="font-medium">{name}</span></div>
               <div className="flex justify-between py-0.5"><span className="text-muted-foreground">Template</span><span className="font-medium">{selectedTemplate?.name}</span></div>
               <div className="flex justify-between py-0.5"><span className="text-muted-foreground">Destinatários</span><span className="font-medium">{audienceCount ?? 0}</span></div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="camp-scheduled">Quando enviar (opcional)</Label>
+              <Input
+                id="camp-scheduled"
+                type="datetime-local"
+                value={scheduledAt}
+                onChange={(e) => setScheduledAt(e.target.value)}
+              />
+              {scheduledInPast ? (
+                <p className="text-xs text-red-600">Escolha uma data futura.</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">Vazio = enviar agora.</p>
+              )}
             </div>
 
             {isNonOfficial && (
@@ -303,7 +349,7 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
           ) : (
             <Button onClick={handleSend} disabled={!canSend}>
               {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Check className="mr-1.5 h-4 w-4" />}
-              Enviar agora
+              {isScheduled ? 'Agendar' : 'Enviar agora'}
             </Button>
           )}
         </DialogFooter>
