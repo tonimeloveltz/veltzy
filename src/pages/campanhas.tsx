@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Megaphone, Plus, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth.store'
@@ -38,6 +39,7 @@ const StatusBadge = ({ status }: { status: BlastCampaignStatus }) => (
 
 export default function CampanhasPage() {
   const features = useAuthStore((s) => s.company?.features)
+  const navigate = useNavigate()
   const [wizardOpen, setWizardOpen] = useState(false)
   const { data: campaigns, isLoading } = useCampaigns()
 
@@ -95,7 +97,11 @@ export default function CampanhasPage() {
             </thead>
             <tbody>
               {campaigns.map((c) => (
-                <tr key={c.id} className="border-b last:border-0 hover:bg-muted/30">
+                <tr
+                  key={c.id}
+                  onClick={() => navigate(`/campanhas/${c.id}`)}
+                  className="cursor-pointer border-b last:border-0 hover:bg-muted/30"
+                >
                   <td className="px-4 py-3 font-medium">{c.name}</td>
                   <td className="px-4 py-3 text-muted-foreground">{c.template?.name ?? '—'}</td>
                   <td className="px-4 py-3"><StatusBadge status={c.status} /></td>
