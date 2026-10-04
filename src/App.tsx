@@ -106,7 +106,9 @@ const App = () => {
                 {/* Gate de feature (mkt_ativo_enabled) e na propria pagina via company.features (fonte unica = companies.features, mesma da edge). */}
                 <Route path="/campanhas" element={<ProtectedRoute requireRole={['admin', 'manager', 'super_admin']}><CampanhasPage /></ProtectedRoute>} />
                 <Route path="/campanhas/:id" element={<ProtectedRoute requireRole={['admin', 'manager', 'super_admin']}><CampanhaDetalhePage /></ProtectedRoute>} />
-                <Route path="/cadencias" element={<ProtectedRoute requireRole={['admin', 'manager', 'super_admin']}><CadenciasPage /></ProtectedRoute>} />
+                <Route path="/automacoes" element={<ProtectedRoute requireRole={['admin', 'manager', 'super_admin']}><CadenciasPage /></ProtectedRoute>} />
+                {/* Alias legado: /cadencias → /automacoes (preserva links/bookmarks antigos). */}
+                <Route path="/cadencias" element={<Navigate to="/automacoes" replace />} />
                 <Route path="/admin" element={<ProtectedRoute requireRole={['admin', 'super_admin']}><AdminPage /></ProtectedRoute>} />
                 {/* Alias legado mantido de proposito (ver bloco de aliases acima): protege links antigos para /company. */}
                 <Route path="/company" element={<Navigate to="/admin?tab=empresa" replace />} />

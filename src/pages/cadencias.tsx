@@ -74,8 +74,8 @@ export default function CadenciasPage() {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-24 text-center">
         <AlertCircle className="h-10 w-10 text-muted-foreground" />
-        <h2 className="text-lg font-semibold">Cadências não habilitadas</h2>
-        <p className="max-w-sm text-sm text-muted-foreground">A automação de cadências não está liberada para esta empresa.</p>
+        <h2 className="text-lg font-semibold">Automações não habilitadas</h2>
+        <p className="max-w-sm text-sm text-muted-foreground">As automações não estão liberadas para esta empresa.</p>
       </div>
     )
   }
@@ -88,11 +88,11 @@ export default function CadenciasPage() {
             <Workflow className="h-5 w-5" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold">Cadências</h1>
+            <h1 className="text-xl font-semibold">Automações</h1>
             <p className="text-sm text-muted-foreground">Sequências automáticas de mensagens (drip)</p>
           </div>
         </div>
-        <Button onClick={() => setFormOpen(true)}><Plus className="mr-1.5 h-4 w-4" /> Nova cadência</Button>
+        <Button onClick={() => setFormOpen(true)}><Plus className="mr-1.5 h-4 w-4" /> Nova automação</Button>
       </div>
 
       {isLoading ? (
@@ -100,7 +100,7 @@ export default function CadenciasPage() {
       ) : !cadences?.length ? (
         <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed py-20 text-center">
           <Workflow className="h-8 w-8 text-muted-foreground" />
-          <p className="text-sm font-medium">Nenhuma cadência ainda</p>
+          <p className="text-sm font-medium">Nenhuma automação ainda</p>
           <p className="text-sm text-muted-foreground">Crie uma sequência de nutrição automática.</p>
         </div>
       ) : (
@@ -108,7 +108,7 @@ export default function CadenciasPage() {
           <table className="w-full text-sm">
             <thead className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
               <tr>
-                <th className="px-4 py-2.5 font-medium">Cadência</th>
+                <th className="px-4 py-2.5 font-medium">Automação</th>
                 <th className="px-4 py-2.5 font-medium">Gatilho</th>
                 <th className="px-4 py-2.5 font-medium">Ativa</th>
                 <th className="px-4 py-2.5 font-medium text-right">Acompanhar</th>

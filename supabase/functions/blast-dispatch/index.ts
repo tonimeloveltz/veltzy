@@ -2,7 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders } from '../_shared/cors.ts'
 import { buildAudiencePlan, leadIdsInStages } from '../_shared/blast-audience.ts'
 import { computeBlastSchedule, type ScheduleItem } from '../_shared/blast-schedule.ts'
-import { getTemplateBodyText, renderTemplateBody, resolveTemplateParams } from '../_shared/blast-render.ts'
+import { getTemplateBodyText, renderTemplateBody, renderMessageBody, resolveTemplateParams } from '../_shared/blast-render.ts'
 
 // blast-dispatch (mkt-ativo · SPEC §2a/§3). Fluxo: gate por-empresa (early-return,
 // precedente sdr-ai) → resolve provider (cloud_api RECUSADO na Fase 1: HSM real =
@@ -115,26 +115,40 @@ Deno.serve(async (req) => {
     const provider = (companyProvider?.active_whatsapp_provider as string) ?? 'zapi'
     const isCloudApi = provider === 'cloud_api'
 
-    // ---- Template: fonte do conteudo. cloud_api = template HSM (params separados);
-    // waha/evolution = BODY renderizado como texto. ----
-    if (!campaign.template_id) {
-      return jsonResponse({ error: 'Campanha sem template_id' }, corsHeaders, 400)
-    }
-    const { data: template } = await veltzy
-      .from('whatsapp_templates')
-      .select('id, company_id, name, language, components, status')
-      .eq('id', campaign.template_id)
-      .single()
-    if (!template || template.company_id !== companyId) {
-      return jsonResponse({ error: 'Template nao encontrado' }, corsHeaders, 404)
-    }
-    // Cloud API oficial: a Meta so entrega template APROVADO. Recusa cedo se nao estiver.
-    if (isCloudApi && template.status !== 'APPROVED') {
-      return jsonResponse({ error: `Template '${template.name}' nao esta APPROVED (status: ${template.status}). Cloud API exige template aprovado.`, reason: 'template_not_approved' }, corsHeaders, 422)
-    }
-    const bodyText = getTemplateBodyText(template.components)
-    if (!bodyText) {
-      return jsonResponse({ error: 'Template sem componente BODY com texto' }, corsHeaders, 422)
+    // ---- Fonte do conteudo. Com template_id: HSM (Cloud API) / BODY renderizado (waha/evo).
+    // Sem template_id: MENSAGEM LIVRE (campaign.message_body) — so nao-oficial. ----
+    // deno-lint-ignore no-explicit-any
+    let template: any = null
+    let bodyText = ''
+    const isFreeText = !campaign.template_id
+
+    if (isFreeText) {
+      // Cloud API exige template aprovado (regra da Meta): texto livre nao serve.
+      if (isCloudApi) {
+        return jsonResponse({ error: 'Canal oficial (Cloud API) exige template aprovado pela Meta; mensagem livre nao e permitida.', reason: 'template_required' }, corsHeaders, 422)
+      }
+      bodyText = (campaign.message_body ?? '').trim()
+      if (!bodyText) {
+        return jsonResponse({ error: 'Campanha sem template_id e sem message_body' }, corsHeaders, 400)
+      }
+    } else {
+      const { data: tpl } = await veltzy
+        .from('whatsapp_templates')
+        .select('id, company_id, name, language, components, status')
+        .eq('id', campaign.template_id)
+        .single()
+      if (!tpl || tpl.company_id !== companyId) {
+        return jsonResponse({ error: 'Template nao encontrado' }, corsHeaders, 404)
+      }
+      // Cloud API oficial: a Meta so entrega template APROVADO. Recusa cedo se nao estiver.
+      if (isCloudApi && tpl.status !== 'APPROVED') {
+        return jsonResponse({ error: `Template '${tpl.name}' nao esta APPROVED (status: ${tpl.status}). Cloud API exige template aprovado.`, reason: 'template_not_approved' }, corsHeaders, 422)
+      }
+      bodyText = getTemplateBodyText(tpl.components)
+      if (!bodyText) {
+        return jsonResponse({ error: 'Template sem componente BODY com texto' }, corsHeaders, 422)
+      }
+      template = tpl
     }
 
     // ---- Audiencia: dentro da company, exclui opt-out, aplica o filtro ----
@@ -144,13 +158,29 @@ Deno.serve(async (req) => {
       .select('*')
       .eq('company_id', companyId)
       .eq('marketing_opt_out', false)
+    // Seleção MANUAL: restringe a EXATAMENTE esses leads (ignora os outros filtros).
+    if (plan.manualIds) q = q.in('id', plan.manualIds)
     if (plan.temperatureIn) q = q.in('temperature', plan.temperatureIn)
     if (plan.tagsOverlap) q = q.overlaps('tags', plan.tagsOverlap)
     if (plan.sourceEq) q = q.eq('source_id', plan.sourceEq)
 
+    // Excluir recentes: remove leads com mensagem enviada nos últimos N dias (anti-fadiga).
+    if (plan.excludeRecentDays) {
+      const since = new Date(Date.now() - plan.excludeRecentDays * 86_400_000).toISOString()
+      const { data: recent, error: recentErr } = await veltzy
+        .from('messages')
+        .select('lead_id')
+        .eq('company_id', companyId)
+        .gte('created_at', since)
+        .not('lead_id', 'is', null)
+      if (recentErr) return jsonResponse({ error: `Falha ao resolver recentes: ${recentErr.message}` }, corsHeaders, 500)
+      const recentIds = [...new Set((recent ?? []).map((m: { lead_id: string }) => m.lead_id))]
+      if (recentIds.length > 0) q = q.not('id', 'in', `(${recentIds.join(',')})`)
+    }
+
     // Segmentação por ETAPA (critério A estrito): resolve os lead_ids cujo deal ABERTO
-    // mais recente está num dos stages e restringe a audiência a eles.
-    if (plan.stageIn) {
+    // mais recente está num dos stages e restringe a audiência a eles. (Pulado na seleção manual.)
+    if (plan.stageIn && !plan.manualIds) {
       const { data: openDeals, error: dealsErr } = await veltzy
         .from('deals')
         .select('lead_id, stage_id, created_at')
@@ -189,8 +219,10 @@ Deno.serve(async (req) => {
     const scheduleItems: ScheduleItem[] = audience.map((l: { whatsapp_instance_name: string | null }) => ({
       instanceKey: l.whatsapp_instance_name ?? 'default',
     }))
+    // anti_ban (override editável por campanha) tem precedência sobre throttle_config.
+    const antiBan = (campaign.anti_ban ?? campaign.throttle_config ?? null)
     const schedule = computeBlastSchedule(scheduleItems, {
-      throttle: (campaign.throttle_config ?? null) as Parameters<typeof computeBlastSchedule>[1]['throttle'],
+      throttle: antiBan as Parameters<typeof computeBlastSchedule>[1]['throttle'],
       enforce: !isCloudApi,
       now: new Date(campaign.scheduled_at ? new Date(campaign.scheduled_at) : new Date()),
       tzOffsetMinutes: BRT_OFFSET_MINUTES,
@@ -204,8 +236,9 @@ Deno.serve(async (req) => {
       const base = {
         company_id: companyId,
         lead_id: lead.id as string,
-        // content sempre carrega o texto renderizado (historico/inbox), mesmo no template.
-        content: renderTemplateBody(bodyText, variableMapping, lead),
+        // content carrega o texto renderizado (historico/inbox). Texto livre usa variaveis
+        // nomeadas ({{nome}}/{{telefone}}/{{empresa}}); template usa o mapping posicional.
+        content: isFreeText ? renderMessageBody(bodyText, lead) : renderTemplateBody(bodyText, variableMapping, lead),
         scheduled_at: schedule[i].scheduled_at,
         source: 'campaign',
         instance_name: (lead.whatsapp_instance_name as string) ?? null,
