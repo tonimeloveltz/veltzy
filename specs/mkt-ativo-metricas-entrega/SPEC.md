@@ -101,6 +101,7 @@ supabase/functions/cloud-api-inbound/index.ts
 src/types/database.ts
 src/services/campaigns.service.ts
 src/components/campanhas/recipient-list.tsx
+deno.lock
 <!-- /arquivos -->
 
 (Além de `src/types/database.types.ts` regenerado pelo gen types — coberto pelo allow do pvo.)
