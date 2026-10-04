@@ -66,6 +66,8 @@ Deno.serve(async (req) => {
         const activeProvider = await getActiveProvider(supabasePublic, item.company_id)
         const msgType = (item.message_type ?? 'text') as 'text' | 'image' | 'audio' | 'video' | 'document'
         let deliveryStatus: 'sent' | 'failed' = 'sent'
+        // wamid do envio (Cloud API): guardado em messages.external_id p/ casar o receipt (Onda 2).
+        let externalId: string | null = null
 
         if (activeProvider === 'waha') {
           // WAHA: espelha o ramo evolution, mas o provider usa sessionName (mesmo
@@ -142,7 +144,7 @@ Deno.serve(async (req) => {
               if (!meta.template_name || !meta.language) {
                 throw new Error('Item de template sem template_name/language no metadata')
               }
-              await provider.sendTemplate!({
+              const res = await provider.sendTemplate!({
                 phone: lead.phone,
                 phoneNumberId: outbound.phoneNumberId,
                 companyId: item.company_id,
@@ -150,8 +152,9 @@ Deno.serve(async (req) => {
                 language: meta.language,
                 params: meta.params ?? [],
               })
+              externalId = res?.externalId ?? null
             } else {
-              await provider.sendMessage({} as WhatsAppConfig, {
+              const res = await provider.sendMessage({} as WhatsAppConfig, {
                 phone: lead.phone,
                 content: item.content,
                 type: msgType,
@@ -159,6 +162,7 @@ Deno.serve(async (req) => {
                 phoneNumberId: outbound.phoneNumberId,
                 companyId: item.company_id,
               })
+              externalId = res?.externalId ?? null
             }
           } catch (err) {
             console.error('[process-message-queue] Cloud API send failed:', err)
@@ -191,7 +195,8 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Salvar mensagem no historico
+        // Salvar mensagem no historico. external_id (wamid) + message_queue_id ligam o
+        // receipt (cloud-api-inbound statuses[]) e a tela de detalhe da campanha (Onda 2).
         await supabase.from('messages').insert({
           lead_id: item.lead_id,
           company_id: item.company_id,
@@ -202,6 +207,8 @@ Deno.serve(async (req) => {
           source: deliveryStatus === 'failed' ? 'manual' : 'whatsapp',
           instance_name: item.instance_name ?? null,
           delivery_status: deliveryStatus,
+          external_id: externalId,
+          message_queue_id: item.id,
         })
 
         await supabase

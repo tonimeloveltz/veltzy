@@ -19,6 +19,8 @@ export interface CompanyFeatures {
   mkt_ativo_enabled?: boolean
   /** IA nas cadências (gerar mensagem via Hub). Gate de custo, adicional ao mkt_ativo_enabled. */
   ai_msg_enabled?: boolean
+  /** Métricas de entrega (Entregue/Lido via receipts Cloud API). Default OFF (privacy by design). */
+  delivery_metrics_enabled?: boolean
 }
 
 // ---- mkt-ativo (disparo em massa / campanhas) ----

@@ -4,11 +4,12 @@ import { normalizePhoneBR } from '../_shared/phone.ts'
 import { verifyMetaSignature } from '../_shared/meta-signature.ts'
 import { resolveCloudApiNumber, ResolvedNumber } from '../_shared/cloud-api-resolve.ts'
 import { downloadAndPersistCloudApiMedia } from '../_shared/cloud-api-media.ts'
+import { mapStatus, shouldApply, type DeliveryStatus } from './delivery-status.ts'
 
-// NOTA: statuses[] (delivery/read) e eventos de coexistencia
-// (account_offboarded/reconnected) sao Fase 3. Esta funcao trata:
-// GET hub.challenge + verificacao HMAC + messages[] + smb_message_echoes +
-// history + smb_app_state_sync (log) + message_template_status_update (bloco d).
+// Esta funcao trata: GET hub.challenge + verificacao HMAC + messages[] +
+// smb_message_echoes + history + smb_app_state_sync (log) +
+// message_template_status_update (bloco d) + statuses[] (delivery/read, Onda 2).
+// Eventos de coexistencia (account_offboarded/reconnected) seguem fora de escopo.
 
 import { getCorsHeaders } from '../_shared/cors.ts'
 
@@ -56,6 +57,8 @@ Deno.serve(async (req) => {
   const url = Deno.env.get('SUPABASE_URL')!
   const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   const supabaseVeltzy = createClient(url, key, { db: { schema: 'veltzy' } })
+  // Gate das métricas de entrega lê public.companies.features (schema public, não veltzy).
+  const supabasePublic = createClient(url, key)
 
   // --- Loop sobre entry[].changes[].value ---
   // Erro de item individual nunca derruba a resposta: sempre 200 no fim
@@ -126,7 +129,13 @@ Deno.serve(async (req) => {
           console.log(`[cloud-api-inbound] smb_app_state_sync recebido (V1.3, so log): ${n} contato(s), company=${resolved.companyId}`)
         }
 
-        // statuses[] e eventos de coexistencia: Fase 3 (nao processados aqui)
+        // statuses[] (delivery/read receipts, Onda 2): atualiza delivery_status da mensagem
+        // de saída (por wamid=external_id), com gate por empresa + progressão monotônica.
+        if (Array.isArray(value.statuses)) {
+          for (const st of value.statuses) {
+            await processStatus(supabaseVeltzy, supabasePublic, resolved.companyId, st)
+          }
+        }
       }
     }
   } catch (err) {
@@ -504,5 +513,56 @@ async function processTemplateStatusUpdate(
     }
   } catch (err) {
     console.error('[cloud-api-inbound] processTemplateStatusUpdate error:', err)
+  }
+}
+
+/**
+ * Receipt de entrega (Onda 2): um item de value.statuses[] -> atualiza o delivery_status
+ * da mensagem de saída (por external_id=wamid), isolado por company, com gate por empresa
+ * e progressão monotônica (ver delivery-status.ts). Best-effort: erro não derruba o 200.
+ */
+async function processStatus(
+  // deno-lint-ignore no-explicit-any
+  supabaseVeltzy: any,
+  // deno-lint-ignore no-explicit-any
+  supabasePublic: any,
+  companyId: string,
+  // deno-lint-ignore no-explicit-any
+  st: any,
+): Promise<void> {
+  try {
+    const wamid = st?.id != null ? String(st.id) : null
+    const next = mapStatus(st?.status)
+    if (!wamid || !next) return
+
+    // Gate por empresa (public.companies.features) — privacy by design, default OFF.
+    const { data: company } = await supabasePublic
+      .from('companies').select('features').eq('id', companyId).single()
+    const features = (company?.features ?? {}) as Record<string, unknown>
+    if (features.delivery_metrics_enabled !== true) return
+
+    // Mensagem de saída desta empresa pelo wamid (external_id é globalmente único,
+    // mas filtramos por company_id como defesa em profundidade).
+    const { data: msg } = await supabaseVeltzy
+      .from('messages')
+      .select('id, delivery_status')
+      .eq('external_id', wamid)
+      .eq('company_id', companyId)
+      .maybeSingle()
+    if (!msg) return // mensagem não é de campanha/registrada (ou outro tenant): ignora
+
+    if (!shouldApply(msg.delivery_status as DeliveryStatus | null, next)) return
+
+    // deno-lint-ignore no-explicit-any
+    const patch: Record<string, any> = {
+      delivery_status: next,
+      delivery_updated_at: new Date().toISOString(),
+    }
+    if (next === 'failed') patch.delivery_error = st?.errors?.[0]?.title ?? st?.errors?.[0]?.message ?? null
+
+    const { error } = await supabaseVeltzy.from('messages').update(patch).eq('id', msg.id)
+    if (error) console.error('[cloud-api-inbound] processStatus update erro:', error.message)
+  } catch (err) {
+    console.error('[cloud-api-inbound] processStatus error:', err)
   }
 }
