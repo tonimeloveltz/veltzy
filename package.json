@@ -9,6 +9,8 @@
     "lint": "eslint .",
     "preflight": "bash scripts/preflight.sh",
     "pvo": "bash scripts/pvo.sh",
+    "prod:dry": "bash scripts/prod-push.sh --dry-run",
+    "prod:apply": "bash scripts/prod-push.sh --apply",
     "preview": "vite preview",
     "test": "vitest",
     "test:ui": "vitest --ui",
