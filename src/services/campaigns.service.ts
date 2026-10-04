@@ -134,7 +134,7 @@ export const getCampaignById = async (
   return (data as unknown as CampaignWithTemplate) ?? null
 }
 
-/** Recipient com nome do lead e o item da fila (content renderizado + status). */
+/** Recipient com nome do lead, o item da fila e a entrega (delivery do receipt Cloud API). */
 export interface RecipientDetail extends BlastRecipient {
   lead: { name: string | null } | null
   queue: {
@@ -143,11 +143,16 @@ export interface RecipientDetail extends BlastRecipient {
     sent_at: string | null
     error_message: string | null
   } | null
+  /** Métricas de entrega (Onda 2): sent|delivered|read|failed da mensagem ligada. null = sem mensagem. */
+  delivery_status?: string | null
+  delivery_updated_at?: string | null
 }
 
 /**
  * Recipients da campanha com embedding: lead(name) + message_queue(content, status, ...).
  * FKs (lead_id->leads, message_queue_id->message_queue) habilitam os aliases do PostgREST.
+ * Entrega (Onda 2): veltzy.messages é a fonte da verdade do delivery_status; o recipient
+ * chega nela pelo message_queue_id (não há FK recipient->messages → query dedicada + map).
  */
 export const getCampaignRecipientsDetailed = async (
   campaignId: string,
@@ -158,5 +163,24 @@ export const getCampaignRecipientsDetailed = async (
     .eq('campaign_id', campaignId)
     .order('created_at', { ascending: false })
   if (error) throw error
-  return (data ?? []) as unknown as RecipientDetail[]
+  const recipients = (data ?? []) as unknown as RecipientDetail[]
+
+  // Anexa o delivery_status da mensagem ligada, por message_queue_id (join por chave).
+  const queueIds = recipients.map((r) => r.message_queue_id).filter((id): id is string => !!id)
+  if (queueIds.length > 0) {
+    const { data: deliveries, error: dErr } = await veltzy()
+      .from('messages')
+      .select('message_queue_id, delivery_status, delivery_updated_at')
+      .in('message_queue_id', queueIds)
+    if (dErr) throw dErr
+    const byQueue = new Map(
+      (deliveries ?? []).map((d: Record<string, unknown>) => [d.message_queue_id as string, d]),
+    )
+    for (const r of recipients) {
+      const d = r.message_queue_id ? byQueue.get(r.message_queue_id) : undefined
+      r.delivery_status = (d?.delivery_status as string | null) ?? null
+      r.delivery_updated_at = (d?.delivery_updated_at as string | null) ?? null
+    }
+  }
+  return recipients
 }
