@@ -93,6 +93,10 @@ export function CadenceForm({ open, onOpenChange }: Props) {
             <Input id="cad-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Nutrição pós-cadastro" />
           </div>
 
+          <p className="rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
+            A cadência para automaticamente se o contato responder ou pedir opt-out.
+          </p>
+
           {/* Gatilho */}
           <div className="space-y-1.5">
             <Label>Como inicia</Label>
