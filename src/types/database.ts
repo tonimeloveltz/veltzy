@@ -35,6 +35,10 @@ export interface AudienceFilter {
   source_id?: string
   /** Etapa: stage_id do deal aberto mais recente (resolvido na edge via deals). */
   stage_id?: string[]
+  /** Seleção manual: usa EXATAMENTE estes leads (ignora os demais filtros de público). */
+  manual_ids?: string[]
+  /** Exclui leads com mensagem enviada nos últimos N dias (anti-fadiga). */
+  exclude_recent_days?: number
 }
 
 /** Override anti-ban por-campanha (§4bis). Ausente = defaults de sistema. */
@@ -51,9 +55,13 @@ export interface BlastCampaign {
   company_id: string
   name: string
   template_id: string | null
+  /** Texto livre (WAHA/Evolution) renderizável; usado quando template_id IS NULL. */
+  message_body: string | null
   variable_mapping: Record<string, string>
   audience_filter: AudienceFilter
   throttle_config: ThrottleConfig | null
+  /** Override anti-ban por-campanha (mesma forma do ThrottleConfig). null = defaults do servidor. */
+  anti_ban: ThrottleConfig | null
   status: BlastCampaignStatus
   scheduled_at: string | null
   started_at: string | null
@@ -86,6 +94,8 @@ export type CadenceRunStatus = 'active' | 'completed' | 'cancelled' | 'failed'
 export type CadenceTriggerEvent =
   | 'lead_created' | 'lead_stage_changed' | 'lead_temperature_changed'
   | 'message_received' | 'no_response' | 'deal_closed' | 'lead_lost'
+  // Automações (Leadbaze): gatilhos novos.
+  | 'stage_changed' | 'tag_added' | 'recurring' | 'webhook'
 
 export interface CadenceCondition {
   field: string
@@ -101,6 +111,10 @@ export interface Cadence {
   cancel_on_stage_change: boolean
   trigger_event: CadenceTriggerEvent | null
   trigger_conditions: CadenceCondition[]
+  /** Cron do gatilho 'recurring' (null fora dele). */
+  recurring_cron: string | null
+  /** Token do gatilho 'webhook' (null fora dele). */
+  webhook_token: string | null
   created_by: string | null
   created_at: string
   updated_at: string

@@ -49,6 +49,24 @@ export function renderTemplateBody(
 }
 
 /**
+ * Renderiza MENSAGEM LIVRE (campanha sem template, WAHA/Evolution) substituindo
+ * variáveis NOMEADas {{nome}}/{{telefone}}/{{empresa}} pelos campos do lead.
+ * Variável desconhecida vira '' (nunca vaza {{x}} cru no envio). Case-insensitive.
+ */
+const FREE_VAR_MAP: Record<string, string> = {
+  nome: 'name',
+  telefone: 'phone',
+  empresa: 'company_name',
+}
+export function renderMessageBody(body: string, lead: Record<string, unknown>): string {
+  return body.replace(/\{\{\s*([a-zA-Z_]+)\s*\}\}/g, (_m, name: string) => {
+    const field = FREE_VAR_MAP[name.toLowerCase()]
+    const v = field ? lead[field] : undefined
+    return v == null ? '' : String(v)
+  })
+}
+
+/**
  * Resolve os PARAMETROS posicionais de um template (Cloud API HSM), em ordem
  * crescente das variaveis {{n}} do body. Diferente de renderTemplateBody (que
  * devolve texto), aqui devolve o ARRAY de valores — o payload de template da Meta
