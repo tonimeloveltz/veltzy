@@ -16,6 +16,10 @@ export interface AudienceFilter {
   // A resolução (DISTINCT ON lead_id … status='open' ORDER created_at DESC) é na edge;
   // aqui só normaliza a lista de stages desejados.
   stage_id?: string[]
+  // Seleção manual: usa EXATAMENTE estes leads e IGNORA os demais filtros de público.
+  manual_ids?: string[]
+  // Exclui leads com mensagem enviada nos últimos N dias (anti-fadiga; resolvido na edge).
+  exclude_recent_days?: number
   // status / pipeline_id: por-pipeline = evolução futura.
   [key: string]: unknown
 }
@@ -25,6 +29,8 @@ export interface AudiencePlan {
   tagsOverlap?: string[] // lead.tags && filtro (qualquer tag em comum)
   sourceEq?: string
   stageIn?: string[]     // filtra pelo stage do deal aberto recente (resolvido na edge via deals)
+  manualIds?: string[]   // seleção manual: restringe a EXATAMENTE estes leads (ignora os outros filtros)
+  excludeRecentDays?: number // exclui quem recebeu mensagem nos últimos N dias (resolvido na edge)
   // Sempre verdadeiros na edge, explicitados aqui para o teste documentar a regra:
   companyScoped: true // .eq('company_id', companyId)
   excludeOptOut: true // .eq('marketing_opt_out', false)
@@ -43,6 +49,18 @@ const cleanStrings = (v: unknown): string[] | undefined => {
 export function buildAudiencePlan(filter: AudienceFilter | null | undefined): AudiencePlan {
   const f = filter ?? {}
   const plan: AudiencePlan = { companyScoped: true, excludeOptOut: true }
+
+  // exclude_recent_days aplica em qualquer modo (manual ou por filtro).
+  if (typeof f.exclude_recent_days === 'number' && f.exclude_recent_days > 0) {
+    plan.excludeRecentDays = Math.floor(f.exclude_recent_days)
+  }
+
+  // Seleção MANUAL tem precedência: usa exatamente esses leads e ignora os demais filtros.
+  const manualIds = cleanStrings(f.manual_ids)
+  if (manualIds) {
+    plan.manualIds = manualIds
+    return plan
+  }
 
   const temperatureIn = cleanStrings(f.temperature)
   if (temperatureIn) plan.temperatureIn = temperatureIn

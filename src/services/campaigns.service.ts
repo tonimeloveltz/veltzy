@@ -3,6 +3,7 @@ import type {
   AudienceFilter,
   BlastCampaign,
   BlastRecipient,
+  ThrottleConfig,
 } from '@/types/database'
 import type { WhatsAppTemplate } from '@/types/whatsapp-template'
 import { leadIdsInStages } from '@/lib/stage-audience'
@@ -44,17 +45,30 @@ export const countAudience = async (companyId: string, filter: AudienceFilter): 
     .eq('company_id', companyId)
     .eq('marketing_opt_out', false)
     .not('phone', 'is', null)
-  if (filter.temperature?.length) q = q.in('temperature', filter.temperature)
-  if (filter.tags?.length) q = q.overlaps('tags', filter.tags)
-  if (filter.source_id) q = q.eq('source_id', filter.source_id)
-  // Etapa: resolve os lead_ids pelo deal aberto mais recente (mesmo critério da edge),
-  // p/ a contagem ao vivo bater com o disparo real.
-  if (filter.stage_id?.length) {
-    const { data: openDeals } = await veltzy()
-      .from('deals').select('lead_id, stage_id, created_at').eq('company_id', companyId).eq('status', 'open')
-    const stageLeadIds = leadIdsInStages(openDeals ?? [], filter.stage_id)
-    if (stageLeadIds.length === 0) return 0
-    q = q.in('id', stageLeadIds)
+  // Seleção MANUAL tem precedência (usa exatamente estes; ignora os outros filtros).
+  if (filter.manual_ids?.length) {
+    q = q.in('id', filter.manual_ids)
+  } else {
+    if (filter.temperature?.length) q = q.in('temperature', filter.temperature)
+    if (filter.tags?.length) q = q.overlaps('tags', filter.tags)
+    if (filter.source_id) q = q.eq('source_id', filter.source_id)
+    // Etapa: resolve os lead_ids pelo deal aberto mais recente (mesmo critério da edge),
+    // p/ a contagem ao vivo bater com o disparo real.
+    if (filter.stage_id?.length) {
+      const { data: openDeals } = await veltzy()
+        .from('deals').select('lead_id, stage_id, created_at').eq('company_id', companyId).eq('status', 'open')
+      const stageLeadIds = leadIdsInStages(openDeals ?? [], filter.stage_id)
+      if (stageLeadIds.length === 0) return 0
+      q = q.in('id', stageLeadIds)
+    }
+  }
+  // Excluir recentes: remove quem recebeu mensagem nos últimos N dias (mesma regra da edge).
+  if (filter.exclude_recent_days && filter.exclude_recent_days > 0) {
+    const since = new Date(Date.now() - filter.exclude_recent_days * 86_400_000).toISOString()
+    const { data: recent } = await veltzy()
+      .from('messages').select('lead_id').eq('company_id', companyId).gte('created_at', since).not('lead_id', 'is', null)
+    const recentIds = [...new Set((recent ?? []).map((m: { lead_id: string }) => m.lead_id))]
+    if (recentIds.length > 0) q = q.not('id', 'in', `(${recentIds.join(',')})`)
   }
   const { count, error } = await q
   if (error) throw error
@@ -63,9 +77,14 @@ export const countAudience = async (companyId: string, filter: AudienceFilter): 
 
 export interface CreateCampaignInput {
   name: string
-  template_id: string
+  /** Template HSM (obrigatório no Cloud API). null = mensagem livre (WAHA/Evolution). */
+  template_id?: string | null
+  /** Texto livre (quando sem template). */
+  message_body?: string | null
   variable_mapping: Record<string, string>
   audience_filter: AudienceFilter
+  /** Override anti-ban por campanha (ThrottleConfig). null = defaults do servidor. */
+  anti_ban?: ThrottleConfig | null
   scheduled_at?: string | null
   followup_cadence_id?: string | null
   followup_mode?: 'none' | 'immediate' | 'no_reply'
@@ -82,9 +101,11 @@ export const createCampaign = async (
     .insert({
       company_id: companyId,
       name: input.name,
-      template_id: input.template_id,
+      template_id: input.template_id ?? null,
+      message_body: input.message_body ?? null,
       variable_mapping: input.variable_mapping,
       audience_filter: input.audience_filter,
+      anti_ban: input.anti_ban ?? null,
       status: input.scheduled_at ? 'scheduled' : 'draft',
       scheduled_at: input.scheduled_at ?? null,
       followup_cadence_id: input.followup_cadence_id ?? null,

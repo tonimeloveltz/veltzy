@@ -398,6 +398,14 @@ verify_jwt = false
 [functions.start-cadences]
 verify_jwt = false
 
+# Automacoes · gatilho recorrente (cron-auth, roda a cada 15min).
+[functions.process-recurring-cadences]
+verify_jwt = false
+
+# Automacoes · gatilho webhook. Publico, auth pelo webhook_token da automacao.
+[functions.cadence-webhook]
+verify_jwt = false
+
 [functions.instagram-send]
 verify_jwt = true
 

@@ -194,6 +194,13 @@ export const updateLead = async (companyId: string, leadId: string, input: Updat
     .select()
     .single()
   if (error) throw error
+  // Gatilho 'tag_added' das automações (best-effort): só quando tags foram editadas e há
+  // alguma tag. start-cadences filtra pela tag configurada e é idempotente.
+  if (input.tags !== undefined && (data as { tags?: string[] }).tags?.length) {
+    supabase.functions
+      .invoke('start-cadences', { body: { trigger: 'tag_added', leadId, companyId } })
+      .catch(() => { /* best-effort */ })
+  }
   return data
 }
 
