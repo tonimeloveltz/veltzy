@@ -46,6 +46,10 @@ export interface CreateCadenceInput {
   trigger_conditions: CadenceCondition[]
   cancel_on_stage_change: boolean
   steps: CadenceStepInput[]
+  /** Rascunho (false) ou ativa (true). Default true (compat). */
+  is_enabled?: boolean
+  recurring_cron?: string | null
+  webhook_token?: string | null
 }
 
 export const createCadence = async (
@@ -61,7 +65,9 @@ export const createCadence = async (
       trigger_event: input.trigger_event,
       trigger_conditions: input.trigger_conditions,
       cancel_on_stage_change: input.cancel_on_stage_change,
-      is_enabled: true,
+      is_enabled: input.is_enabled ?? true,
+      recurring_cron: input.recurring_cron ?? null,
+      webhook_token: input.webhook_token ?? null,
       created_by: createdBy,
     })
     .select()

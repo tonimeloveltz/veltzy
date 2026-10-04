@@ -5,10 +5,11 @@ import { useAuthStore } from '@/stores/auth.store'
 import { useCampaignTemplates, useAudienceCount, useCreateCampaign, useDispatchCampaign } from '@/hooks/use-campaigns'
 import { useCadences } from '@/hooks/use-cadences'
 import { useLeadSources } from '@/hooks/use-lead-sources'
-import { leadTemperatureConfig } from '@/lib/lead-config'
 import { getTemplateBody, extractVariables } from '@/lib/template-render'
 import { StageMultiSelect } from '@/components/mkt-ativo/stage-multi-select'
 import { LeadTagsInput } from '@/components/pipeline/lead-tags-input'
+import { ManualContactPicker } from '@/components/campanhas/manual-contact-picker'
+import { AntiBanSettings, ANTI_BAN_DEFAULTS } from '@/components/campanhas/anti-ban-settings'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -18,17 +19,52 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import type { LeadTemperature, AudienceFilter } from '@/types/database'
+import type { AudienceFilter, ThrottleConfig } from '@/types/database'
 
-const TEMPERATURES: LeadTemperature[] = ['cold', 'warm', 'hot', 'fire']
 const OFFICIAL_PROVIDER = 'cloud_api'
+const STEP_LABELS = ['Destinatários', 'Mensagem', 'Configurações', 'Revisão']
 
-// Opcoes de mapeamento de variavel {{n}} → campo do lead (ou texto fixo).
-const LEAD_FIELDS = [
-  { value: 'lead.name', label: 'Nome do contato' },
-  { value: 'lead.company_name', label: 'Empresa do contato' },
-  { value: 'lead.phone', label: 'Telefone' },
-  { value: '__fixed__', label: 'Texto fixo' },
+// Stepper visual (fidelidade Leadbaze): 4 círculos numerados ligados por linha; etapa atual
+// em destaque, concluídas com check, futuras esmaecidas. Usa tokens do app.
+function WizardStepper({ step }: { step: number }) {
+  return (
+    <div className="flex items-center">
+      {STEP_LABELS.map((label, i) => {
+        const n = i + 1
+        const done = n < step
+        const current = n === step
+        return (
+          <div key={label} className="flex flex-1 items-center last:flex-none">
+            <div className="flex flex-col items-center gap-1">
+              <div
+                className={cn(
+                  'flex h-7 w-7 items-center justify-center rounded-full border text-xs font-medium',
+                  current && 'border-primary bg-primary text-primary-foreground',
+                  done && 'border-primary bg-primary/10 text-primary',
+                  !current && !done && 'border-input text-muted-foreground',
+                )}
+              >
+                {done ? <Check className="h-4 w-4" /> : n}
+              </div>
+              <span className={cn('text-[10px]', current ? 'font-medium text-foreground' : 'text-muted-foreground')}>{label}</span>
+            </div>
+            {n < STEP_LABELS.length && (
+              <div className={cn('mx-1 h-0.5 flex-1', n < step ? 'bg-primary' : 'bg-border')} />
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+type AudienceMode = 'all' | 'stage' | 'source' | 'tag' | 'manual'
+const AUDIENCE_MODES: { value: AudienceMode; label: string }[] = [
+  { value: 'all', label: 'Todos ativos' },
+  { value: 'stage', label: 'Por etapa' },
+  { value: 'source', label: 'Por origem' },
+  { value: 'tag', label: 'Por tag' },
+  { value: 'manual', label: 'Seleção manual' },
 ]
 
 interface Props {
@@ -38,27 +74,36 @@ interface Props {
 
 export function CampaignWizard({ open, onOpenChange }: Props) {
   const provider = useAuthStore((s) => s.company?.active_whatsapp_provider)
-  const isNonOfficial = provider != null && provider !== OFFICIAL_PROVIDER
   const isCloudApi = provider === OFFICIAL_PROVIDER
+  const isNonOfficial = provider != null && !isCloudApi
 
   const [step, setStep] = useState(1)
   const [name, setName] = useState('')
-  const [templateId, setTemplateId] = useState('')
-  const [temperatures, setTemperatures] = useState<Set<LeadTemperature>>(new Set())
+
+  // Passo 1 — público
+  const [audienceMode, setAudienceMode] = useState<AudienceMode>('all')
   const [stageIds, setStageIds] = useState<string[]>([])
+  const [sourceId, setSourceId] = useState('')
   const [tags, setTags] = useState<string[]>([])
-  const [sourceId, setSourceId] = useState('all')
-  // Agendamento (opcional): '' = enviar agora; senão datetime-local futuro → status 'scheduled'.
-  const [scheduledAt, setScheduledAt] = useState('')
-  // varMapping[n] = 'lead.x' ou, se fixo, o proprio texto.
+  const [manualIds, setManualIds] = useState<string[]>([])
+  const [excludeRecent, setExcludeRecent] = useState(false)
+  const [excludeDays, setExcludeDays] = useState(7)
+
+  // Passo 2 — mensagem. Cloud API só aceita template; demais começam em texto livre.
+  const [msgMode, setMsgMode] = useState<'free' | 'template'>(isCloudApi ? 'template' : 'free')
+  const [messageBody, setMessageBody] = useState('')
+  const [templateId, setTemplateId] = useState('')
   const [varMapping, setVarMapping] = useState<Record<string, string>>({})
-  // Follow-up pós-campanha (Fase 2): '' = nenhum; senão cadência + modo/delay.
+
+  // Passo 3 — config
+  const [antiBan, setAntiBan] = useState<ThrottleConfig | null>(null)
+  const [scheduledAt, setScheduledAt] = useState('')
   const [followupCadenceId, setFollowupCadenceId] = useState('')
   const [followupMode, setFollowupMode] = useState<'immediate' | 'no_reply'>('immediate')
   const [followupDays, setFollowupDays] = useState(3)
+
   const { data: cadences } = useCadences()
   const { data: leadSources } = useLeadSources()
-
   const { data: templates } = useCampaignTemplates()
   const selectedTemplate = templates?.find((t) => t.id === templateId)
   const bodyText = selectedTemplate ? getTemplateBody(selectedTemplate.components) : ''
@@ -66,40 +111,37 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
 
   const audienceFilter: AudienceFilter = useMemo(() => {
     const f: AudienceFilter = {}
-    if (temperatures.size) f.temperature = [...temperatures]
-    if (stageIds.length) f.stage_id = stageIds
-    if (tags.length) f.tags = tags
-    if (sourceId && sourceId !== 'all') f.source_id = sourceId
+    if (audienceMode === 'stage' && stageIds.length) f.stage_id = stageIds
+    if (audienceMode === 'source' && sourceId) f.source_id = sourceId
+    if (audienceMode === 'tag' && tags.length) f.tags = tags
+    if (audienceMode === 'manual') f.manual_ids = manualIds
+    if (excludeRecent && excludeDays > 0) f.exclude_recent_days = excludeDays
     return f
-  }, [temperatures, stageIds, tags, sourceId])
-  const { data: audienceCount, isFetching: countLoading } = useAudienceCount(audienceFilter, open && step >= 2)
+  }, [audienceMode, stageIds, sourceId, tags, manualIds, excludeRecent, excludeDays])
+  const { data: audienceCount, isFetching: countLoading } = useAudienceCount(audienceFilter, open && step >= 1)
 
   const createCampaign = useCreateCampaign()
   const dispatchCampaign = useDispatchCampaign()
   const busy = createCampaign.isPending || dispatchCampaign.isPending
 
   const reset = () => {
-    setStep(1); setName(''); setTemplateId(''); setTemperatures(new Set()); setStageIds([]); setVarMapping({})
-    setTags([]); setSourceId('all'); setScheduledAt('')
-    setFollowupCadenceId(''); setFollowupMode('immediate'); setFollowupDays(3)
+    setStep(1); setName('')
+    setAudienceMode('all'); setStageIds([]); setSourceId(''); setTags([]); setManualIds([]); setExcludeRecent(false); setExcludeDays(7)
+    setMsgMode(isCloudApi ? 'template' : 'free'); setMessageBody(''); setTemplateId(''); setVarMapping({})
+    setAntiBan(null); setScheduledAt(''); setFollowupCadenceId(''); setFollowupMode('immediate'); setFollowupDays(3)
   }
   const close = () => { onOpenChange(false); setTimeout(reset, 200) }
 
-  const toggleTemp = (t: LeadTemperature) => {
-    setTemperatures((prev) => {
-      const next = new Set(prev)
-      next.has(t) ? next.delete(t) : next.add(t)
-      return next
-    })
-  }
-
-  // Cloud API oficial só entrega template APROVADO — bloqueia a seleção de não-APPROVED.
   const templateNotApproved = isCloudApi && !!selectedTemplate && selectedTemplate.status !== 'APPROVED'
-  const canNext1 = name.trim() !== '' && templateId !== '' && !templateNotApproved
-  // Agendamento: se preenchido, precisa ser no futuro.
   const scheduledInPast = scheduledAt !== '' && new Date(scheduledAt).getTime() <= Date.now()
   const isScheduled = scheduledAt !== '' && !scheduledInPast
-  const canSend = (audienceCount ?? 0) > 0 && !busy && !templateNotApproved && !scheduledInPast
+
+  const messageOk = msgMode === 'free'
+    ? messageBody.trim() !== ''
+    : (templateId !== '' && !templateNotApproved)
+  const canNext1 = name.trim() !== '' && (audienceCount ?? 0) > 0
+  const canNext2 = messageOk
+  const canSend = (audienceCount ?? 0) > 0 && messageOk && !busy && !scheduledInPast
 
   const buildMapping = (): Record<string, string> => {
     const out: Record<string, string> = {}
@@ -111,9 +153,11 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
     try {
       const campaign = await createCampaign.mutateAsync({
         name: name.trim(),
-        template_id: templateId,
-        variable_mapping: buildMapping(),
+        template_id: msgMode === 'template' ? templateId : null,
+        message_body: msgMode === 'free' ? messageBody.trim() : null,
+        variable_mapping: msgMode === 'template' ? buildMapping() : {},
         audience_filter: audienceFilter,
+        anti_ban: antiBan,
         scheduled_at: isScheduled ? new Date(scheduledAt).toISOString() : null,
         followup_cadence_id: followupCadenceId || null,
         followup_mode: followupCadenceId ? followupMode : 'none',
@@ -126,212 +170,205 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
     }
   }
 
+  // Estimativa de tempo (client-side): N * delay médio, respeitando teto/dia por número.
+  const estimate = useMemo(() => {
+    const n = audienceCount ?? 0
+    if (n <= 1) return null
+    const ab = { ...ANTI_BAN_DEFAULTS, ...(antiBan ?? {}) }
+    const avg = (ab.delay_min + ab.delay_max) / 2
+    const totalSec = (n - 1) * (isCloudApi ? 1 : avg)
+    const min = Math.round(totalSec / 60)
+    return min < 1 ? '< 1 min' : `~${min} min`
+  }, [audienceCount, antiBan, isCloudApi])
+
+  const audienceCard = (
+    <div className="flex items-center gap-2 rounded-md border bg-muted/40 p-3 text-sm">
+      <Users className="h-4 w-4 text-muted-foreground" />
+      {countLoading ? (
+        <span className="text-muted-foreground">Calculando público…</span>
+      ) : (
+        <span><strong>{audienceCount ?? 0}</strong> contato(s) será(ão) impactado(s) (exclui opt-out e sem telefone).</span>
+      )}
+    </div>
+  )
+
   return (
     <Dialog open={open} onOpenChange={(o) => (o ? onOpenChange(true) : close())}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Nova campanha · Etapa {step} de 3</DialogTitle>
+          <DialogTitle>Nova campanha</DialogTitle>
         </DialogHeader>
+        <WizardStepper step={step} />
 
-        {/* Etapa 1: nome + template */}
+        {/* Etapa 1: Destinatários */}
         {step === 1 && (
           <div className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="camp-name">Nome da campanha</Label>
               <Input id="camp-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Promo Black Friday" />
             </div>
-            <div className="space-y-1.5">
-              <Label>Template (modelo da mensagem)</Label>
-              <Select value={templateId} onValueChange={setTemplateId}>
-                <SelectTrigger><SelectValue placeholder="Escolha um template" /></SelectTrigger>
+            <div className="space-y-2">
+              <Label>Público</Label>
+              <div className="flex flex-wrap gap-2">
+                {AUDIENCE_MODES.map((m) => (
+                  <button
+                    key={m.value}
+                    type="button"
+                    onClick={() => setAudienceMode(m.value)}
+                    className={cn(
+                      'rounded-full border px-3 py-1 text-sm transition',
+                      audienceMode === m.value ? 'border-primary bg-primary/10 text-primary' : 'border-input text-muted-foreground hover:bg-muted',
+                    )}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {audienceMode === 'stage' && <StageMultiSelect value={stageIds} onChange={setStageIds} />}
+            {audienceMode === 'source' && (
+              <Select value={sourceId} onValueChange={setSourceId}>
+                <SelectTrigger><SelectValue placeholder="Escolha a origem" /></SelectTrigger>
                 <SelectContent>
-                  {templates?.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>{t.name} · {t.language}</SelectItem>
-                  ))}
+                  {(leadSources ?? []).map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                 </SelectContent>
               </Select>
-            </div>
-            {bodyText && (
-              <div className="rounded-md border bg-muted/40 p-3 text-sm">
-                <p className="mb-1 text-xs font-medium text-muted-foreground">Prévia</p>
-                {bodyText}
-              </div>
             )}
-            {templateNotApproved && (
-              <p className="text-sm text-red-600">
-                Este template não está aprovado (status: {selectedTemplate?.status}). O canal oficial (Cloud API) só envia templates aprovados pela Meta.
-              </p>
-            )}
+            {audienceMode === 'tag' && <LeadTagsInput value={tags} onChange={setTags} />}
+            {audienceMode === 'manual' && <ManualContactPicker value={manualIds} onChange={setManualIds} />}
+
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={excludeRecent} onChange={(e) => setExcludeRecent(e.target.checked)} />
+              Excluir quem já recebeu mensagem nos últimos
+              <Input type="number" min={1} className="h-8 w-16" value={String(excludeDays)} onChange={(e) => setExcludeDays(Number(e.target.value))} disabled={!excludeRecent} />
+              dias
+            </label>
+            {audienceCard}
           </div>
         )}
 
-        {/* Etapa 2: publico + contagem */}
+        {/* Etapa 2: Mensagem */}
         {step === 2 && (
           <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Público — temperatura do contato</Label>
-              <div className="flex flex-wrap gap-2">
-                {TEMPERATURES.map((t) => {
-                  const on = temperatures.has(t)
-                  return (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => toggleTemp(t)}
-                      className={cn(
-                        'rounded-full border px-3 py-1 text-sm transition',
-                        on ? 'border-primary bg-primary/10 text-primary' : 'border-input text-muted-foreground hover:bg-muted',
-                      )}
-                    >
-                      {leadTemperatureConfig[t].label}
-                    </button>
-                  )
-                })}
-              </div>
-              <p className="text-xs text-muted-foreground">Sem seleção = todos os contatos elegíveis.</p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={isCloudApi}
+                onClick={() => setMsgMode('free')}
+                className={cn('rounded-md border px-3 py-1.5 text-sm', msgMode === 'free' ? 'border-primary bg-primary/10 text-primary' : 'border-input text-muted-foreground', isCloudApi && 'cursor-not-allowed opacity-50')}
+              >
+                Escrever agora
+              </button>
+              <button
+                type="button"
+                onClick={() => setMsgMode('template')}
+                className={cn('rounded-md border px-3 py-1.5 text-sm', msgMode === 'template' ? 'border-primary bg-primary/10 text-primary' : 'border-input text-muted-foreground')}
+              >
+                Usar template
+              </button>
             </div>
-            <div className="space-y-2">
-              <Label>Etapa do funil (opcional)</Label>
-              <StageMultiSelect value={stageIds} onChange={setStageIds} />
-              <p className="text-xs text-muted-foreground">Considera a etapa do negócio aberto mais recente do contato.</p>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Origem (opcional)</Label>
-              <Select value={sourceId} onValueChange={setSourceId}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas as origens</SelectItem>
-                  {(leadSources ?? []).map((s) => (
-                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Tags (opcional)</Label>
-              <LeadTagsInput value={tags} onChange={setTags} />
-              <p className="text-xs text-muted-foreground">Inclui contatos com qualquer uma das tags.</p>
-            </div>
-            <div className="flex items-center gap-2 rounded-md border bg-muted/40 p-3 text-sm">
-              <Users className="h-4 w-4 text-muted-foreground" />
-              {countLoading ? (
-                <span className="text-muted-foreground">Calculando público…</span>
-              ) : (
-                <span><strong>{audienceCount ?? 0}</strong> contato(s) elegível(is) (exclui quem pediu opt-out e sem telefone).</span>
-              )}
-            </div>
-          </div>
-        )}
+            {isCloudApi && (
+              <p className="text-xs text-muted-foreground">Canal oficial (Cloud API) exige template aprovado pela Meta.</p>
+            )}
 
-        {/* Etapa 3: variaveis + revisao + banner + enviar */}
-        {step === 3 && (
-          <div className="space-y-4">
-            {variables.length > 0 && (
-              <div className="space-y-2">
-                <Label>Variáveis do template</Label>
-                {variables.map((v) => {
-                  const current = varMapping[v] ?? 'lead.name'
-                  const isFixed = !current.startsWith('lead.')
-                  return (
-                    <div key={v} className="flex items-center gap-2">
-                      <span className="w-10 shrink-0 text-sm text-muted-foreground">{`{{${v}}}`}</span>
-                      <Select
-                        value={isFixed ? '__fixed__' : current}
-                        onValueChange={(val) => setVarMapping((m) => ({ ...m, [v]: val === '__fixed__' ? '' : val }))}
-                      >
-                        <SelectTrigger className="flex-1"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {LEAD_FIELDS.map((f) => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                      {isFixed && (
-                        <Input
-                          className="flex-1"
-                          placeholder="Texto fixo"
-                          value={current}
-                          onChange={(e) => setVarMapping((m) => ({ ...m, [v]: e.target.value }))}
-                        />
-                      )}
-                    </div>
-                  )
-                })}
+            {msgMode === 'free' && !isCloudApi && (
+              <div className="space-y-1.5">
+                <Label htmlFor="camp-body">Mensagem</Label>
+                <textarea
+                  id="camp-body"
+                  value={messageBody}
+                  onChange={(e) => setMessageBody(e.target.value)}
+                  rows={5}
+                  placeholder="Escreva a mensagem. Variáveis: {{nome}}, {{telefone}}, {{empresa}}"
+                  className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                />
+                <p className="text-xs text-muted-foreground">Variáveis: {'{{nome}}'} · {'{{telefone}}'} · {'{{empresa}}'}</p>
               </div>
             )}
 
-            <div className="rounded-md border p-3 text-sm">
-              <div className="flex justify-between py-0.5"><span className="text-muted-foreground">Campanha</span><span className="font-medium">{name}</span></div>
-              <div className="flex justify-between py-0.5"><span className="text-muted-foreground">Template</span><span className="font-medium">{selectedTemplate?.name}</span></div>
-              <div className="flex justify-between py-0.5"><span className="text-muted-foreground">Destinatários</span><span className="font-medium">{audienceCount ?? 0}</span></div>
-            </div>
+            {msgMode === 'template' && (
+              <>
+                <div className="space-y-1.5">
+                  <Label>Template</Label>
+                  <Select value={templateId} onValueChange={setTemplateId}>
+                    <SelectTrigger><SelectValue placeholder="Escolha um template" /></SelectTrigger>
+                    <SelectContent>
+                      {templates?.map((t) => <SelectItem key={t.id} value={t.id}>{t.name} · {t.language}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {bodyText && (
+                  <div className="rounded-md border bg-muted/40 p-3 text-sm">
+                    <p className="mb-1 text-xs font-medium text-muted-foreground">Prévia</p>
+                    {bodyText}
+                  </div>
+                )}
+                {templateNotApproved && (
+                  <p className="text-sm text-red-600">Template não aprovado (status: {selectedTemplate?.status}). O Cloud API só envia templates aprovados pela Meta.</p>
+                )}
+                {variables.length > 0 && (
+                  <div className="space-y-2">
+                    <Label>Variáveis do template</Label>
+                    {variables.map((v) => {
+                      const current = varMapping[v] ?? 'lead.name'
+                      const isFixed = !current.startsWith('lead.')
+                      return (
+                        <div key={v} className="flex items-center gap-2">
+                          <span className="w-10 shrink-0 text-sm text-muted-foreground">{`{{${v}}}`}</span>
+                          <Select value={isFixed ? '__fixed__' : current} onValueChange={(val) => setVarMapping((m) => ({ ...m, [v]: val === '__fixed__' ? '' : val }))}>
+                            <SelectTrigger className="flex-1"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="lead.name">Nome do contato</SelectItem>
+                              <SelectItem value="lead.company_name">Empresa do contato</SelectItem>
+                              <SelectItem value="lead.phone">Telefone</SelectItem>
+                              <SelectItem value="__fixed__">Texto fixo</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          {isFixed && <Input className="flex-1" placeholder="Texto fixo" value={current} onChange={(e) => setVarMapping((m) => ({ ...m, [v]: e.target.value }))} />}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
 
+        {/* Etapa 3: Configurações */}
+        {step === 3 && (
+          <div className="space-y-4">
+            <AntiBanSettings value={antiBan} onChange={setAntiBan} />
             <div className="space-y-1.5">
               <Label htmlFor="camp-scheduled">Quando enviar (opcional)</Label>
-              <Input
-                id="camp-scheduled"
-                type="datetime-local"
-                value={scheduledAt}
-                onChange={(e) => setScheduledAt(e.target.value)}
-              />
+              <Input id="camp-scheduled" type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} />
               {scheduledInPast ? (
                 <p className="text-xs text-red-600">Escolha uma data futura.</p>
               ) : (
                 <p className="text-xs text-muted-foreground">Vazio = enviar agora.</p>
               )}
             </div>
-
-            {isNonOfficial && (
-              <div className="flex gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-                <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
-                <div className="space-y-1">
-                  <p className="font-medium text-amber-700">Envio por canal não-oficial ({provider})</p>
-                  <p className="text-amber-700/90">
-                    O WhatsApp pode banir o número em disparo em massa. Para proteger, aplicamos automaticamente:
-                    espaçamento de 30–90s entre envios, teto de 50/dia por número e janela das 08h às 20h.
-                    Prefira público que já interagiu e comece com volume baixo.
-                  </p>
-                </div>
+            {estimate && (
+              <div className="rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
+                Estimativa: {estimate} para {audienceCount} contato(s).
               </div>
             )}
-
-            {isCloudApi && (
-              <div className="flex gap-2 rounded-md border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm">
-                <Check className="h-4 w-4 shrink-0 text-emerald-600" />
-                <div className="space-y-1">
-                  <p className="font-medium text-emerald-700">Envio por canal oficial (Cloud API)</p>
-                  <p className="text-emerald-700/90">
-                    Disparo via template aprovado pela Meta. Sem os limites anti-ban do canal não-oficial —
-                    seguem as regras da Meta por categoria/qualidade do template.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Follow-up pós-campanha (opcional): ao terminar, inscreve numa cadência. */}
             <div className="space-y-1.5 rounded-md border p-3">
               <Label>Follow-up (opcional)</Label>
               <Select value={followupCadenceId || 'none'} onValueChange={(v) => setFollowupCadenceId(v === 'none' ? '' : v)}>
                 <SelectTrigger><SelectValue placeholder="Sem follow-up" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Sem follow-up</SelectItem>
-                  {(cadences ?? []).filter((c) => c.is_enabled).map((c) => (
-                    <SelectItem key={c.id} value={c.id}>Iniciar cadência: {c.name}</SelectItem>
-                  ))}
+                  {(cadences ?? []).filter((c) => c.is_enabled).map((c) => <SelectItem key={c.id} value={c.id}>Iniciar automação: {c.name}</SelectItem>)}
                 </SelectContent>
               </Select>
               {followupCadenceId && (
                 <div className="flex flex-wrap items-center gap-2 pt-1">
-                  <button type="button" onClick={() => setFollowupMode('immediate')}
-                    className={cn('rounded-full border px-3 py-1 text-sm', followupMode === 'immediate' ? 'border-primary bg-primary/10 text-primary' : 'border-input text-muted-foreground')}>
-                    Ao concluir
-                  </button>
-                  <button type="button" onClick={() => setFollowupMode('no_reply')}
-                    className={cn('rounded-full border px-3 py-1 text-sm', followupMode === 'no_reply' ? 'border-primary bg-primary/10 text-primary' : 'border-input text-muted-foreground')}>
-                    Sem resposta após
-                  </button>
+                  <button type="button" onClick={() => setFollowupMode('immediate')} className={cn('rounded-full border px-3 py-1 text-sm', followupMode === 'immediate' ? 'border-primary bg-primary/10 text-primary' : 'border-input text-muted-foreground')}>Ao concluir</button>
+                  <button type="button" onClick={() => setFollowupMode('no_reply')} className={cn('rounded-full border px-3 py-1 text-sm', followupMode === 'no_reply' ? 'border-primary bg-primary/10 text-primary' : 'border-input text-muted-foreground')}>Sem resposta após</button>
                   {followupMode === 'no_reply' && (
                     <span className="flex items-center gap-1 text-sm">
-                      <Input type="number" min={1} className="w-16" value={String(followupDays)}
-                        onChange={(e) => setFollowupDays(Number(e.target.value))} /> dias
+                      <Input type="number" min={1} className="w-16" value={String(followupDays)} onChange={(e) => setFollowupDays(Number(e.target.value))} /> dias
                     </span>
                   )}
                 </div>
@@ -340,16 +377,39 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
           </div>
         )}
 
+        {/* Etapa 4: Revisão */}
+        {step === 4 && (
+          <div className="space-y-4">
+            <div className="rounded-md border p-3 text-sm">
+              <div className="flex justify-between py-0.5"><span className="text-muted-foreground">Campanha</span><span className="font-medium">{name}</span></div>
+              <div className="flex justify-between py-0.5"><span className="text-muted-foreground">Mensagem</span><span className="font-medium">{msgMode === 'free' ? 'Texto livre' : (selectedTemplate?.name ?? 'Template')}</span></div>
+              <div className="flex justify-between py-0.5"><span className="text-muted-foreground">Destinatários</span><span className="font-medium">{audienceCount ?? 0}</span></div>
+              <div className="flex justify-between py-0.5"><span className="text-muted-foreground">Quando</span><span className="font-medium">{isScheduled ? new Date(scheduledAt).toLocaleString('pt-BR') : 'Agora'}</span></div>
+            </div>
+            {isNonOfficial && (
+              <div className="flex gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+                <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
+                <p className="text-amber-700/90">Canal não-oficial ({provider}). A proteção anti-bloqueio da etapa anterior é aplicada no envio.</p>
+              </div>
+            )}
+          </div>
+        )}
+
         <DialogFooter className="gap-2 sm:justify-between">
           <Button variant="ghost" onClick={() => (step === 1 ? close() : setStep(step - 1))} disabled={busy}>
             {step === 1 ? 'Cancelar' : 'Voltar'}
           </Button>
-          {step < 3 ? (
-            <Button onClick={() => setStep(step + 1)} disabled={step === 1 && !canNext1}>Continuar</Button>
+          {step < 4 ? (
+            <Button
+              onClick={() => setStep(step + 1)}
+              disabled={(step === 1 && !canNext1) || (step === 2 && !canNext2)}
+            >
+              Continuar
+            </Button>
           ) : (
             <Button onClick={handleSend} disabled={!canSend}>
               {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Check className="mr-1.5 h-4 w-4" />}
-              {isScheduled ? 'Agendar' : 'Enviar agora'}
+              {isScheduled ? 'Agendar' : 'Confirmar e Disparar'}
             </Button>
           )}
         </DialogFooter>

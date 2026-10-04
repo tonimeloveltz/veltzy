@@ -1,5 +1,13 @@
-import { veltzy } from '@/lib/supabase'
+import { supabase, veltzy } from '@/lib/supabase'
 import type { DealWithLead, DealStatus, CreateDealInput, UpdateDealInput } from '@/types/database'
+
+/** Dispara o gatilho 'stage_changed' das automações (best-effort; não bloqueia o move). */
+function fireStageChanged(companyId: string, leadId: string | null | undefined) {
+  if (!leadId) return
+  supabase.functions
+    .invoke('start-cadences', { body: { trigger: 'stage_changed', leadId, companyId } })
+    .catch(() => { /* best-effort: automações são aditivas ao fluxo do kanban */ })
+}
 
 const DEAL_WITH_LEAD_SELECT = `
   *,
@@ -132,6 +140,7 @@ export const moveDealStage = async (
     .select(DEAL_WITH_LEAD_SELECT)
     .single()
   if (error) throw error
+  fireStageChanged(companyId, (data as { lead_id?: string }).lead_id)
   return data
 }
 
@@ -149,6 +158,7 @@ export const updateDealValueAndMove = async (
     .select(DEAL_WITH_LEAD_SELECT)
     .single()
   if (error) throw error
+  fireStageChanged(companyId, (data as { lead_id?: string }).lead_id)
   return data
 }
 
