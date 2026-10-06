@@ -16,6 +16,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { useRoles } from '@/hooks/use-roles'
 import { useWhatsAppNumbers, useDisconnectNumber, useDeleteNumber } from '@/hooks/use-whatsapp-numbers'
+import { useWhatsAppStatus } from '@/hooks/use-whatsapp-status'
+import type { WhatsAppProviderType } from '@/types/database'
 import { useWhatsAppCategories } from '@/hooks/use-whatsapp-categories'
 import type { WhatsAppNumberItem, WhatsAppProviderKind } from '@/services/whatsapp-numbers.service'
 import { ConnectNumberDialog, type ConnectChoice } from './connect-number-dialog'
@@ -132,6 +134,15 @@ const PROVIDER_META: {
   { key: 'waha', label: 'WAHA', connect: 'waha', categoryKey: 'waha' },
 ]
 
+// Provider que de fato envia (companies.active_whatsapp_provider, lido do banco e nao do
+// login: muda no Hub sem a pessoa relogar). Os demais numeros listados nao enviam.
+const ACTIVE_PROVIDER_LABEL: Record<WhatsAppProviderType, string> = {
+  cloud_api: 'WhatsApp API Oficial',
+  evolution: 'Evolution',
+  waha: 'WAHA',
+  zapi: 'Z-API',
+}
+
 // Linha de estado vazio: provider LIBERADO no Hub mas sem numero conectado ainda.
 const EmptyProviderRow = ({
   label,
@@ -167,6 +178,8 @@ export const WhatsAppNumbersList = () => {
   const { isAdmin } = useRoles()
   const { data: numbers, isLoading } = useWhatsAppNumbers()
   const { data: categories } = useWhatsAppCategories()
+  const { data: whatsappStatus } = useWhatsAppStatus()
+  const activeProviderLabel = whatsappStatus ? ACTIVE_PROVIDER_LABEL[whatsappStatus.provider] : null
   const disconnectMutation = useDisconnectNumber()
   const deleteMutation = useDeleteNumber()
 
@@ -211,6 +224,9 @@ export const WhatsAppNumbersList = () => {
                 <CardTitle className="text-base">Numeros de WhatsApp</CardTitle>
                 <CardDescription>
                   {count} {count === 1 ? 'numero' : 'numeros'} conectados aos seus funis
+                  {activeProviderLabel && (
+                    <> · Envio ativo: <span className="font-medium text-foreground">{activeProviderLabel}</span></>
+                  )}
                 </CardDescription>
               </div>
             </div>
