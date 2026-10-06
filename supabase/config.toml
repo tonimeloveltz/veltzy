@@ -478,6 +478,12 @@ verify_jwt = false
 [functions.prospect-group-inbound]
 verify_jwt = false
 
+# prospect-dm-send (agente-grupos-whatsapp V3): envio da DM. verify_jwt=true —
+# service_role (modo auto, via process-windows) e JWT de usuario (modo manual, UI
+# admin/super_admin) passam; a function distingue o modo pelo Bearer.
+[functions.prospect-dm-send]
+verify_jwt = true
+
 [edge_runtime]
 enabled = true
 # Supported request policies: `oneshot`, `per_worker`.
