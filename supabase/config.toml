@@ -472,6 +472,12 @@ verify_jwt = false
 [functions.prospect-classify]
 verify_jwt = false
 
+# prospect-group-inbound (agente-grupos-whatsapp V2): webhook da sessao WAHA
+# dedicada (posta direto, sem passar pelo waha-webhook-receiver). Auth propria =
+# HMAC-SHA512 do corpo cru (PROSPECT_WAHA_WEBHOOK_HMAC), por isso verify_jwt=false.
+[functions.prospect-group-inbound]
+verify_jwt = false
+
 [edge_runtime]
 enabled = true
 # Supported request policies: `oneshot`, `per_worker`.
