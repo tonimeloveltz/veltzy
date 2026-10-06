@@ -188,15 +188,20 @@ Deno.serve(async (req) => {
           }
         }
 
-        // alert: tarefa pro Toni (grupo + trecho + signal_id).
+        // alert: tarefa pro Toni (grupo + trecho + signal_id). try/catch pra uma
+        // tarefa que falhe nao derrubar o lote inteiro (created_by e nullable no schema).
         if (signalId && decision === 'alert') {
-          await supabase.from('tasks').insert({
-            company_id: companyId,
-            type: 'todo',
-            status: 'pending',
-            title: `Prospecção: oportunidade sem telefone${groupName ? ` — ${groupName}` : ''}`,
-            description: `${target}\n\n(sinal ${signalId}: autor sem telefone DM-able; abordar manualmente)`,
-          })
+          try {
+            await supabase.from('tasks').insert({
+              company_id: companyId,
+              type: 'todo',
+              status: 'pending',
+              title: `Prospecção: oportunidade sem telefone${groupName ? ` — ${groupName}` : ''}`,
+              description: `${target}\n\n(sinal ${signalId}: autor sem telefone DM-able; abordar manualmente)`,
+            })
+          } catch (e) {
+            console.error('[process-windows] tarefa de alerta falhou:', (e as Error).message)
+          }
         }
 
         await markClassified(supabase, cand)
