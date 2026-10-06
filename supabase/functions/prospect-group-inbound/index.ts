@@ -132,12 +132,12 @@ Deno.serve(async (req) => {
       let alreadyContacted = false
       let leadOptedOut = false
       if (author.phone) {
-        // person_key = lead_id se ja virou lead, senao sha256(phone) — MESMA regra do
-        // dm-send/ledger, pra o "1 contato por pessoa" casar entre V2 e V3.
+        // person_key PADRONIZADO = sha256(phone normalizado) em todo lugar (prefilter +
+        // responded-update + dm-send/reserva). O vinculo com o lead vive em signal.lead_id.
         const { data: lead } = await supabase
-          .from('leads').select('id, marketing_opt_out').eq('company_id', companyId).eq('phone', author.phone).maybeSingle()
+          .from('leads').select('marketing_opt_out').eq('company_id', companyId).eq('phone', author.phone).maybeSingle()
         leadOptedOut = lead?.marketing_opt_out === true
-        const personKey = lead?.id ?? await sha256Hex(author.phone)
+        const personKey = await sha256Hex(normalizePhoneBR(author.phone))
         const { data: contacted } = await supabase
           .from('prospect_contacted').select('id').eq('company_id', companyId).eq('person_key', personKey).maybeSingle()
         alreadyContacted = !!contacted
@@ -220,15 +220,13 @@ Deno.serve(async (req) => {
       sourceId: leadSource?.id ?? undefined,
     })
 
-    // Respondeu a DM -> marca prospect_contacted.responded. person_key pode ser
-    // sha256(phone) (ainda nao virou lead) OU lead_id::text (ja virou): cobre os dois.
+    // Respondeu a DM -> marca prospect_contacted.responded. person_key PADRONIZADO =
+    // sha256(phone normalizado), a MESMA chave da reserva do dm-send.
     // Opt-out (SAIR/PARE): o handler ja setou leads.marketing_opt_out; aqui fecha o
     // bloqueio no ledger de prospeccao (responded=true tambem sinaliza "nao recontatar").
-    const personKey = await sha256Hex(phone)
+    const personKey = await sha256Hex(normalizePhoneBR(phone))
     await supabase.from('prospect_contacted').update({ responded: true })
       .eq('company_id', companyId).eq('person_key', personKey)
-    await supabase.from('prospect_contacted').update({ responded: true })
-      .eq('company_id', companyId).eq('person_key', result.leadId)
 
     return json({
       ok: true,
