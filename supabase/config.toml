@@ -490,6 +490,14 @@ verify_jwt = true
 [functions.prospect-process-windows]
 verify_jwt = false
 
+# prospect-dm-draft / prospect-approach (agente-grupos-whatsapp V5): thin edges da UI.
+# verify_jwt=true; validam papel admin/super_admin da empresa do sinal dentro da function.
+[functions.prospect-dm-draft]
+verify_jwt = true
+
+[functions.prospect-approach]
+verify_jwt = true
+
 [edge_runtime]
 enabled = true
 # Supported request policies: `oneshot`, `per_worker`.

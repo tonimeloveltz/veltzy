@@ -16,6 +16,7 @@ import {
   Zap,
   Megaphone,
   Workflow,
+  Radar,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useIsMobile } from '@/hooks/use-mobile'
@@ -93,6 +94,7 @@ const SidebarContent = ({ onNavigate }: SidebarContentProps) => {
     { label: 'SDR IA', href: '/sdr-ia', icon: Zap, visible: (canAccessAdmin || isManager) && isSdrAgentV2 },
     { label: 'Campanhas', href: '/campanhas', icon: Megaphone, visible: (canAccessAdmin || isManager) && !!company?.features?.mkt_ativo_enabled },
     { label: 'Automações', href: '/automacoes', icon: Workflow, visible: (canAccessAdmin || isManager) && !!company?.features?.mkt_ativo_enabled },
+    { label: 'Prospecção', href: '/prospeccao', icon: Radar, visible: canAccessAdmin && !!company?.features?.prospect_groups_enabled },
     { label: 'Gestão', href: '/gestao', icon: Users, visible: canAccessGestao },
     { label: 'Admin', href: '/admin', icon: Shield, visible: canAccessAdmin },
     { label: 'Super Admin', href: '/super-admin', icon: Crown, visible: isSuperAdmin },
