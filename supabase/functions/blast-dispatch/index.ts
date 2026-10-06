@@ -3,6 +3,7 @@ import { getCorsHeaders } from '../_shared/cors.ts'
 import { buildAudiencePlan, leadIdsInStages } from '../_shared/blast-audience.ts'
 import { computeBlastSchedule, type ScheduleItem } from '../_shared/blast-schedule.ts'
 import { getTemplateBodyText, renderTemplateBody, renderMessageBody, resolveTemplateParams } from '../_shared/blast-render.ts'
+import { resolveSenderInstance, splitAntiBan } from '../_shared/blast-sender.ts'
 
 // blast-dispatch (mkt-ativo · SPEC §2a/§3). Fluxo: gate por-empresa (early-return,
 // precedente sdr-ai) → resolve provider (cloud_api RECUSADO na Fase 1: HSM real =
@@ -202,6 +203,21 @@ Deno.serve(async (req) => {
       return jsonResponse({ ok: true, recipients: 0, note: 'Nenhum lead elegivel (apos company/opt-out/filtro)' }, corsHeaders)
     }
 
+    // ---- Numero de envio (SPEC seletor-numero-campanha): mora no anti_ban. So nao-oficial;
+    // o escolhido precisa ser da company (regra de ouro), senao e ignorado. ----
+    const split = splitAntiBan(campaign.anti_ban)
+    let sender: string | null = null
+    if (split.sender && (provider === 'waha' || provider === 'evolution')) {
+      const table = provider === 'waha' ? 'waha_instances' : 'evolution_instances'
+      const column = provider === 'waha' ? 'session_name' : 'instance_name'
+      const { data: owned } = await admin
+        .from(table).select(column).eq('company_id', companyId).eq(column, split.sender).maybeSingle()
+      if (owned) sender = split.sender
+      else console.warn(`[blast-dispatch] sender_instance '${split.sender}' nao pertence a company ${companyId}; ignorado`)
+    }
+    const senderFor = (l: { whatsapp_instance_name: string | null }) =>
+      resolveSenderInstance(l.whatsapp_instance_name, sender, split.force)
+
     // ---- Cria blast_recipients (idempotente via UNIQUE(campaign_id, lead_id)) ----
     const recipientRows = audience.map((l: { id: string; phone: string }) => ({
       campaign_id,
@@ -216,11 +232,12 @@ Deno.serve(async (req) => {
 
     // ---- Escalonamento (§4bis). enforce=true (nao-oficial waha/evolution/zapi) aplica o
     // piso anti-ban; cloud_api OFICIAL nao (enforce=false = espacamento leve, limites da Meta). ----
+    // O teto diario agrupa pelo numero EFETIVO de envio (ja com o sender aplicado).
     const scheduleItems: ScheduleItem[] = audience.map((l: { whatsapp_instance_name: string | null }) => ({
-      instanceKey: l.whatsapp_instance_name ?? 'default',
+      instanceKey: senderFor(l) ?? 'default',
     }))
     // anti_ban (override editável por campanha) tem precedência sobre throttle_config.
-    const antiBan = (campaign.anti_ban ?? campaign.throttle_config ?? null)
+    const antiBan = split.throttle ?? campaign.throttle_config ?? null
     const schedule = computeBlastSchedule(scheduleItems, {
       throttle: antiBan as Parameters<typeof computeBlastSchedule>[1]['throttle'],
       enforce: !isCloudApi,
@@ -241,7 +258,7 @@ Deno.serve(async (req) => {
         content: isFreeText ? renderMessageBody(bodyText, lead) : renderTemplateBody(bodyText, variableMapping, lead),
         scheduled_at: schedule[i].scheduled_at,
         source: 'campaign',
-        instance_name: (lead.whatsapp_instance_name as string) ?? null,
+        instance_name: senderFor(lead as { whatsapp_instance_name: string | null }),
       }
       if (isCloudApi) {
         return {

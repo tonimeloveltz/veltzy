@@ -10,6 +10,8 @@ import { StageMultiSelect } from '@/components/mkt-ativo/stage-multi-select'
 import { LeadTagsInput } from '@/components/pipeline/lead-tags-input'
 import { ManualContactPicker } from '@/components/campanhas/manual-contact-picker'
 import { AntiBanSettings, ANTI_BAN_DEFAULTS } from '@/components/campanhas/anti-ban-settings'
+import { SenderNumberSelect } from '@/components/campanhas/sender-number-select'
+import { useWhatsAppNumbers } from '@/hooks/use-whatsapp-numbers'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -19,9 +21,10 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import type { AudienceFilter, ThrottleConfig } from '@/types/database'
+import type { AntiBanConfig, AudienceFilter, ThrottleConfig } from '@/types/database'
 
 const OFFICIAL_PROVIDER = 'cloud_api'
+const SENDER_PROVIDERS = ['waha', 'evolution']
 const STEP_LABELS = ['Destinatários', 'Mensagem', 'Configurações', 'Revisão']
 
 // Stepper visual (fidelidade Leadbaze): 4 círculos numerados ligados por linha; etapa atual
@@ -76,6 +79,7 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
   const provider = useAuthStore((s) => s.company?.active_whatsapp_provider)
   const isCloudApi = provider === OFFICIAL_PROVIDER
   const isNonOfficial = provider != null && !isCloudApi
+  const showSender = provider != null && SENDER_PROVIDERS.includes(provider)
 
   const [step, setStep] = useState(1)
   const [name, setName] = useState('')
@@ -97,6 +101,9 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
 
   // Passo 3 — config
   const [antiBan, setAntiBan] = useState<ThrottleConfig | null>(null)
+  // undefined = ainda não escolhido (o seletor aplica o default); null = nenhum.
+  const [sender, setSender] = useState<string | null | undefined>(undefined)
+  const [senderForce, setSenderForce] = useState(false)
   const [scheduledAt, setScheduledAt] = useState('')
   const [followupCadenceId, setFollowupCadenceId] = useState('')
   const [followupMode, setFollowupMode] = useState<'immediate' | 'no_reply'>('immediate')
@@ -105,6 +112,8 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
   const { data: cadences } = useCadences()
   const { data: leadSources } = useLeadSources()
   const { data: templates } = useCampaignTemplates()
+  const { data: numbers } = useWhatsAppNumbers()
+  const senderLabel = sender ? (numbers?.find((n) => n.ref === sender)?.displayNumber ?? sender) : null
   const selectedTemplate = templates?.find((t) => t.id === templateId)
   const bodyText = selectedTemplate ? getTemplateBody(selectedTemplate.components) : ''
   const variables = useMemo(() => extractVariables(bodyText), [bodyText])
@@ -128,7 +137,7 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
     setStep(1); setName('')
     setAudienceMode('all'); setStageIds([]); setSourceId(''); setTags([]); setManualIds([]); setExcludeRecent(false); setExcludeDays(7)
     setMsgMode(isCloudApi ? 'template' : 'free'); setMessageBody(''); setTemplateId(''); setVarMapping({})
-    setAntiBan(null); setScheduledAt(''); setFollowupCadenceId(''); setFollowupMode('immediate'); setFollowupDays(3)
+    setAntiBan(null); setSender(undefined); setSenderForce(false); setScheduledAt(''); setFollowupCadenceId(''); setFollowupMode('immediate'); setFollowupDays(3)
   }
   const close = () => { onOpenChange(false); setTimeout(reset, 200) }
 
@@ -149,6 +158,12 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
     return out
   }
 
+  // Número de envio mora no jsonb anti_ban (sem migration). Sem nada escolhido = null.
+  const buildAntiBan = (): AntiBanConfig | null => {
+    if (!showSender || !sender) return antiBan
+    return { ...(antiBan ?? {}), sender_instance: sender, sender_force: senderForce }
+  }
+
   const handleSend = async () => {
     try {
       const campaign = await createCampaign.mutateAsync({
@@ -157,7 +172,7 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
         message_body: msgMode === 'free' ? messageBody.trim() : null,
         variable_mapping: msgMode === 'template' ? buildMapping() : {},
         audience_filter: audienceFilter,
-        anti_ban: antiBan,
+        anti_ban: buildAntiBan(),
         scheduled_at: isScheduled ? new Date(scheduledAt).toISOString() : null,
         followup_cadence_id: followupCadenceId || null,
         followup_mode: followupCadenceId ? followupMode : 'none',
@@ -338,6 +353,9 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
         {/* Etapa 3: Configurações */}
         {step === 3 && (
           <div className="space-y-4">
+            {showSender && provider && (
+              <SenderNumberSelect provider={provider} value={sender} onChange={setSender} force={senderForce} onForceChange={setSenderForce} />
+            )}
             <AntiBanSettings value={antiBan} onChange={setAntiBan} />
             <div className="space-y-1.5">
               <Label htmlFor="camp-scheduled">Quando enviar (opcional)</Label>
@@ -383,6 +401,9 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
             <div className="rounded-md border p-3 text-sm">
               <div className="flex justify-between py-0.5"><span className="text-muted-foreground">Campanha</span><span className="font-medium">{name}</span></div>
               <div className="flex justify-between py-0.5"><span className="text-muted-foreground">Mensagem</span><span className="font-medium">{msgMode === 'free' ? 'Texto livre' : (selectedTemplate?.name ?? 'Template')}</span></div>
+              {showSender && (
+                <div className="flex justify-between py-0.5"><span className="text-muted-foreground">Número de envio</span><span className="font-medium">{senderLabel ? `${senderLabel}${senderForce ? ' (todos)' : ''}` : 'Número de cada conversa'}</span></div>
+              )}
               <div className="flex justify-between py-0.5"><span className="text-muted-foreground">Destinatários</span><span className="font-medium">{audienceCount ?? 0}</span></div>
               <div className="flex justify-between py-0.5"><span className="text-muted-foreground">Quando</span><span className="font-medium">{isScheduled ? new Date(scheduledAt).toLocaleString('pt-BR') : 'Agora'}</span></div>
             </div>
