@@ -21,6 +21,8 @@ export interface CompanyFeatures {
   ai_msg_enabled?: boolean
   /** Métricas de entrega (Entregue/Lido via receipts Cloud API). Default OFF (privacy by design). */
   delivery_metrics_enabled?: boolean
+  /** Agente de prospecção em grupos de WhatsApp (feature oculta, v1 só a Veltz). Ausente = false. */
+  prospect_groups_enabled?: boolean
 }
 
 // ---- mkt-ativo (disparo em massa / campanhas) ----
