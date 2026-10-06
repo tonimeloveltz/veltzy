@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders } from '../_shared/cors.ts'
+import { normalizePhoneBR } from '../_shared/phone.ts'
 import { WahaHubProvider } from '../_shared/providers/waha-hub.ts'
 import { prospectCreateLeadDeal } from '../_shared/prospect-create-lead-deal.ts'
 
@@ -112,12 +113,12 @@ Deno.serve(async (req) => {
     const phone = signal.author_phone_resolved
     if (!phone) return block('no_phone')
 
-    // opt-out + 1-contato-por-pessoa (person_key = lead_id se ja virou lead, senao sha256(phone))
-    const { data: existingLead } = await supabase.from('leads').select('id, marketing_opt_out').eq('company_id', companyId).eq('phone', phone).maybeSingle()
+    // opt-out do lead (se existir por phone). person_key PADRONIZADO = sha256(phone
+    // normalizado) em todo lugar (V2 prefilter/responded + aqui); o vinculo com o
+    // lead vive em signal.lead_id. A checagem de 1-contato e a RESERVA ATOMICA abaixo.
+    const { data: existingLead } = await supabase.from('leads').select('marketing_opt_out').eq('company_id', companyId).eq('phone', phone).maybeSingle()
     if (existingLead?.marketing_opt_out === true) return block('opt_out')
-    const personKey = existingLead?.id ?? await sha256Hex(phone)
-    const { data: contacted } = await supabase.from('prospect_contacted').select('id').eq('company_id', companyId).eq('person_key', personKey).maybeSingle()
-    if (contacted) return block('already_contacted')
+    const personKey = await sha256Hex(normalizePhoneBR(phone))
 
     // horario comercial
     if (!withinBusinessHours(cfg?.business_hours ?? null)) return block('outside_hours')
@@ -146,6 +147,15 @@ Deno.serve(async (req) => {
     const sessionName: string | null = group?.session_name ?? null
     if (!sessionName) return block('no_session')
 
+    // RESERVA ATOMICA do contato = mutex "1 DM por pessoa pra sempre". Feita DEPOIS de
+    // todos os outros guardrails (pra nao queimar o tiro em bloqueio transitorio) e ANTES
+    // do envio. unique(company_id, person_key) e o lock: se nao inseriu (conflito), ja
+    // foi contatado -> bloqueia. Se o envio falhar, a reserva e desfeita (permite retry).
+    const { data: reserved } = await supabase.from('prospect_contacted')
+      .upsert({ company_id: companyId, person_key: personKey, responded: false }, { onConflict: 'company_id,person_key', ignoreDuplicates: true })
+      .select('id')
+    if (!reserved || reserved.length === 0) return block('already_contacted')
+
     // --- Envio ---
     const { data: dmLog } = await supabase.from('prospect_dm_log').insert({
       company_id: companyId,
@@ -164,18 +174,13 @@ Deno.serve(async (req) => {
         { phone, content: messageText, type: 'text', sessionName, companyId },
       )
 
-      // contato+deal pela funcao estreita (lead upsert + deal; sem messages/SDR/SLA/fila)
+      // contato+deal pela funcao estreita (lead upsert + deal; sem messages/SDR/SLA/fila).
+      // A reserva em prospect_contacted ja foi feita acima (mutex) — nao re-grava aqui.
       const { leadId, dealId } = await prospectCreateLeadDeal({
         supabaseUrl: SUPABASE_URL, supabaseKey: SERVICE_ROLE,
         companyId, phone, name: null, sessionName, groupName: group?.name ?? null,
         pipelineId: await resolvePipelineId(supabase, companyId), sourceId: await resolveSourceId(supabase, companyId),
       })
-
-      // ledger 1-contato-por-pessoa (person_key = lead_id, por SPEC)
-      await supabase.from('prospect_contacted').upsert(
-        { company_id: companyId, person_key: leadId, responded: false },
-        { onConflict: 'company_id,person_key', ignoreDuplicates: true },
-      )
 
       await supabase.from('prospect_dm_log').update({
         status: 'sent', waha_external_id: result.externalId ?? null, sent_at: new Date().toISOString(),
@@ -185,6 +190,8 @@ Deno.serve(async (req) => {
 
       return json({ ok: true, sent: true, lead_id: leadId, deal_id: dealId, external_id: result.externalId ?? null }, 200, headers)
     } catch (sendErr) {
+      // Envio falhou: desfaz a reserva (a pessoa NAO foi contatada de fato) -> permite retry.
+      await supabase.from('prospect_contacted').delete().eq('company_id', companyId).eq('person_key', personKey)
       await supabase.from('prospect_dm_log').update({
         status: 'failed', error: (sendErr as Error).message,
       }).eq('id', dmLog?.id)
