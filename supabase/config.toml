@@ -484,6 +484,12 @@ verify_jwt = false
 [functions.prospect-dm-send]
 verify_jwt = true
 
+# prospect-process-windows (agente-grupos-whatsapp V4): processa janelas do raw e
+# classifica. Invocado pelo cron SQL; auth propria = x-cron-secret vs
+# prospect_cron_config.cron_secret, por isso verify_jwt=false.
+[functions.prospect-process-windows]
+verify_jwt = false
+
 [edge_runtime]
 enabled = true
 # Supported request policies: `oneshot`, `per_worker`.
