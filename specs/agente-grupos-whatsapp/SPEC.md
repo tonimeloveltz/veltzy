@@ -378,7 +378,8 @@ Branch `feature/agente-grupos-whatsapp` a partir da `develop`. `npm run prefligh
 
 ## V2. `prospect-group-inbound` *(após H4)*
 - `config.toml`: **`verify_jwt = false`**. Valida **HMAC-SHA512** do corpo cru com `PROSPECT_WAHA_WEBHOOK_HMAC` vs header `X-Webhook-Hmac` (comparação constante); falhou → 401.
-- **Grupo (`@g.us`)**: pré-filtro determinístico (`_shared/prospect-prefilter.ts`: mídia sem texto; < 15 chars; do próprio número; autor já em `prospect_contacted`; lead com `marketing_opt_out`); resolve telefone (`_shared/prospect-phone-resolve.ts`: `participant`→`participantAlt`/`remoteJidAlt`→`groups/{id}/participants/v2`→Contacts-LIDs); calcula `author_key` normalizado; **upsert** em `prospect_group_messages_raw` com `session_name`/`engine` (dedup por engine); incrementa `messages_read`.
+- **Grupo (`@g.us`)**: pré-filtro determinístico (`_shared/prospect-prefilter.ts`: mídia sem texto; < 15 chars; do próprio número; autor já em `prospect_contacted`; lead com `marketing_opt_out`); resolve telefone **por-payload** (`_shared/prospect-phone-resolve.ts`: `participant`→`participantAlt`/`remoteJidAlt`, strip `@c.us|@lid|@s.whatsapp.net`). **Fallback por-API (`groups/{id}/participants/v2` + Contacts-LIDs) DEFERIDO** — Veltzy não fala com a WAHA direto; exige **edge nova no Hub (`waha-group-participants`)** = necessidade registrada ao copiloto do Hub. Até lá, **LID puro → `author_phone_resolved=null`** → `author_key` = identificador sem sufixo → V4 trata em **modo alerta** (sem telefone DM-able). Calcula `author_key`; **upsert** em `prospect_group_messages_raw` com `session_name`/`engine`; incrementa `messages_read`.
+- **engine do raw:** `waha_instances` **NÃO** tem coluna `engine`; deriva do **`session_name`** (as 2 sessões-sombra codificam a engine no nome — convenção fixada no H4, ex.: `…-webjs`/`…-noweb`), fallback `prospect_config.engine`. A chave do webhook (`payload.session`) dá a sessão → engine.
 - **1:1 (resposta à DM)**: `handleInboundMessage()` com `instanceName=<sessão dedicada>`, `whatsapp_provider='waha'` → loga a mensagem real + inbox. **Sem SDR** (a pipeline de Prospecção não tem SDR; aceite 2 cobre). Detecta **SAIR/PARE** (reusa `isOptOutMessage`) → `marketing_opt_out=true` + `prospect_contacted.responded=true` + bloqueio.
 - **Nunca** grava mensagem de grupo como 1:1 (grupo só vai para `raw`/`signals`).
 
@@ -388,6 +389,7 @@ Dois modos, `config.toml` com `verify_jwt=true` (service_role e JWT de usuário 
 - **Manual** (chamado pela UI com **JWT do usuário**): valida papel **admin/super_admin**; **ignora `dm_auto_enabled`**.
 - **Ambos**: `shadow_mode=true` **bloqueia** (nenhum envio); + kill switch empresa+global, horário comercial, teto/rampa do dia (via `prospect_dm_log`), intervalo/jitter, `prospect_contacted` (1x), opt-out.
 - Envio via **Hub `waha-send-message`** (`providers/waha-hub.ts`, sessão dedicada). Grava `prospect_dm_log`; registra `prospect_contacted`; cria contato+deal pela **função estreita** `_shared/prospect-create-lead-deal.ts` (lead upsert + deal com `pipelineId`/`sourceId`/`tags:['grupo:<nome>']`/`instanceName`; **sem insert em `messages`, sem SDR/SLA/fila**); preenche `signal.lead_id/deal_id`, `status='sent'`.
+- **Texto da DM — dm-send é agnóstico à composição**: recebe `{signal_id, message_text}` nos **dois modos**. Valida `message_text` **não-vazio E contendo o opt-out** (`SAIR`/`PARE`, case-insensitive) — garantia obrigatória no gate de envio, independente de quem compôs. A **composição** (Haiku via `ai-complete`, feature `prospect_dm_message`; identifica a Veltz + cita o contexto do grupo + SAIR/PARE) vive em `_shared/prospect-compose-dm.ts`: o **V4** compõe antes de chamar o dm-send (auto); a **UI (V5)** gera o rascunho pro admin editar/aprovar via edge thin (`verify_jwt=true` + papel admin → `ai-complete`). Request: auto `{signal_id, message_text}`+service_role; manual `{signal_id, message_text}`+JWT admin/super_admin.
 
 ## V4. Crons (edges) *(após H6)*
 - `prospect-process-windows/index.ts` (`verify_jwt=false` + `x-cron-secret`): lê `raw` `classified=false` por grupo, **deduplica logicamente por `(group_jid, message_external_id, author_key)`** (engine-independente; prefere linha com telefone resolvido), monta janelas, chama `prospect-classify`, grava `prospect_signals` por faixa (`auto_dm`/`review`/`alert`/`discard`); se `auto_dm` e guardrails OK e **não shadow** → invoca `prospect-dm-send` (automático); marca raw `classified=true`.
@@ -397,7 +399,10 @@ Dois modos, `config.toml` com `verify_jwt=true` (service_role e JWT de usuário 
 ## V5. UI oculta *(após H1; dados reais após V2+)*
 Gate `useAuthStore(s => s.company?.features?.prospect_groups_enabled)`.
 - `pages/prospeccao.tsx` + rota: **Grupos** (entrar via invite link, ativar/desativar, nicho, kill switch empresa, indicadores), **Fila de sinais** (faixa `review`: Aprovar → chama `prospect-dm-send` **manual com JWT**; Rejeitar; abas auto-enviados/descartados/**Alerta** com botão **"Abordei"** → cria lead+deal pela mesma `prospect-create-lead-deal`), **Sombra/rotulagem** (lista shadow; botão é/não-é → RPC `prospect_review_signal`; Jev vs humano; taxa de resolução por engine), **Métricas** (lidas, sinais por faixa, DMs, respostas, taxa).
-- `prospect.service.ts` (leitura via RLS; review via RPC), hooks `use-prospect-*`, item de menu no sidebar atrás da flag.
+- `prospect.service.ts` (leitura via RLS; review via RPC `prospect_review_signal`), hooks `use-prospect-*`, item de menu no sidebar atrás da flag.
+- **2 edges thin (browser não chama `ai-complete`/`_shared` direto)**, `verify_jwt=true` + papel admin/super_admin da empresa do sinal:
+  - `prospect-dm-draft`: `{signal_id}` → `composeProspectDm` (Haiku) → devolve rascunho pro admin **editar** antes de Aprovar; o Aprovar chama `prospect-dm-send` (manual) com o texto final.
+  - `prospect-approach`: botão **"Abordei"** da aba Alerta → `prospectCreateLeadDeal` + marca `signal.status` + reserva `prospect_contacted` (mesma chave estável), **sem** enviar DM.
 
 ## V — Arquivos
 <!-- arquivos -->
@@ -406,10 +411,13 @@ supabase/functions/_shared/decision-client.ts
 supabase/functions/_shared/prospect-prefilter.ts
 supabase/functions/_shared/prospect-phone-resolve.ts
 supabase/functions/_shared/prospect-create-lead-deal.ts
+supabase/functions/_shared/prospect-compose-dm.ts
 supabase/functions/prospect-classify/index.ts
 supabase/functions/prospect-group-inbound/index.ts
 supabase/functions/prospect-dm-send/index.ts
 supabase/functions/prospect-process-windows/index.ts
+supabase/functions/prospect-dm-draft/index.ts
+supabase/functions/prospect-approach/index.ts
 supabase/config.toml
 src/pages/prospeccao.tsx
 src/services/prospect.service.ts
@@ -459,6 +467,12 @@ src/App.tsx
 - **Purga:** anonimiza `author_*` de sinais >7d sem lead; `snippet` permanece.
 - **person_key** = `lead_id` ou `sha256(telefone)`; **kill switch global** em `system_flags`.
 - Probabilidade do fallback Haiku é aproximada (tool-calling), não calibrada como a do Jev — registrada com `provider`.
+- **Resolução de telefone v1 = por-payload só.** O fallback por-API (`participants/v2`+LIDs) depende de uma **edge nova no Hub** (`waha-group-participants`) porque Veltzy não acessa a WAHA direto — fica DEFERIDO como necessidade do Hub. Impacta a taxa de resolução medida no sombra (risco @lid): com só payload, LID puro cai em modo alerta. Quando o Hub expor o endpoint, `prospect-phone-resolve` ganha o fallback sem mudar o resto.
+- **engine do raw** derivada do `session_name` (convenção do H4), não de coluna em `waha_instances` (que não existe) nem de `prospect_config.engine` (que é single-value e não distingue as 2 sessões-sombra do mesmo número).
+- **Texto da DM**: `prospect-dm-send` é agnóstico (recebe `message_text`), mas **valida opt-out obrigatório** (SAIR/PARE) no gate. Composição = Haiku via `ai-complete` (feature `prospect_dm_message`) em `_shared/prospect-compose-dm.ts`, reusada pelo V4 (auto) e pela UI (rascunho). Desacopla composição de envio sem perder a garantia de opt-out.
+- **1-contato-por-pessoa = reserva ATÔMICA antes do envio, chave estável `hex(sha256(normalizePhoneBR(phone)))`** (supera o person_key dual lead_id/phone): o `dm-send`, depois de passar todos os outros guardrails, faz `INSERT prospect_contacted {person_key, responded:false}` on-conflict-do-nothing; conflito → `already_contacted`; **falha de envio → remove a reserva** (permite retry). V2 (responded-update) e o prefilter usam a MESMA chave. Elimina DM dupla sob concorrência e o mismatch de chave. O vínculo com o lead fica em `signal.lead_id`.
+- **tags `grupo:<nome>` vão em `leads.tags`** (a tabela `deals` não tem coluna `tags` — confirmado no schema).
+- **Rampa de aquecimento real** precisa de `prospect_config.warmup_started_at` (necessidade registrada ao Hub). Até existir, o teto do dia usa `daily_dm_cap` + contagem de 24h como proxy.
 - **Feature key canônica = `prospect_classify`** (snake). `prospect-classify` chama `ai-decide` com `feature='prospect_classify'`. Sem linha em `ai_features`/`ai_model_config`, o resolver cai no **fallback Haiku** (correto por ora). Para **ligar o Jev** (pós-H3b + `TYPESAFE_API_KEY`), o Hub semeia `('veltzy','prospect_classify', provider='jev', model=<jev>)`.
 - **Smoke sem credencial privilegiada:** `prospect-classify`/`ai-decide` são `verify_jwt=false` e a chamada interna usa o service env do runtime → o smoke externo roda com a **anon key pública** do staging (não usar service_role de peer; política do Toni). Se o gateway exigir service, o smoke é gate humano do Toni.
 - **Enforcement de teto de IA (A3b do Hub, futuro):** `ai-decide` chama `check_ai_access` e loga `ai_usage` → sujeito ao teto mensal (`tenant_ai_config`/`current_month_spend_usd`). Alinhar o contrato com o copiloto do Hub quando o A3b entrar.
