@@ -188,6 +188,14 @@ Deno.serve(async (req) => {
       return json({ ok: true, skipped: true, reason: 'invalid_phone' }, 200, headers)
     }
 
+    // Anti-SDR determinístico: QUALQUER lead novo da sessão dedicada cai na pipeline
+    // "Prospecção grupos" (sem SDR) + source grupo-whatsapp — não no default da empresa
+    // (que pode ter SDR e a Iris responderia um prospect). Lead existente não muda.
+    const [{ data: pipeline }, { data: leadSource }] = await Promise.all([
+      supabase.from('pipelines').select('id').eq('company_id', companyId).eq('name', 'Prospecção grupos').maybeSingle(),
+      supabase.from('lead_sources').select('id').eq('company_id', companyId).eq('slug', 'grupo-whatsapp').maybeSingle(),
+    ])
+
     const messageType = deriveMessageType(p)
     const result = await handleInboundMessage({
       supabaseUrl: SUPABASE_URL,
@@ -206,6 +214,8 @@ Deno.serve(async (req) => {
       whatsappProvider: 'waha',
       adContext: null,
       profilePicUrl: null,
+      pipelineId: pipeline?.id ?? undefined,
+      sourceId: leadSource?.id ?? undefined,
     })
 
     // Respondeu a DM -> marca prospect_contacted.responded. person_key pode ser
