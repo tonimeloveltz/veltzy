@@ -930,3 +930,156 @@ export interface EvolutionInstance {
   status: 'connected' | 'disconnected' | 'qr_pending'
   created_at: string
 }
+
+// ---- Agente de prospeccao em grupos de WhatsApp (feature oculta) ----
+// Tabelas no schema `veltzy` (ver specs/agente-grupos-whatsapp/SPEC.md, bloco H1).
+// Tipos escritos a mao no estilo deste arquivo; Veltzy nao gera Database<> do Supabase.
+
+export type ProspectEngine = 'webjs' | 'noweb'
+export type ProspectDecision = 'auto_dm' | 'review' | 'alert' | 'discard'
+export type ProspectSignalStatus = 'pending' | 'approved' | 'rejected' | 'sent' | 'expired'
+export type ProspectDmStatus = 'queued' | 'sent' | 'failed' | 'blocked'
+export type ProspectProvider = 'jev' | 'anthropic'
+
+/** Mapa de perguntas do Jev (igual ao _shared/jev.ts das edges). */
+export interface JevNoul {
+  type: 'noul'
+  criteria: { true: string; false: string }
+}
+export interface JevChoice {
+  type: 'choice'
+  instructions: string
+  criteria: Record<string, string>
+}
+export interface JevScore {
+  type: 'score'
+  instructions: string
+  criteria: Record<string, string>
+}
+export type JevQuestion = JevNoul | JevChoice | JevScore
+export type JevQuestions = Record<string, JevQuestion>
+
+export interface ProspectConfig {
+  company_id: string
+  is_enabled: boolean
+  shadow_mode: boolean
+  dm_auto_enabled: boolean
+  engine: ProspectEngine
+  daily_dm_cap: number
+  daily_dm_ceiling: number
+  warmup: Record<string, number>
+  business_hours: { start: string; end: string; tz: string }
+  min_interval_seconds: number
+  max_interval_seconds: number
+  updated_at: string
+}
+
+export interface ProspectCriteria {
+  id: string
+  company_id: string
+  niche: string
+  questions: JevQuestions
+  threshold_auto: number
+  threshold_review: number
+  is_active: boolean
+  updated_at: string
+}
+
+export interface ProspectGroup {
+  id: string
+  company_id: string
+  session_name: string
+  group_jid: string | null
+  name: string
+  invite_code: string | null
+  niche: string | null
+  is_active: boolean
+  messages_read: number
+  joined_at: string | null
+  created_at: string
+}
+
+export interface ProspectGroupMessageRaw {
+  id: string
+  company_id: string
+  group_id: string | null
+  group_jid: string
+  session_name: string
+  engine: ProspectEngine | null
+  message_external_id: string
+  author_identifier: string | null
+  author_key: string | null
+  author_phone_resolved: string | null
+  text: string | null
+  window_context: Record<string, unknown> | null
+  classified: boolean
+  received_at: string
+}
+
+export interface ProspectSignal {
+  id: string
+  company_id: string
+  group_id: string
+  message_external_id: string
+  author_identifier: string | null
+  author_phone_resolved: string | null
+  snippet: string
+  is_opportunity: boolean | null
+  category: string | null
+  urgency: number | null
+  probability: number | null
+  confidence: number | null
+  provider: string | null
+  decision: ProspectDecision
+  status: ProspectSignalStatus
+  shadow: boolean
+  human_label: boolean | null
+  reviewed_by: string | null
+  reviewed_at: string | null
+  lead_id: string | null
+  deal_id: string | null
+  created_at: string
+}
+
+export interface ProspectDmLog {
+  id: string
+  company_id: string
+  signal_id: string
+  session_name: string
+  to_phone: string | null
+  to_identifier: string | null
+  message_text: string
+  status: ProspectDmStatus
+  waha_external_id: string | null
+  error: string | null
+  sent_at: string | null
+  created_at: string
+}
+
+export interface ProspectContacted {
+  id: string
+  company_id: string
+  person_key: string
+  first_contacted_at: string
+  responded: boolean
+}
+
+export interface ProspectCronConfig {
+  job_key: string
+  edge_url: string | null
+  cron_secret: string | null
+  is_enabled: boolean
+  updated_at: string
+}
+
+/** Retorno estruturado do edge prospect-classify (V1).
+ * probability/confidence sao nativos do ai-decide (noul do Jev); null enquanto o
+ * provider nao os emitir (ex.: fallback Haiku atual). O gradeamento de faixa e do V4. */
+export interface ProspectClassification {
+  is_opportunity: boolean
+  category: string
+  urgency: number
+  probability: number | null
+  confidence: number | null
+  provider: string
+}

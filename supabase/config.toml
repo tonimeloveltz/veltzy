@@ -466,6 +466,12 @@ verify_jwt = false
 [functions.blast-dispatch]
 verify_jwt = false
 
+# prospect-classify (agente-grupos-whatsapp V1): edge interno, chamado pelo
+# prospect-process-windows (V4) com service_role. Sem caller de browser; valida
+# service_role no Bearer dentro da function, por isso verify_jwt=false.
+[functions.prospect-classify]
+verify_jwt = false
+
 [edge_runtime]
 enabled = true
 # Supported request policies: `oneshot`, `per_worker`.
