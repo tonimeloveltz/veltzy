@@ -132,13 +132,15 @@ Deno.serve(async (req) => {
       let alreadyContacted = false
       let leadOptedOut = false
       if (author.phone) {
-        const personKey = await sha256Hex(author.phone)
+        // person_key = lead_id se ja virou lead, senao sha256(phone) — MESMA regra do
+        // dm-send/ledger, pra o "1 contato por pessoa" casar entre V2 e V3.
+        const { data: lead } = await supabase
+          .from('leads').select('id, marketing_opt_out').eq('company_id', companyId).eq('phone', author.phone).maybeSingle()
+        leadOptedOut = lead?.marketing_opt_out === true
+        const personKey = lead?.id ?? await sha256Hex(author.phone)
         const { data: contacted } = await supabase
           .from('prospect_contacted').select('id').eq('company_id', companyId).eq('person_key', personKey).maybeSingle()
         alreadyContacted = !!contacted
-        const { data: lead } = await supabase
-          .from('leads').select('marketing_opt_out').eq('company_id', companyId).eq('phone', author.phone).maybeSingle()
-        leadOptedOut = lead?.marketing_opt_out === true
       }
 
       const pf = prefilterGroupMessage({ text, hasMedia: !!p.hasMedia, fromMe, alreadyContacted, leadOptedOut })
