@@ -152,6 +152,7 @@ Deno.serve(async (req) => {
           userId: profileId ?? undefined,
           mode,
           pipelineId: sdrPipelineId,
+          provider: activeProvider,
         })
       }
 

@@ -6,6 +6,7 @@ interface ResolveContext {
   userId?: string
   pipelineId?: string
   mode: 'human' | 'sdr' | 'automation'
+  provider?: 'evolution' | 'waha'
 }
 
 /**
@@ -15,7 +16,9 @@ interface ResolveContext {
  * 1. lead.whatsapp_instance_name (responde pelo mesmo numero que recebeu)
  * 2. Para SDR: pipeline.sdr_instance_name
  * 3. profile.default_whatsapp_instance do vendedor
- * 4. null (erro: vendedor sem numero)
+ * 4. Fallback: numero unico conectado da empresa (so quando ha exatamente um),
+ *    pra empresas de numero unico funcionarem sem o cliente configurar nada.
+ * 5. null (erro: empresa sem numero ou com varios e nenhum default escolhido)
  */
 export async function resolveInstanceName(
   supabaseVeltzy: SupabaseClient,
@@ -64,6 +67,29 @@ export async function resolveInstanceName(
 
     if (profile?.default_whatsapp_instance) {
       return profile.default_whatsapp_instance
+    }
+  }
+
+  // 4. Fallback por empresa: se ha exatamente UM numero conectado, usa ele.
+  // Empresa de numero unico (o caso comum) envia sem ninguem configurar nada.
+  // Com varios numeros nao da pra adivinhar: cai no default por-vendedor (3).
+  if (ctx.provider === 'waha') {
+    const { data: sessions } = await supabasePublic
+      .from('waha_instances')
+      .select('session_name')
+      .eq('company_id', ctx.companyId)
+      .eq('status', 'connected')
+    if (sessions?.length === 1) {
+      return sessions[0].session_name
+    }
+  } else if (ctx.provider === 'evolution') {
+    const { data: insts } = await supabasePublic
+      .from('evolution_instances')
+      .select('instance_name')
+      .eq('company_id', ctx.companyId)
+      .eq('status', 'connected')
+    if (insts?.length === 1) {
+      return insts[0].instance_name
     }
   }
 
