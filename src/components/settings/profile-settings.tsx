@@ -15,6 +15,7 @@ import { updateProfile } from '@/services/profile.service'
 import { resetPassword } from '@/services/auth.service'
 import { useWhatsAppStatus } from '@/hooks/use-whatsapp-status'
 import { useEvolutionInstances } from '@/hooks/use-evolution-instances'
+import { useWahaInstances } from '@/hooks/use-whatsapp-instances'
 
 const roleLabels: Record<string, string> = { admin: 'Admin', manager: 'Gestor', seller: 'Vendedor', super_admin: 'Super Admin' }
 const roleBadge: Record<string, string> = { admin: 'bg-purple-500/10 text-purple-500', manager: 'bg-blue-500/10 text-blue-500', seller: 'bg-muted text-muted-foreground', super_admin: 'bg-red-500/10 text-red-500' }
@@ -27,7 +28,16 @@ const ProfileSettings = () => {
   const primaryRole = roles[0] ?? 'seller'
   const { data: whatsappStatus } = useWhatsAppStatus()
   const { data: instances } = useEvolutionInstances()
-  const isEvolution = whatsappStatus?.provider === 'evolution'
+  const { data: wahaInstances } = useWahaInstances()
+  const provider = whatsappStatus?.provider
+  const isEvolution = provider === 'evolution'
+  const isWaha = provider === 'waha'
+  // Evolution e WAHA usam o mesmo campo (default_whatsapp_instance): o nome da
+  // instancia (Evolution) ou da sessao (WAHA) e o identificador do numero.
+  const supportsDefaultNumber = isEvolution || isWaha
+  const numberOptions = isWaha
+    ? (wahaInstances ?? []).map((i) => ({ value: i.session_name, label: i.phone_number ?? i.display_name ?? i.session_name }))
+    : (instances ?? []).map((i) => ({ value: i.instance_name, label: i.phone_number ?? i.instance_name }))
   const [selectedInstance, setSelectedInstance] = useState(profile?.default_whatsapp_instance ?? '')
 
   const { register, handleSubmit, reset } = useForm({
@@ -46,7 +56,7 @@ const ProfileSettings = () => {
     setSaving(true)
     try {
       const updates: Record<string, unknown> = { name: values.name }
-      if (isEvolution) {
+      if (supportsDefaultNumber) {
         updates.default_whatsapp_instance = selectedInstance || null
       }
       const updated = await updateProfile(profile.id, updates)
@@ -93,7 +103,7 @@ const ProfileSettings = () => {
             <Input value={profile?.email ?? ''} disabled className="opacity-60" />
             <p className="text-[10px] text-muted-foreground">O email nao pode ser alterado</p>
           </div>
-          {isEvolution && (
+          {supportsDefaultNumber && (
             <div className="space-y-2">
               <Label>Numero WhatsApp padrao</Label>
               <Select value={selectedInstance} onValueChange={setSelectedInstance}>
@@ -101,9 +111,9 @@ const ProfileSettings = () => {
                   <SelectValue placeholder="Selecione seu numero" />
                 </SelectTrigger>
                 <SelectContent>
-                  {instances?.map((inst) => (
-                    <SelectItem key={inst.instance_name} value={inst.instance_name}>
-                      {inst.phone_number ?? inst.instance_name}
+                  {numberOptions.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
