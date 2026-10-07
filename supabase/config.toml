@@ -466,6 +466,38 @@ verify_jwt = false
 [functions.blast-dispatch]
 verify_jwt = false
 
+# prospect-classify (agente-grupos-whatsapp V1): edge interno, chamado pelo
+# prospect-process-windows (V4) com service_role. Sem caller de browser; valida
+# service_role no Bearer dentro da function, por isso verify_jwt=false.
+[functions.prospect-classify]
+verify_jwt = false
+
+# prospect-group-inbound (agente-grupos-whatsapp V2): webhook da sessao WAHA
+# dedicada (posta direto, sem passar pelo waha-webhook-receiver). Auth propria =
+# HMAC-SHA512 do corpo cru (PROSPECT_WAHA_WEBHOOK_HMAC), por isso verify_jwt=false.
+[functions.prospect-group-inbound]
+verify_jwt = false
+
+# prospect-dm-send (agente-grupos-whatsapp V3): envio da DM. verify_jwt=true —
+# service_role (modo auto, via process-windows) e JWT de usuario (modo manual, UI
+# admin/super_admin) passam; a function distingue o modo pelo Bearer.
+[functions.prospect-dm-send]
+verify_jwt = true
+
+# prospect-process-windows (agente-grupos-whatsapp V4): processa janelas do raw e
+# classifica. Invocado pelo cron SQL; auth propria = x-cron-secret vs
+# prospect_cron_config.cron_secret, por isso verify_jwt=false.
+[functions.prospect-process-windows]
+verify_jwt = false
+
+# prospect-dm-draft / prospect-approach (agente-grupos-whatsapp V5): thin edges da UI.
+# verify_jwt=true; validam papel admin/super_admin da empresa do sinal dentro da function.
+[functions.prospect-dm-draft]
+verify_jwt = true
+
+[functions.prospect-approach]
+verify_jwt = true
+
 [edge_runtime]
 enabled = true
 # Supported request policies: `oneshot`, `per_worker`.

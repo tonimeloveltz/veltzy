@@ -28,6 +28,7 @@ const SdrIaPage = lazy(() => import('@/pages/sdr-ia'))
 const CampanhasPage = lazy(() => import('@/pages/campanhas'))
 const CampanhaDetalhePage = lazy(() => import('@/pages/campanha-detalhe'))
 const CadenciasPage = lazy(() => import('@/pages/cadencias'))
+const ProspeccaoPage = lazy(() => import('@/pages/prospeccao'))
 const PrivacidadePage = lazy(() => import('@/pages/privacidade'))
 const TermosPage = lazy(() => import('@/pages/termos'))
 const NotFoundPage = lazy(() => import('@/pages/not-found'))
@@ -107,6 +108,8 @@ const App = () => {
                 <Route path="/campanhas" element={<ProtectedRoute requireRole={['admin', 'manager', 'super_admin']}><CampanhasPage /></ProtectedRoute>} />
                 <Route path="/campanhas/:id" element={<ProtectedRoute requireRole={['admin', 'manager', 'super_admin']}><CampanhaDetalhePage /></ProtectedRoute>} />
                 <Route path="/automacoes" element={<ProtectedRoute requireRole={['admin', 'manager', 'super_admin']}><CadenciasPage /></ProtectedRoute>} />
+                {/* Gate de feature (prospect_groups_enabled) e na propria pagina via company.features. */}
+                <Route path="/prospeccao" element={<ProtectedRoute requireRole={['admin', 'super_admin']}><ProspeccaoPage /></ProtectedRoute>} />
                 {/* Alias legado: /cadencias → /automacoes (preserva links/bookmarks antigos). */}
                 <Route path="/cadencias" element={<Navigate to="/automacoes" replace />} />
                 <Route path="/admin" element={<ProtectedRoute requireRole={['admin', 'super_admin']}><AdminPage /></ProtectedRoute>} />
