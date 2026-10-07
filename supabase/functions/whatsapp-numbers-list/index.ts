@@ -67,14 +67,16 @@ async function resolveCompanyId(authHeader: string | null): Promise<{ companyId:
     return new Response(JSON.stringify({ error: 'Usuario sem empresa vinculada' }), { status: 400 })
   }
 
-  // Somente admin/super_admin (mesma regra do whatsapp-instance-manage).
+  // admin/manager/super_admin. Lista e so leitura; manager entra porque escolhe o numero
+  // de envio no wizard de campanha (que libera manager). Gerencia segue so admin no
+  // whatsapp-instance-manage.
   const { data: roles } = await admin
     .from('user_roles')
     .select('role')
     .eq('user_id', user.id)
     .eq('company_id', profile.company_id)
   const userRoles = (roles ?? []).map((r: { role: string }) => r.role)
-  if (!userRoles.some((r: string) => ['admin', 'super_admin'].includes(r))) {
+  if (!userRoles.some((r: string) => ['admin', 'manager', 'super_admin'].includes(r))) {
     const { data: globalRoles } = await admin
       .from('user_roles')
       .select('role')

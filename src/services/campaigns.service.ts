@@ -3,7 +3,7 @@ import type {
   AudienceFilter,
   BlastCampaign,
   BlastRecipient,
-  ThrottleConfig,
+  AntiBanConfig,
 } from '@/types/database'
 import type { WhatsAppTemplate } from '@/types/whatsapp-template'
 import { leadIdsInStages } from '@/lib/stage-audience'
@@ -83,8 +83,8 @@ export interface CreateCampaignInput {
   message_body?: string | null
   variable_mapping: Record<string, string>
   audience_filter: AudienceFilter
-  /** Override anti-ban por campanha (ThrottleConfig). null = defaults do servidor. */
-  anti_ban?: ThrottleConfig | null
+  /** Override anti-ban por campanha + número de envio (AntiBanConfig). null = defaults do servidor. */
+  anti_ban?: AntiBanConfig | null
   scheduled_at?: string | null
   followup_cadence_id?: string | null
   followup_mode?: 'none' | 'immediate' | 'no_reply'
