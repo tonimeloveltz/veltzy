@@ -3,6 +3,7 @@ import { useAuthStore } from '@/stores/auth.store'
 import { toast } from 'sonner'
 import {
   listInstances,
+  listWahaInstances,
   getInstanceStatus,
   createInstance,
   fetchQrCode,
@@ -17,6 +18,17 @@ export function useWhatsAppInstances() {
   return useQuery({
     queryKey: ['whatsapp-instances', companyId],
     queryFn: () => listInstances(companyId!),
+    enabled: !!companyId,
+    staleTime: 30_000,
+  })
+}
+
+export function useWahaInstances() {
+  const companyId = useAuthStore((s) => s.company?.id)
+
+  return useQuery({
+    queryKey: ['waha-instances', companyId],
+    queryFn: () => listWahaInstances(companyId!),
     enabled: !!companyId,
     staleTime: 30_000,
   })
