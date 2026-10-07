@@ -23,6 +23,17 @@ export async function listInstances(companyId: string) {
   return data ?? []
 }
 
+// Sessoes WAHA da empresa (espelha listInstances do Evolution). waha_instances
+// vive no schema PUBLIC e a RLS e company-scoped, entao o read direto funciona.
+export async function listWahaInstances(companyId: string) {
+  const { data } = await supabase
+    .from('waha_instances')
+    .select('session_name, display_name, phone_number, status, created_at')
+    .eq('company_id', companyId)
+    .order('created_at', { ascending: true })
+  return data ?? []
+}
+
 export async function getInstanceStatus(instanceName: string): Promise<string | null> {
   const { data } = await supabase
     .from('evolution_instances')
