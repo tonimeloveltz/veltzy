@@ -52,6 +52,14 @@ export interface ThrottleConfig {
   window_end?: number
 }
 
+/** anti_ban da campanha: throttle + número de envio (sem migration, mora no mesmo jsonb). */
+export interface AntiBanConfig extends ThrottleConfig {
+  /** session_name (waha) | instance_name (evolution). Cobre lead sem número. */
+  sender_instance?: string | null
+  /** true = todos saem pelo sender_instance, mesmo quem já tem número. */
+  sender_force?: boolean
+}
+
 export interface BlastCampaign {
   id: string
   company_id: string
@@ -62,8 +70,8 @@ export interface BlastCampaign {
   variable_mapping: Record<string, string>
   audience_filter: AudienceFilter
   throttle_config: ThrottleConfig | null
-  /** Override anti-ban por-campanha (mesma forma do ThrottleConfig). null = defaults do servidor. */
-  anti_ban: ThrottleConfig | null
+  /** Override anti-ban por-campanha + número de envio. null = defaults do servidor. */
+  anti_ban: AntiBanConfig | null
   status: BlastCampaignStatus
   scheduled_at: string | null
   started_at: string | null

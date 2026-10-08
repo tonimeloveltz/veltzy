@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "preflight": "bash scripts/preflight.sh",
+    "pvo": "bash scripts/pvo.sh",
     "preview": "vite preview",
     "test": "vitest",
     "test:ui": "vitest --ui",

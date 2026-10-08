@@ -28,7 +28,7 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   }
 }
 
-/** Lista unificada dos numeros dos 3 providers (agregador service_role, filtra company). */
+/** Lista unificada dos numeros dos 3 providers (agregador com credencial de servidor, filtra company). */
 export async function listWhatsAppNumbers(): Promise<WhatsAppNumberItem[]> {
   const res = await fetch(NUMBERS_URL, { method: 'GET', headers: await getAuthHeaders() })
   if (!res.ok) {
