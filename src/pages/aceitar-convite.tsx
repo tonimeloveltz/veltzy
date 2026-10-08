@@ -29,7 +29,7 @@ const registerSchema = z.object({
 
 type RegisterValues = z.infer<typeof registerSchema>
 
-type InviteState = 'loading' | 'valid' | 'invalid' | 'expired' | 'accepting' | 'accepted' | 'needs_register' | 'needs_login'
+type InviteState = 'loading' | 'valid' | 'invalid' | 'expired' | 'accepting' | 'accepted' | 'needs_register' | 'needs_login' | 'wrong_account'
 
 const roleLabels: Record<string, string> = {
   seller: 'Vendedor',
@@ -199,26 +199,38 @@ const AceitarConvitePage = () => {
     setInvite(data)
     setCompanyName(data.company_name ?? '')
 
-    if (user) {
-      setState('valid')
-    } else {
-      const { data: session } = await supabase.auth.getSession()
-      if (session.session?.user) {
+    // Identidade da sessao atual (se houver). O convite e por-email: so quem
+    // esta logado com o MESMO email do convite ve o botao Aceitar. Logado com
+    // outra conta cai em 'wrong_account' (antes mostrava Aceitar e dava o erro
+    // generico "Convite nao pertence a este usuario" ao clicar).
+    const { data: sessionData } = await supabase.auth.getSession()
+    const sessionUser = sessionData.session?.user
+    if (sessionUser) {
+      if ((sessionUser.email ?? '').toLowerCase() === data.email.toLowerCase()) {
         setState('valid')
       } else {
-        const { data: existingProfile } = await supabase
-          .from('profiles')
-          .select('user_id')
-          .eq('email', data.email)
-          .single()
+        setState('wrong_account')
+      }
+    } else {
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('user_id')
+        .eq('email', data.email)
+        .single()
 
-        if (existingProfile?.user_id) {
-          setState('needs_login')
-        } else {
-          setState('needs_register')
-        }
+      if (existingProfile?.user_id) {
+        setState('needs_login')
+      } else {
+        setState('needs_register')
       }
     }
+  }
+
+  // Sai da conta atual e recarrega mantendo o token na URL: sem sessao, o fluxo
+  // reabre em needs_login/needs_register para o email correto do convite.
+  const switchAccount = async () => {
+    await supabase.auth.signOut()
+    window.location.reload()
   }
 
   const acceptInvite = async () => {
@@ -438,6 +450,31 @@ const AceitarConvitePage = () => {
               </Button>
             </CardContent>
           )}
+        </Card>
+      </div>
+    )
+  }
+
+  if (state === 'wrong_account') {
+    return (
+      <div className="flex h-dvh items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <XCircle className="mx-auto h-12 w-12 text-amber-500" />
+            <CardTitle className="mt-4">Convite para outro email</CardTitle>
+            <CardDescription>
+              Este convite e para <strong>{invite?.email}</strong>, mas voce esta
+              logado com outra conta. Saia e entre com o email do convite para aceitar.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap justify-center gap-3">
+            <Button variant="outline" onClick={() => navigate('/')}>
+              Cancelar
+            </Button>
+            <Button onClick={switchAccount}>
+              Sair e usar {invite?.email}
+            </Button>
+          </CardContent>
         </Card>
       </div>
     )
