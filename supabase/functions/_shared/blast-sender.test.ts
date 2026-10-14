@@ -1,5 +1,5 @@
 import { assertEquals } from 'jsr:@std/assert@1'
-import { resolveSenderInstance, splitAntiBan } from './blast-sender.ts'
+import { resolveCloudSenderOverride, resolveSenderInstance, splitAntiBan } from './blast-sender.ts'
 
 Deno.test('splitAntiBan: null/nao-objeto = tudo vazio', () => {
   assertEquals(splitAntiBan(null), { throttle: null, sender: null, force: false })
@@ -37,4 +37,18 @@ Deno.test('resolveSenderInstance: force manda todos pelo escolhido', () => {
 Deno.test('resolveSenderInstance: sem escolhido = comportamento antigo', () => {
   assertEquals(resolveSenderInstance('lead-num', null, false), 'lead-num')
   assertEquals(resolveSenderInstance(null, null, false), null)
+})
+
+Deno.test('resolveCloudSenderOverride: sem escolhido segue a resolucao normal', () => {
+  assertEquals(resolveCloudSenderOverride(null, null, false), null)
+  assertEquals(resolveCloudSenderOverride('uuid-lead', null, true), null)
+})
+
+Deno.test('resolveCloudSenderOverride: lead com numero da conversa mantem o dele', () => {
+  assertEquals(resolveCloudSenderOverride('uuid-lead', '1101736456367508', false), null)
+})
+
+Deno.test('resolveCloudSenderOverride: lead sem numero ou force usa o escolhido', () => {
+  assertEquals(resolveCloudSenderOverride(null, '1101736456367508', false), '1101736456367508')
+  assertEquals(resolveCloudSenderOverride('uuid-lead', '1101736456367508', true), '1101736456367508')
 })
