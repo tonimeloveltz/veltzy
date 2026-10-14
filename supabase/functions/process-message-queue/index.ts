@@ -124,10 +124,12 @@ Deno.serve(async (req) => {
           // Cloud API oficial: resolve o numero (vinculo do lead -> default da empresa,
           // reusa resolveOutboundCloudApiNumber do whatsapp-send). Se message_type='template'
           // (campanha HSM), envia via sendTemplate (metadata: name/language/params); senao texto.
+          // metadata.phone_number_id = numero escolhido na campanha (blast-dispatch).
+          const preferred = ((item.metadata ?? {}) as { phone_number_id?: string }).phone_number_id ?? null
           const outbound = await resolveOutboundCloudApiNumber(supabase, {
             cloud_api_number_id: (lead.cloud_api_number_id as string | null) ?? null,
             company_id: item.company_id,
-          })
+          }, preferred)
           if (!outbound) {
             await supabase
               .from('message_queue')
