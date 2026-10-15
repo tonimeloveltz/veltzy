@@ -9,7 +9,7 @@ import {
 const NONE = '__none__'
 
 interface SenderNumberSelectProps {
-  /** Provider ativo da empresa ('waha' | 'evolution'); filtra os números listados. */
+  /** Provider ativo da empresa ('waha' | 'evolution' | 'cloud_api'); filtra os números listados. */
   provider: string
   /** undefined = ainda não escolhido (aplica o default); null = nenhum. */
   value: string | null | undefined
@@ -22,6 +22,9 @@ interface SenderNumberSelectProps {
 // continua saindo por ele; o escolhido cobre quem não tem, ou todos com o checkbox.
 export function SenderNumberSelect({ provider, value, onChange, force, onForceChange }: SenderNumberSelectProps) {
   const { data: numbers, isLoading, isError } = useWhatsAppNumbers()
+  // API Oficial: sem número da conversa, o envio cai no número padrão da empresa.
+  const isCloudApi = provider === 'cloud_api'
+  const fallbackLabel = isCloudApi ? 'Número da conversa ou o padrão da empresa' : 'Nenhum (só o número de cada conversa)'
   const options = useMemo(
     () => (numbers ?? []).filter((n) => n.provider === provider && n.status === 'connected'),
     [numbers, provider],
@@ -53,7 +56,7 @@ export function SenderNumberSelect({ provider, value, onChange, force, onForceCh
               {options.map((n) => (
                 <SelectItem key={n.ref} value={n.ref}>{n.displayNumber ?? n.ref}</SelectItem>
               ))}
-              <SelectItem value={NONE}>Nenhum (só o número de cada conversa)</SelectItem>
+              <SelectItem value={NONE}>{fallbackLabel}</SelectItem>
             </SelectContent>
           </Select>
           {value && (

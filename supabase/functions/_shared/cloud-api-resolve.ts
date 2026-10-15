@@ -54,6 +54,7 @@ export interface OutboundNumber {
 
 /**
  * Resolve qual numero Cloud API usar para enviar.
+ *  0. preferredPhoneNumberId (numero escolhido na campanha), se for da empresa e ativo
  *  1. lead.cloud_api_number_id (responde pelo numero onde o lead falou)
  *  2. numero default da empresa (status='active' AND is_default=true)
  *  3. null -> erro de configuracao (whatsapp-send nao envia)
@@ -62,7 +63,26 @@ export async function resolveOutboundCloudApiNumber(
   // deno-lint-ignore no-explicit-any
   supabaseVeltzy: SupabaseClient<any, any, any>,
   lead: { cloud_api_number_id: string | null; company_id: string },
+  preferredPhoneNumberId?: string | null,
 ): Promise<OutboundNumber | null> {
+  // 0. Escolhido na campanha. Filtra por company_id (regra de ouro): de outra empresa e ignorado.
+  if (preferredPhoneNumberId) {
+    const { data } = await supabaseVeltzy
+      .from('cloud_api_numbers')
+      .select('phone_number_id, instance_label')
+      .eq('company_id', lead.company_id)
+      .eq('phone_number_id', preferredPhoneNumberId)
+      .eq('status', 'active')
+      .maybeSingle()
+    if (data) {
+      return {
+        phoneNumberId: data.phone_number_id,
+        instanceLabel: data.instance_label ?? data.phone_number_id,
+      }
+    }
+    console.warn('[cloud-api-resolve] numero escolhido indisponivel; seguindo vinculo do lead/default')
+  }
+
   // 1. Vinculo do lead
   if (lead.cloud_api_number_id) {
     const { data } = await supabaseVeltzy

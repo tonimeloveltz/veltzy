@@ -24,7 +24,7 @@ import {
 import type { AntiBanConfig, AudienceFilter, ThrottleConfig } from '@/types/database'
 
 const OFFICIAL_PROVIDER = 'cloud_api'
-const SENDER_PROVIDERS = ['waha', 'evolution']
+const SENDER_PROVIDERS = ['waha', 'evolution', OFFICIAL_PROVIDER]
 const STEP_LABELS = ['Destinatários', 'Mensagem', 'Configurações', 'Revisão']
 
 // Stepper visual (fidelidade Leadbaze): 4 círculos numerados ligados por linha; etapa atual

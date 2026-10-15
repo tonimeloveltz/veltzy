@@ -41,3 +41,16 @@ export function resolveSenderInstance(
   if (leadInstance) return leadInstance
   return sender
 }
+
+// API Oficial: o lead guarda o numero como cloud_api_number_id (uuid), nao como instancia.
+// Retorna o phone_number_id escolhido quando ele deve valer pra este lead; null = segue a
+// resolucao normal do envio (numero da conversa -> padrao da empresa).
+export function resolveCloudSenderOverride(
+  leadCloudNumberId: string | null | undefined,
+  sender: string | null,
+  force: boolean,
+): string | null {
+  if (!sender) return null
+  if (force || !leadCloudNumberId) return sender
+  return null
+}

@@ -3,7 +3,7 @@ import { getCorsHeaders } from '../_shared/cors.ts'
 import { buildAudiencePlan, leadIdsInStages } from '../_shared/blast-audience.ts'
 import { computeBlastSchedule, type ScheduleItem } from '../_shared/blast-schedule.ts'
 import { getTemplateBodyText, renderTemplateBody, renderMessageBody, resolveTemplateParams } from '../_shared/blast-render.ts'
-import { resolveSenderInstance, splitAntiBan } from '../_shared/blast-sender.ts'
+import { resolveCloudSenderOverride, resolveSenderInstance, splitAntiBan } from '../_shared/blast-sender.ts'
 
 // blast-dispatch (mkt-ativo · SPEC §2a/§3). Fluxo: gate por-empresa (early-return,
 // precedente sdr-ai) → resolve provider (cloud_api RECUSADO na Fase 1: HSM real =
@@ -135,7 +135,7 @@ Deno.serve(async (req) => {
     } else {
       const { data: tpl } = await veltzy
         .from('whatsapp_templates')
-        .select('id, company_id, name, language, components, status')
+        .select('id, company_id, waba_id, name, language, components, status')
         .eq('id', campaign.template_id)
         .single()
       if (!tpl || tpl.company_id !== companyId) {
@@ -203,11 +203,26 @@ Deno.serve(async (req) => {
       return jsonResponse({ ok: true, recipients: 0, note: 'Nenhum lead elegivel (apos company/opt-out/filtro)' }, corsHeaders)
     }
 
-    // ---- Numero de envio (SPEC seletor-numero-campanha): mora no anti_ban. So nao-oficial;
-    // o escolhido precisa ser da company (regra de ouro), senao e ignorado. ----
+    // ---- Numero de envio (SPEC seletor-numero-campanha): mora no anti_ban. waha/evolution
+    // guardam a sessao/instancia; cloud_api guarda o phone_number_id. O escolhido precisa ser
+    // da company (regra de ouro), senao e ignorado. ----
     const split = splitAntiBan(campaign.anti_ban)
     let sender: string | null = null
-    if (split.sender && (provider === 'waha' || provider === 'evolution')) {
+    let cloudSenderLabel: string | null = null
+    if (split.sender && isCloudApi) {
+      const { data: owned } = await veltzy
+        .from('cloud_api_numbers').select('phone_number_id, instance_label, waba_id')
+        .eq('company_id', companyId).eq('phone_number_id', split.sender).eq('status', 'active').maybeSingle()
+      if (!owned) {
+        console.warn(`[blast-dispatch] numero Cloud API '${split.sender}' nao pertence a company ${companyId} ou esta inativo; ignorado`)
+      } else if (template?.waba_id && owned.waba_id && owned.waba_id !== template.waba_id) {
+        // Template HSM e da WABA: numero de outra conta da Meta nao consegue enviar este template.
+        return jsonResponse({ error: `O template '${template.name}' nao pertence a conta Meta do numero escolhido. Escolha um numero da mesma conta ou outro template.`, reason: 'template_waba_mismatch' }, corsHeaders, 422)
+      } else {
+        sender = split.sender
+        cloudSenderLabel = (owned.instance_label as string | null) ?? split.sender
+      }
+    } else if (split.sender && (provider === 'waha' || provider === 'evolution')) {
       const table = provider === 'waha' ? 'waha_instances' : 'evolution_instances'
       const column = provider === 'waha' ? 'session_name' : 'instance_name'
       const { data: owned } = await admin
@@ -217,6 +232,9 @@ Deno.serve(async (req) => {
     }
     const senderFor = (l: { whatsapp_instance_name: string | null }) =>
       resolveSenderInstance(l.whatsapp_instance_name, sender, split.force)
+    // Cloud API: phone_number_id escolhido quando vale pra este lead (null = vinculo do lead/default).
+    const cloudOverrideFor = (l: { cloud_api_number_id?: string | null }) =>
+      isCloudApi ? resolveCloudSenderOverride(l.cloud_api_number_id, sender, split.force) : null
 
     // ---- Cria blast_recipients (idempotente via UNIQUE(campaign_id, lead_id)) ----
     const recipientRows = audience.map((l: { id: string; phone: string }) => ({
@@ -233,8 +251,10 @@ Deno.serve(async (req) => {
     // ---- Escalonamento (§4bis). enforce=true (nao-oficial waha/evolution/zapi) aplica o
     // piso anti-ban; cloud_api OFICIAL nao (enforce=false = espacamento leve, limites da Meta). ----
     // O teto diario agrupa pelo numero EFETIVO de envio (ja com o sender aplicado).
-    const scheduleItems: ScheduleItem[] = audience.map((l: { whatsapp_instance_name: string | null }) => ({
-      instanceKey: senderFor(l) ?? 'default',
+    const scheduleItems: ScheduleItem[] = audience.map((l: { whatsapp_instance_name: string | null; cloud_api_number_id?: string | null }) => ({
+      instanceKey: isCloudApi
+        ? (cloudOverrideFor(l) ?? l.cloud_api_number_id ?? 'default')
+        : (senderFor(l) ?? 'default'),
     }))
     // anti_ban (override editável por campanha) tem precedência sobre throttle_config.
     const antiBan = split.throttle ?? campaign.throttle_config ?? null
@@ -250,6 +270,7 @@ Deno.serve(async (req) => {
     // + metadata (name/language/params resolvidos por-recipient); demais = texto renderizado. ----
     const variableMapping = (campaign.variable_mapping ?? {}) as Record<string, string>
     const queueRows = audience.map((lead: Record<string, unknown>, i: number) => {
+      const cloudOverride = cloudOverrideFor(lead as { cloud_api_number_id?: string | null })
       const base = {
         company_id: companyId,
         lead_id: lead.id as string,
@@ -258,7 +279,9 @@ Deno.serve(async (req) => {
         content: isFreeText ? renderMessageBody(bodyText, lead) : renderTemplateBody(bodyText, variableMapping, lead),
         scheduled_at: schedule[i].scheduled_at,
         source: 'campaign',
-        instance_name: senderFor(lead as { whatsapp_instance_name: string | null }),
+        instance_name: isCloudApi
+          ? (cloudOverride ? cloudSenderLabel : (lead.whatsapp_instance_name as string | null) ?? null)
+          : senderFor(lead as { whatsapp_instance_name: string | null }),
       }
       if (isCloudApi) {
         return {
@@ -268,6 +291,8 @@ Deno.serve(async (req) => {
             template_name: template.name,
             language: template.language,
             params: resolveTemplateParams(bodyText, variableMapping, lead),
+            // Lido pelo process-message-queue antes do vinculo do lead/default.
+            ...(cloudOverride ? { phone_number_id: cloudOverride } : {}),
           },
         }
       }
