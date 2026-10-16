@@ -87,6 +87,54 @@ export const createCadence = async (
   return cadence as unknown as Cadence
 }
 
+export type UpdateCadenceInput = Omit<CreateCadenceInput, 'is_enabled'>
+
+/**
+ * Edita cadência e passos. Os passos são gravados por upsert em (cadence_id, step_order)
+ * e só depois os excedentes são apagados: um erro no meio nunca deixa a cadência sem
+ * passos (o process-cadences concluiria os runs ativos). Runs ativos seguem pelo índice
+ * current_step, então passam a usar a lista nova a partir de onde estão.
+ */
+export const updateCadence = async (
+  companyId: string,
+  id: string,
+  input: UpdateCadenceInput,
+): Promise<void> => {
+  const { error } = await veltzy()
+    .from('cadences')
+    .update({
+      name: input.name,
+      trigger_event: input.trigger_event,
+      trigger_conditions: input.trigger_conditions,
+      cancel_on_stage_change: input.cancel_on_stage_change,
+      recurring_cron: input.recurring_cron ?? null,
+      webhook_token: input.webhook_token ?? null,
+    })
+    .eq('id', id)
+    .eq('company_id', companyId)
+  if (error) throw error
+
+  if (input.steps.length > 0) {
+    const rows = input.steps.map((s, i) => ({
+      cadence_id: id,
+      step_order: i,
+      action_type: s.action_type,
+      config: s.config,
+    }))
+    const { error: upsertErr } = await veltzy()
+      .from('cadence_steps')
+      .upsert(rows, { onConflict: 'cadence_id,step_order' })
+    if (upsertErr) throw upsertErr
+  }
+
+  const { error: delErr } = await veltzy()
+    .from('cadence_steps')
+    .delete()
+    .eq('cadence_id', id)
+    .gte('step_order', input.steps.length)
+  if (delErr) throw delErr
+}
+
 export const setCadenceEnabled = async (id: string, isEnabled: boolean): Promise<void> => {
   const { error } = await veltzy().from('cadences').update({ is_enabled: isEnabled }).eq('id', id)
   if (error) throw error

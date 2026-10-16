@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Workflow, Plus, AlertCircle, Users } from 'lucide-react'
+import { Workflow, Plus, AlertCircle, Users, Pencil } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth.store'
 import { useCadences, useCadenceRuns, useToggleCadence } from '@/hooks/use-cadences'
@@ -67,6 +67,7 @@ export default function CadenciasPage() {
   const features = useAuthStore((s) => s.company?.features)
   const [formOpen, setFormOpen] = useState(false)
   const [selected, setSelected] = useState<Cadence | null>(null)
+  const [editing, setEditing] = useState<Cadence | null>(null)
   const { data: cadences, isLoading } = useCadences()
   const toggle = useToggleCadence()
 
@@ -92,7 +93,7 @@ export default function CadenciasPage() {
             <p className="text-sm text-muted-foreground">Sequências automáticas de mensagens (drip)</p>
           </div>
         </div>
-        <Button onClick={() => setFormOpen(true)}><Plus className="mr-1.5 h-4 w-4" /> Nova automação</Button>
+        <Button onClick={() => { setEditing(null); setFormOpen(true) }}><Plus className="mr-1.5 h-4 w-4" /> Nova automação</Button>
       </div>
 
       {isLoading ? (
@@ -111,7 +112,7 @@ export default function CadenciasPage() {
                 <th className="px-4 py-2.5 font-medium">Automação</th>
                 <th className="px-4 py-2.5 font-medium">Gatilho</th>
                 <th className="px-4 py-2.5 font-medium">Ativa</th>
-                <th className="px-4 py-2.5 font-medium text-right">Acompanhar</th>
+                <th className="px-4 py-2.5 font-medium text-right">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -126,6 +127,9 @@ export default function CadenciasPage() {
                     />
                   </td>
                   <td className="px-4 py-3 text-right">
+                    <Button variant="ghost" size="sm" onClick={() => { setEditing(c); setFormOpen(true) }}>
+                      <Pencil className="mr-1.5 h-4 w-4" /> Editar
+                    </Button>
                     <Button variant="ghost" size="sm" onClick={() => setSelected(c)}>
                       <Users className="mr-1.5 h-4 w-4" /> Runs
                     </Button>
@@ -137,7 +141,11 @@ export default function CadenciasPage() {
         </div>
       )}
 
-      <CadenceForm open={formOpen} onOpenChange={setFormOpen} />
+      <CadenceForm
+        open={formOpen}
+        onOpenChange={(o) => { setFormOpen(o); if (!o) setTimeout(() => setEditing(null), 200) }}
+        cadence={editing}
+      />
       <RunsSheet cadence={selected} onClose={() => setSelected(null)} />
     </div>
   )

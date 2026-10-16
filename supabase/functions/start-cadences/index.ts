@@ -4,7 +4,7 @@ import { leadMatchesConditions, type CadenceCondition } from '../_shared/cadence
 
 // start-cadences (mkt-ativo Corte B): START POR EVENTO. Chamada AO LADO do
 // run-automations (lead-inbound-handler etc.) — NÃO toca o run-automations core.
-// Dado {trigger, leadId, companyId}: gate mkt_ativo_enabled → cadências habilitadas
+// Dado {trigger, leadId, companyId, toStageId?, addedTags?}: gate mkt_ativo_enabled → cadências habilitadas
 // com trigger_event=trigger → avalia trigger_conditions → cria cadence_run idempotente
 // (UNIQUE cadence_id,lead_id). O process-cadences (cron) avança os runs.
 // verify_jwt=false (service-to-service, mesmo padrão do run-automations).
@@ -14,7 +14,9 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
-    const { trigger, leadId, companyId } = await req.json()
+    // toStageId (stage_changed) e addedTags (tag_added) dizem O QUE mudou no evento:
+    // o form grava as condições como to_stage_id/tag, campos que o lead não tem.
+    const { trigger, leadId, companyId, toStageId, addedTags } = await req.json()
     if (!trigger || !leadId || !companyId) {
       return json({ error: 'trigger, leadId e companyId obrigatorios' }, corsHeaders, 400)
     }
@@ -52,7 +54,13 @@ Deno.serve(async (req) => {
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
-    const leadForConditions = { ...(lead as Record<string, unknown>), stage_id: openDeal?.stage_id ?? null }
+    const leadForConditions = {
+      ...(lead as Record<string, unknown>),
+      stage_id: openDeal?.stage_id ?? null,
+      to_stage_id: (typeof toStageId === 'string' ? toStageId : openDeal?.stage_id) ?? null,
+      // Sem addedTags (chamador antigo), cai nas tags atuais do lead.
+      tag: Array.isArray(addedTags) ? addedTags : ((lead as { tags?: unknown }).tags ?? []),
+    }
 
     const nowIso = new Date().toISOString()
     let started = 0

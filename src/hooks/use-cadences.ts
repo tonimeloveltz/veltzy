@@ -22,6 +22,15 @@ export const useCadenceRuns = (cadenceId: string | null) => {
   })
 }
 
+export const useCadenceSteps = (cadenceId: string | null) => {
+  return useQuery({
+    queryKey: ['cadence-steps', cadenceId],
+    queryFn: () => cadencesService.getCadenceSteps(cadenceId!),
+    enabled: !!cadenceId,
+    staleTime: 0,
+  })
+}
+
 export const useCreateCadence = () => {
   const queryClient = useQueryClient()
   const companyId = useAuthStore((s) => s.company?.id)
@@ -32,6 +41,21 @@ export const useCreateCadence = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cadences'] })
       toast.success('Cadência criada!')
+    },
+    onError: (err: Error) => toast.error(err.message),
+  })
+}
+
+export const useUpdateCadence = () => {
+  const queryClient = useQueryClient()
+  const companyId = useAuthStore((s) => s.company?.id)
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: cadencesService.UpdateCadenceInput }) =>
+      cadencesService.updateCadence(companyId!, id, input),
+    onSuccess: (_data, { id }) => {
+      queryClient.invalidateQueries({ queryKey: ['cadences'] })
+      queryClient.invalidateQueries({ queryKey: ['cadence-steps', id] })
+      toast.success('Automação atualizada!')
     },
     onError: (err: Error) => toast.error(err.message),
   })
