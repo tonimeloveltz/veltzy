@@ -20,6 +20,11 @@ Deno.test('contains (string) e in (array de valores)', () => {
   assertEquals(leadMatchesConditions([{ field: 'temperature', operator: 'in', value: ['cold'] }], lead), false)
 })
 
+Deno.test('eq contra campo lista = contém', () => {
+  assertEquals(leadMatchesConditions([{ field: 'tags', operator: 'eq', value: 'vip' }], lead), true)
+  assertEquals(leadMatchesConditions([{ field: 'tags', operator: 'eq', value: 'outra' }], lead), false)
+})
+
 Deno.test('AND: todas precisam passar', () => {
   const conds: CadenceCondition[] = [
     { field: 'temperature', operator: 'eq', value: 'hot' },

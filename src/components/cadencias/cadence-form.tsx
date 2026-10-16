@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Plus, Trash2, Loader2 } from 'lucide-react'
-import { useCreateCadence } from '@/hooks/use-cadences'
+import { useCadenceSteps, useCreateCadence, useUpdateCadence } from '@/hooks/use-cadences'
+import { parseConditions, parseRecurringCron } from '@/lib/cadence-draft'
+import type { UpdateCadenceInput } from '@/services/cadences.service'
 import { useCampaignTemplates } from '@/hooks/use-campaigns'
 import { useLeadSources } from '@/hooks/use-lead-sources'
 import { useAuthStore } from '@/stores/auth.store'
@@ -15,7 +17,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { StageMultiSelect } from '@/components/mkt-ativo/stage-multi-select'
-import type { CadenceStepAction, CadenceTriggerEvent, CadenceCondition } from '@/types/database'
+import type { Cadence, CadenceStepAction, CadenceTriggerEvent, CadenceCondition } from '@/types/database'
 
 interface StepDraft {
   action_type: CadenceStepAction
@@ -46,9 +48,12 @@ const TRIGGERS: { value: TriggerChoice; label: string }[] = [
 interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** Presente = modo edição (hidrata o form com a automação e seus passos). */
+  cadence?: Cadence | null
 }
 
-export function CadenceForm({ open, onOpenChange }: Props) {
+export function CadenceForm({ open, onOpenChange, cadence }: Props) {
+  const isEdit = !!cadence
   const [name, setName] = useState('')
   // QUANDO ISSO ACONTECER
   const [trigger, setTrigger] = useState<TriggerChoice>('manual')
@@ -69,6 +74,9 @@ export function CadenceForm({ open, onOpenChange }: Props) {
   const { data: templates } = useCampaignTemplates()
   const { data: leadSources } = useLeadSources()
   const createCadence = useCreateCadence()
+  const updateCadence = useUpdateCadence()
+  const { data: savedSteps, isLoading: stepsLoading } = useCadenceSteps(open && cadence ? cadence.id : null)
+  const isPending = createCadence.isPending || updateCadence.isPending
   const aiEnabled = useAuthStore((s) => s.company?.features?.ai_msg_enabled) === true
   const actionOptions = ACTIONS.filter((a) => !a.aiOnly || aiEnabled)
 
@@ -78,7 +86,26 @@ export function CadenceForm({ open, onOpenChange }: Props) {
     setSourceId(''); setOnlyStageIds([]); setCancelOnStage(false)
     setSteps([{ action_type: 'send_message', config: {} }])
   }
-  const close = () => { onOpenChange(false); setTimeout(reset, 200) }
+  const hydratedId = useRef<string | null>(null)
+  const close = () => { onOpenChange(false); hydratedId.current = null; setTimeout(reset, 200) }
+
+  // Edição: preenche o form uma vez por abertura, quando os passos chegam.
+  useEffect(() => {
+    if (!open || !cadence || !savedSteps || hydratedId.current === cadence.id) return
+    hydratedId.current = cadence.id
+    const cond = parseConditions(cadence.trigger_conditions)
+    const rec = parseRecurringCron(cadence.recurring_cron)
+    setName(cadence.name)
+    setTrigger(cadence.trigger_event ?? 'manual')
+    setStageTargets(cond.stageTargets); setTagName(cond.tagName)
+    setSourceId(cond.sourceId); setOnlyStageIds(cond.onlyStageIds)
+    setRecFreq(rec.freq); setRecTime(rec.time); setRecDow(rec.dow); setRecDom(rec.dom)
+    setWebhookToken(cadence.webhook_token ?? '')
+    setCancelOnStage(cadence.cancel_on_stage_change)
+    setSteps(savedSteps.length
+      ? savedSteps.map((st) => ({ action_type: st.action_type, config: st.config ?? {} }))
+      : [{ action_type: 'send_message', config: {} }])
+  }, [open, cadence, savedSteps])
 
   const setStep = (i: number, patch: Partial<StepDraft>) =>
     setSteps((prev) => prev.map((s, idx) => (idx === i ? { ...s, ...patch } : s)))
@@ -92,7 +119,7 @@ export function CadenceForm({ open, onOpenChange }: Props) {
     }
   }
 
-  const canSave = name.trim() !== '' && steps.length > 0 && !createCadence.isPending
+  const canSave = name.trim() !== '' && steps.length > 0 && !isPending && !(isEdit && stepsLoading)
 
   const buildConditions = (): CadenceCondition[] => {
     const c: CadenceCondition[] = []
@@ -109,18 +136,20 @@ export function CadenceForm({ open, onOpenChange }: Props) {
     : recFreq === 'weekly' ? `weekly@${recDow}@${recTime}`
     : `monthly@${recDom}@${recTime}`
 
-  const save = async (isEnabled: boolean) => {
+  // isEnabled só vale na criação; na edição o liga/desliga continua no switch da lista.
+  const save = async (isEnabled = true) => {
+    const input: UpdateCadenceInput = {
+      name: name.trim(),
+      trigger_event: trigger === 'manual' ? null : trigger,
+      trigger_conditions: buildConditions(),
+      cancel_on_stage_change: cancelOnStage,
+      recurring_cron: trigger === 'recurring' ? buildRecurringCron() : null,
+      webhook_token: trigger === 'webhook' ? (webhookToken || null) : null,
+      steps: steps.map((s) => ({ action_type: s.action_type, config: s.config })),
+    }
     try {
-      await createCadence.mutateAsync({
-        name: name.trim(),
-        trigger_event: trigger === 'manual' ? null : trigger,
-        trigger_conditions: buildConditions(),
-        cancel_on_stage_change: cancelOnStage,
-        is_enabled: isEnabled,
-        recurring_cron: trigger === 'recurring' ? buildRecurringCron() : null,
-        webhook_token: trigger === 'webhook' ? (webhookToken || null) : null,
-        steps: steps.map((s) => ({ action_type: s.action_type, config: s.config })),
-      })
+      if (cadence) await updateCadence.mutateAsync({ id: cadence.id, input })
+      else await createCadence.mutateAsync({ ...input, is_enabled: isEnabled })
       close()
     } catch { /* toast no hook */ }
   }
@@ -128,7 +157,7 @@ export function CadenceForm({ open, onOpenChange }: Props) {
   return (
     <Dialog open={open} onOpenChange={(o) => (o ? onOpenChange(true) : close())}>
       <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
-        <DialogHeader><DialogTitle>Nova automação</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{isEdit ? 'Editar automação' : 'Nova automação'}</DialogTitle></DialogHeader>
 
         <div className="space-y-4">
           <div className="space-y-1.5">
@@ -139,6 +168,11 @@ export function CadenceForm({ open, onOpenChange }: Props) {
           <p className="rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
             A automação para automaticamente se o contato responder ou pedir opt-out.
           </p>
+          {isEdit && (
+            <p className="rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
+              Contatos que já estão nesta automação seguem a partir do passo em que estão, com os passos novos.
+            </p>
+          )}
 
           {/* BLOCO 1 — QUANDO ISSO ACONTECER */}
           <div className="space-y-2 rounded-md border p-3">
@@ -277,13 +311,20 @@ export function CadenceForm({ open, onOpenChange }: Props) {
 
         <DialogFooter className="gap-2 sm:justify-between">
           <Button variant="ghost" onClick={close}>Cancelar</Button>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => save(false)} disabled={!canSave}>Salvar como rascunho</Button>
-            <Button onClick={() => save(true)} disabled={!canSave}>
-              {createCadence.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-              Salvar e ativar
+          {isEdit ? (
+            <Button onClick={() => save()} disabled={!canSave}>
+              {(isPending || stepsLoading) && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+              Salvar alterações
             </Button>
-          </div>
+          ) : (
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => save(false)} disabled={!canSave}>Salvar como rascunho</Button>
+              <Button onClick={() => save(true)} disabled={!canSave}>
+                {isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                Salvar e ativar
+              </Button>
+            </div>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
