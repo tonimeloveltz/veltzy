@@ -438,6 +438,19 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
 
 // --- Funcoes auxiliares ---
 
+/** Cadastro vindo de webhook (FB/IG Lead Ads): só grava o que veio (null se ausente).
+ *  tags é NOT NULL default '{}' em leads: ausente vira [], nunca null. */
+export function buildLeadCadastroInsert(
+  params: Pick<InboundParams, 'email' | 'instagram' | 'company' | 'tags'>,
+): { email: string | null; instagram_handle: string | null; company_name: string | null; tags: string[] } {
+  return {
+    email: params.email ?? null,
+    instagram_handle: params.instagram ?? null,
+    company_name: params.company ?? null,
+    tags: params.tags ?? [],
+  }
+}
+
 async function createLead(
   supabase: SupabaseClient,
   supabasePublic: SupabaseClient,
@@ -530,11 +543,7 @@ async function createLead(
       whatsapp_instance_name: params.instanceName,
       cloud_api_number_id: params.cloudApiNumberId ?? null,
       whatsapp_provider: params.whatsappProvider ?? null,
-      // Cadastro vindo de webhook (FB/IG Lead Ads): só grava o que veio (null se ausente).
-      email: params.email ?? null,
-      instagram_handle: params.instagram ?? null,
-      company_name: params.company ?? null,
-      tags: params.tags && params.tags.length > 0 ? params.tags : null,
+      ...buildLeadCadastroInsert(params),
     })
     .select('id, assigned_to, avatar_url, name, whatsapp_instance_name, cloud_api_number_id, whatsapp_provider, email, instagram_handle, company_name, tags')
     .single()
