@@ -1,5 +1,5 @@
 import { assertEquals } from 'jsr:@std/assert@1'
-import { decideTranscriptionUpdate } from './lead-inbound-handler.ts'
+import { buildLeadCadastroInsert, decideTranscriptionUpdate } from './lead-inbound-handler.ts'
 
 Deno.test('decideTranscriptionUpdate: ok com texto -> aplica', () => {
   const d = decideTranscriptionUpdate(200, { ok: true, data: { text: 'ola mundo' } })
@@ -33,4 +33,18 @@ Deno.test('decideTranscriptionUpdate: ok:true mas texto vazio/espacos -> pula', 
 Deno.test('decideTranscriptionUpdate: texto com espacos ao redor -> aplica preservando o valor', () => {
   const d = decideTranscriptionUpdate(200, { ok: true, data: { text: '  audio transcrito  ' } })
   assertEquals(d, { apply: true, text: '  audio transcrito  ' })
+})
+
+Deno.test('buildLeadCadastroInsert: inbound sem tags (WhatsApp) -> tags [] (leads.tags e NOT NULL)', () => {
+  const c = buildLeadCadastroInsert({})
+  assertEquals(c, { email: null, instagram_handle: null, company_name: null, tags: [] })
+})
+
+Deno.test('buildLeadCadastroInsert: tags vazias -> [] (nunca null)', () => {
+  assertEquals(buildLeadCadastroInsert({ tags: [] }).tags, [])
+})
+
+Deno.test('buildLeadCadastroInsert: cadastro do webhook preserva campos e tags', () => {
+  const c = buildLeadCadastroInsert({ email: 'a@b.com', instagram: '@x', company: 'ACME', tags: ['form'] })
+  assertEquals(c, { email: 'a@b.com', instagram_handle: '@x', company_name: 'ACME', tags: ['form'] })
 })
