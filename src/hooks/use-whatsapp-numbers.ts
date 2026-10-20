@@ -10,14 +10,20 @@ import {
   type WhatsAppProviderKind,
 } from '@/services/whatsapp-numbers.service'
 
-export function useWhatsAppNumbers() {
+interface UseWhatsAppNumbersOptions {
+  enabled?: boolean
+  refetchInterval?: number
+}
+
+export function useWhatsAppNumbers({ enabled = true, refetchInterval }: UseWhatsAppNumbersOptions = {}) {
   const companyId = useAuthStore((s) => s.company?.id)
 
   return useQuery({
     queryKey: ['whatsapp-numbers', companyId],
     queryFn: listWhatsAppNumbers,
-    enabled: !!companyId,
+    enabled: !!companyId && enabled,
     staleTime: 30_000,
+    refetchInterval,
   })
 }
 
