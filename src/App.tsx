@@ -7,6 +7,7 @@ import { ThemeInitializer } from '@/components/layout/theme-initializer'
 import { useAuthInit } from '@/hooks/use-auth-init'
 import { ProtectedRoute } from '@/components/auth/protected-route'
 import { MainLayout } from '@/components/layout/main-layout'
+import { OnboardingGate } from '@/components/onboarding/onboarding-gate'
 import { PageLoadingSkeleton } from '@/components/shared/page-loading-skeleton'
 import { ErrorBoundary } from '@/components/shared/error-boundary'
 
@@ -32,6 +33,7 @@ const ProspeccaoPage = lazy(() => import('@/pages/prospeccao'))
 const PrivacidadePage = lazy(() => import('@/pages/privacidade'))
 const TermosPage = lazy(() => import('@/pages/termos'))
 const NotFoundPage = lazy(() => import('@/pages/not-found'))
+const OnboardingPage = lazy(() => import('@/pages/onboarding'))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -85,9 +87,20 @@ const App = () => {
               />
 
               <Route
+                path="/onboarding"
+                element={
+                  <ProtectedRoute requireRole={['admin', 'super_admin']}>
+                    <OnboardingPage />
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
                 element={
                   <ProtectedRoute>
-                    <MainLayout />
+                    <OnboardingGate>
+                      <MainLayout />
+                    </OnboardingGate>
                   </ProtectedRoute>
                 }
               >

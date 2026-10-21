@@ -7,6 +7,7 @@ import { PipelineTab } from '@/components/admin/pipeline-tab'
 import { ThemeCustomizer } from '@/components/company/theme-customizer'
 import { ActivityLogsDashboard } from '@/components/admin/activity-logs-dashboard'
 import { BusinessRulesTab } from '@/components/admin/business-rules-tab'
+import { SetupPendingBanner } from '@/components/admin/setup-pending-banner'
 import { useAuthStore } from '@/stores/auth.store'
 
 const EmpresaTab = () => {
@@ -44,6 +45,8 @@ const AdminPage = () => {
   return (
     <div className="space-y-6 animate-fade-in p-4 sm:p-6">
       <h1 className="text-2xl font-bold">Admin</h1>
+
+      <SetupPendingBanner />
 
       <Tabs value={tab} onValueChange={(v) => setSearchParams({ tab: v })}>
         <TabsList className="flex-wrap h-auto gap-1">
