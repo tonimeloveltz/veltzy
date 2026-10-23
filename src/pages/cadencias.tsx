@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Workflow, Plus, AlertCircle, Users, Pencil } from 'lucide-react'
+import { Workflow, Plus, AlertCircle, Users, Pencil, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth.store'
 import { useCadences, useCadenceRuns, useToggleCadence } from '@/hooks/use-cadences'
 import { CadenceForm } from '@/components/cadencias/cadence-form'
+import { DeleteCadenceDialog } from '@/components/cadencias/delete-cadence-dialog'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -68,6 +69,7 @@ export default function CadenciasPage() {
   const [formOpen, setFormOpen] = useState(false)
   const [selected, setSelected] = useState<Cadence | null>(null)
   const [editing, setEditing] = useState<Cadence | null>(null)
+  const [deleting, setDeleting] = useState<Cadence | null>(null)
   const { data: cadences, isLoading } = useCadences()
   const toggle = useToggleCadence()
 
@@ -133,6 +135,14 @@ export default function CadenciasPage() {
                     <Button variant="ghost" size="sm" onClick={() => setSelected(c)}>
                       <Users className="mr-1.5 h-4 w-4" /> Runs
                     </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => setDeleting(c)}
+                    >
+                      <Trash2 className="mr-1.5 h-4 w-4" /> Excluir
+                    </Button>
                   </td>
                 </tr>
               ))}
@@ -147,6 +157,7 @@ export default function CadenciasPage() {
         cadence={editing}
       />
       <RunsSheet cadence={selected} onClose={() => setSelected(null)} />
+      <DeleteCadenceDialog cadence={deleting} onClose={() => setDeleting(null)} />
     </div>
   )
 }

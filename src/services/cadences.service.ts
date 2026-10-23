@@ -141,6 +141,23 @@ export const setCadenceEnabled = async (id: string, isEnabled: boolean): Promise
 }
 
 /**
+ * Exclui a cadência. Passos e runs caem por ON DELETE CASCADE (o histórico de
+ * acompanhamento vai junto); campanhas que a usavam de follow-up ficam com
+ * followup_cadence_id NULL. O .select() confirma a linha: a RLS (admin/manager)
+ * barra calada, sem erro, e o toast mentiria.
+ */
+export const deleteCadence = async (companyId: string, id: string): Promise<void> => {
+  const { data, error } = await veltzy()
+    .from('cadences')
+    .delete()
+    .eq('id', id)
+    .eq('company_id', companyId)
+    .select('id')
+  if (error) throw error
+  if (!data?.length) throw new Error('Automação não encontrada ou sem permissão para excluir.')
+}
+
+/**
  * START MANUAL: inscreve lead(s) na cadência. Cria cadence_run (idempotente via
  * UNIQUE cadence_id,lead_id). O process-cadences (cron) avança. Gate real =
  * process-cadences (mkt_ativo_enabled); aqui a RLS já restringe à company.

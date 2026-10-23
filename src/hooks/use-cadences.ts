@@ -71,6 +71,21 @@ export const useToggleCadence = () => {
   })
 }
 
+export const useDeleteCadence = () => {
+  const queryClient = useQueryClient()
+  const companyId = useAuthStore((s) => s.company?.id)
+  return useMutation({
+    mutationFn: (id: string) => cadencesService.deleteCadence(companyId!, id),
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: ['cadences'] })
+      queryClient.removeQueries({ queryKey: ['cadence-steps', id] })
+      queryClient.removeQueries({ queryKey: ['cadence-runs', id] })
+      toast.success('Automação excluída!')
+    },
+    onError: (err: Error) => toast.error(err.message),
+  })
+}
+
 export const useAddLeadsToCadence = () => {
   const queryClient = useQueryClient()
   const companyId = useAuthStore((s) => s.company?.id)
