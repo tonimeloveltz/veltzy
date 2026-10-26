@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase'
+import { supabase, veltzy } from '@/lib/supabase'
 
 const NUMBERS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-numbers-list`
 const MANAGE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-instance-manage`
@@ -72,7 +72,22 @@ export async function getWahaSession(sessionName: string): Promise<{ qr_code_bas
   return res.json()
 }
 
-/** Desconecta um numero por provider (Evolution/WAHA). Cloud API nao usa este fluxo. */
+/** Desconecta um numero oficial: so marca como offboarded (envio e recebimento param
+ *  no Veltzy; na Meta fica intacto e reconecta pelo Embedded Signup).
+ *  Nunca apagar a linha: em prod o FK dos templates e ON DELETE CASCADE. */
+export async function disconnectCloudApiNumber(companyId: string, phoneNumberId: string): Promise<void> {
+  const { data, error } = await veltzy()
+    .from('cloud_api_numbers')
+    .update({ status: 'offboarded' })
+    .eq('company_id', companyId)
+    .eq('phone_number_id', phoneNumberId)
+    .select('id')
+  if (error) throw new Error(error.message)
+  // RLS barra calado (so admin/manager escreve): conta as linhas aceitas.
+  if (!data?.length) throw new Error('Sem permissao para desconectar este numero')
+}
+
+/** Desconecta um numero por provider (Evolution/WAHA). Cloud API usa disconnectCloudApiNumber. */
 export async function disconnectNumber(provider: WhatsAppProviderKind, ref: string): Promise<void> {
   const idField = provider === 'waha' ? 'session_name' : 'instance_name'
   const res = await fetch(MANAGE_URL, {

@@ -88,6 +88,14 @@ Deno.serve(async (req) => {
           continue
         }
 
+        // 1b. Numero desconectado pelo admin (status offboarded): a Meta segue
+        //     entregando porque o app continua inscrito na WABA, mas o Veltzy
+        //     ignora tudo desse numero ate ele ser reconectado pelo Embedded Signup.
+        if (resolved.status !== 'active') {
+          console.warn(`[cloud-api-inbound] numero ${phoneNumberId} desconectado (${resolved.status}), ignorando`)
+          continue
+        }
+
         // 2. Guard multi-provider (V2): chegar aqui significa que resolveCloudApiNumber
         //    JA casou este phone_number_id com um cloud_api_number desta empresa —
         //    ou seja, "a empresa TEM numero Cloud API" ja esta provado por `resolved`.
