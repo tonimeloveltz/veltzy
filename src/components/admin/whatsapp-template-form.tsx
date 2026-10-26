@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Loader2, Plus, X } from 'lucide-react'
+import { Info, Loader2, Plus, X } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -132,7 +132,14 @@ export const WhatsAppTemplateForm = ({ open, onOpenChange }: WhatsAppTemplateFor
               onChange={(e) => setBodyText(e.target.value)}
               placeholder="Olá {{1}}, seu pedido {{2}} foi confirmado."
             />
-            <p className="text-xs text-muted-foreground">Use {'{{1}}'}, {'{{2}}'}... para variáveis.</p>
+            <div className="flex items-start gap-2 rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-xs leading-relaxed">
+              <Info className="mt-px h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+              <span>
+                A Meta só aceita variáveis numeradas em ordem: {'{{1}}'}, {'{{2}}'}, {'{{3}}'}... Nomes como{' '}
+                {'{{nome}}'} não funcionam aqui. O que cada número vira é escolhido ao criar a campanha:
+                nome do contato, empresa do contato, telefone ou um texto fixo.
+              </span>
+            </div>
             {vars.length > 0 && !varsSequential && (
               <p className="text-xs text-red-600">As variáveis devem ser sequenciais a partir de {'{{1}}'}.</p>
             )}
@@ -141,13 +148,17 @@ export const WhatsAppTemplateForm = ({ open, onOpenChange }: WhatsAppTemplateFor
           {vars.length > 0 && varsSequential && (
             <div className="space-y-2">
               <Label>Exemplos das variáveis</Label>
+              <p className="text-xs text-muted-foreground">
+                A Meta exige um valor de exemplo para cada variável e usa ele só para revisar o template.
+                O exemplo não é enviado ao contato.
+              </p>
               {vars.map((n) => (
                 <div key={n} className="flex items-center gap-2">
                   <span className="w-10 text-xs text-muted-foreground">{`{{${n}}}`}</span>
                   <Input
                     value={examples[n] ?? ''}
                     onChange={(e) => setExamples((prev) => ({ ...prev, [n]: e.target.value }))}
-                    placeholder={`Exemplo para {{${n}}}`}
+                    placeholder={n === 1 ? 'ex: Maria' : `Exemplo para {{${n}}}`}
                   />
                 </div>
               ))}

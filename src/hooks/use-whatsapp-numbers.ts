@@ -4,6 +4,7 @@ import { useAuthStore } from '@/stores/auth.store'
 import {
   listWhatsAppNumbers,
   disconnectNumber,
+  disconnectCloudApiNumber,
   deleteNumber,
   createWahaSession,
   getWahaSession,
@@ -48,12 +49,19 @@ export function useWahaSessionStatus(sessionName: string | null, enabled: boolea
 
 export function useDisconnectNumber() {
   const queryClient = useQueryClient()
+  const companyId = useAuthStore((s) => s.company?.id)
 
   return useMutation({
     mutationFn: ({ provider, ref }: { provider: WhatsAppProviderKind; ref: string }) =>
-      disconnectNumber(provider, ref),
-    onSuccess: () => {
+      provider === 'cloud_api'
+        ? disconnectCloudApiNumber(companyId!, ref)
+        : disconnectNumber(provider, ref),
+    onSuccess: (_data, { provider }) => {
       queryClient.invalidateQueries({ queryKey: ['whatsapp-numbers'] })
+      if (provider === 'cloud_api') {
+        queryClient.invalidateQueries({ queryKey: ['cloud-api-numbers'] })
+        queryClient.invalidateQueries({ queryKey: ['whatsapp-status'] })
+      }
       toast.success('Numero desconectado')
     },
     onError: (err: Error) => {

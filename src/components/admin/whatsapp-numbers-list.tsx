@@ -90,10 +90,20 @@ const NumberRow = ({
         <span className="text-xs text-muted-foreground">{status.label}</span>
         {isAdmin && (
           isOfficial ? (
-            <Button variant="outline" size="sm" className="h-8" onClick={onManageOfficial}>
-              <Settings2 className="mr-1 h-3.5 w-3.5" />
-              Gerenciar
-            </Button>
+            // Oficial nao tem Remover: apagar a linha apaga os templates do numero (CASCADE em prod).
+            // Reconectar e pelo Embedded Signup, dentro do Gerenciar.
+            <>
+              <Button variant="outline" size="sm" className="h-8" onClick={onManageOfficial}>
+                <Settings2 className="mr-1 h-3.5 w-3.5" />
+                Gerenciar
+              </Button>
+              {item.status === 'connected' && (
+                <Button variant="outline" size="sm" className="h-8" onClick={() => onDisconnect(item)}>
+                  <Unplug className="mr-1 h-3.5 w-3.5" />
+                  Desconectar
+                </Button>
+              )}
+            </>
           ) : item.status === 'connected' ? (
             <Button variant="outline" size="sm" className="h-8" onClick={() => onDisconnect(item)}>
               <Unplug className="mr-1 h-3.5 w-3.5" />
@@ -333,8 +343,18 @@ export const WhatsAppNumbersList = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Desconectar numero?</AlertDialogTitle>
             <AlertDialogDescription>
-              {disconnectTarget?.displayNumber ?? 'Este numero'} sera desconectado. Voce podera
-              reconectar depois lendo o QR Code novamente.
+              {disconnectTarget?.provider === 'cloud_api' ? (
+                <>
+                  {disconnectTarget.displayNumber ?? 'Este numero'} para de enviar e receber mensagens
+                  no Veltzy. Campanhas e respostas por ele vao falhar. O numero continua registrado na
+                  Meta e os templates sao mantidos. Para voltar, use Gerenciar e conecte o numero de novo.
+                </>
+              ) : (
+                <>
+                  {disconnectTarget?.displayNumber ?? 'Este numero'} sera desconectado. Voce podera
+                  reconectar depois lendo o QR Code novamente.
+                </>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
