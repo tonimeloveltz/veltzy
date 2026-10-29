@@ -2,6 +2,7 @@
 // espelha o formato de automation_rules.conditions ({field, operator, value}) SEM
 // acoplar ao run-automations (que fica intacto). Todas as condições precisam passar
 // (AND); lista vazia = passa (cadência sem filtro dispara pra todo lead do evento).
+// 'eq' contra um campo lista (ex. tag = tags adicionadas no evento) passa se a lista contém o valor.
 
 export interface CadenceCondition {
   field: string
@@ -12,7 +13,7 @@ export interface CadenceCondition {
 function evalOne(c: CadenceCondition, lead: Record<string, unknown>): boolean {
   const v = lead[c.field]
   switch (c.operator) {
-    case 'eq': return v === c.value
+    case 'eq': return Array.isArray(v) ? v.includes(c.value) : v === c.value
     case 'neq': return v !== c.value
     case 'gt': return Number(v) > Number(c.value)
     case 'lt': return Number(v) < Number(c.value)

@@ -22,6 +22,15 @@ export const useCadenceRuns = (cadenceId: string | null) => {
   })
 }
 
+export const useCadenceSteps = (cadenceId: string | null) => {
+  return useQuery({
+    queryKey: ['cadence-steps', cadenceId],
+    queryFn: () => cadencesService.getCadenceSteps(cadenceId!),
+    enabled: !!cadenceId,
+    staleTime: 0,
+  })
+}
+
 export const useCreateCadence = () => {
   const queryClient = useQueryClient()
   const companyId = useAuthStore((s) => s.company?.id)
@@ -37,12 +46,42 @@ export const useCreateCadence = () => {
   })
 }
 
+export const useUpdateCadence = () => {
+  const queryClient = useQueryClient()
+  const companyId = useAuthStore((s) => s.company?.id)
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: cadencesService.UpdateCadenceInput }) =>
+      cadencesService.updateCadence(companyId!, id, input),
+    onSuccess: (_data, { id }) => {
+      queryClient.invalidateQueries({ queryKey: ['cadences'] })
+      queryClient.invalidateQueries({ queryKey: ['cadence-steps', id] })
+      toast.success('Automação atualizada!')
+    },
+    onError: (err: Error) => toast.error(err.message),
+  })
+}
+
 export const useToggleCadence = () => {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ id, isEnabled }: { id: string; isEnabled: boolean }) =>
       cadencesService.setCadenceEnabled(id, isEnabled),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['cadences'] }),
+    onError: (err: Error) => toast.error(err.message),
+  })
+}
+
+export const useDeleteCadence = () => {
+  const queryClient = useQueryClient()
+  const companyId = useAuthStore((s) => s.company?.id)
+  return useMutation({
+    mutationFn: (id: string) => cadencesService.deleteCadence(companyId!, id),
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: ['cadences'] })
+      queryClient.removeQueries({ queryKey: ['cadence-steps', id] })
+      queryClient.removeQueries({ queryKey: ['cadence-runs', id] })
+      toast.success('Automação excluída!')
+    },
     onError: (err: Error) => toast.error(err.message),
   })
 }

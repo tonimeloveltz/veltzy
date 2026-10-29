@@ -162,6 +162,16 @@ export interface WhatsAppCategories {
   waha: boolean
 }
 
+export interface CompanyOnboarding {
+  skipped_at?: string
+  completed_at?: string
+}
+
+export interface CompanyMetadata {
+  onboarding?: CompanyOnboarding
+  [key: string]: unknown
+}
+
 export interface Company {
   id: string
   name: string
@@ -171,6 +181,7 @@ export interface Company {
   secondary_color: string
   features: CompanyFeatures
   settings: Record<string, unknown>
+  metadata: CompanyMetadata | null
   whatsapp_categories: WhatsAppCategories | null
   active_whatsapp_provider: WhatsAppProviderType | null
   is_active: boolean

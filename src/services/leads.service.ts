@@ -186,6 +186,14 @@ export const updateLead = async (companyId: string, leadId: string, input: Updat
   const payload = { ...input }
   if (payload.phone) payload.phone = normalizePhoneBR(payload.phone)
 
+  // Tags de antes, para o gatilho 'tag_added' saber quais tags são novas.
+  let previousTags: string[] = []
+  if (input.tags !== undefined) {
+    const { data: before } = await veltzy()
+      .from('leads').select('tags').eq('id', leadId).eq('company_id', companyId).single()
+    previousTags = (before as { tags?: string[] | null } | null)?.tags ?? []
+  }
+
   const { data, error } = await veltzy()
     .from('leads')
     .update(payload)
@@ -194,11 +202,14 @@ export const updateLead = async (companyId: string, leadId: string, input: Updat
     .select()
     .single()
   if (error) throw error
-  // Gatilho 'tag_added' das automações (best-effort): só quando tags foram editadas e há
-  // alguma tag. start-cadences filtra pela tag configurada e é idempotente.
-  if (input.tags !== undefined && (data as { tags?: string[] }).tags?.length) {
+  // Gatilho 'tag_added' das automações (best-effort): só quando entrou tag nova.
+  // start-cadences filtra pela tag configurada e é idempotente.
+  const addedTags = input.tags !== undefined
+    ? ((data as { tags?: string[] | null }).tags ?? []).filter((t) => !previousTags.includes(t))
+    : []
+  if (addedTags.length) {
     supabase.functions
-      .invoke('start-cadences', { body: { trigger: 'tag_added', leadId, companyId } })
+      .invoke('start-cadences', { body: { trigger: 'tag_added', leadId, companyId, addedTags } })
       .catch(() => { /* best-effort */ })
   }
   return data

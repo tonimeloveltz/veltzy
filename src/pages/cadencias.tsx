@@ -1,14 +1,15 @@
 import { useState } from 'react'
-import { Workflow, Plus, AlertCircle, Users } from 'lucide-react'
+import { Workflow, Plus, AlertCircle, Users, Pencil, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth.store'
 import { useCadences, useCadenceRuns, useToggleCadence } from '@/hooks/use-cadences'
 import { CadenceForm } from '@/components/cadencias/cadence-form'
+import { DeleteCadenceDialog } from '@/components/cadencias/delete-cadence-dialog'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
-  Sheet, SheetContent, SheetTitle,
+  Sheet, SheetContent, SheetDescription, SheetTitle,
 } from '@/components/ui/sheet'
 import type { Cadence, CadenceRunStatus } from '@/types/database'
 
@@ -31,9 +32,12 @@ function RunsSheet({ cadence, onClose }: { cadence: Cadence | null; onClose: () 
   const { data: runs, isLoading } = useCadenceRuns(cadence?.id ?? null)
   return (
     <Sheet open={!!cadence} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent className="w-full sm:max-w-lg">
-        <SheetTitle>Acompanhamento — {cadence?.name}</SheetTitle>
-        <div className="mt-4 space-y-2">
+      <SheetContent className="flex w-full flex-col overflow-y-auto p-6 sm:max-w-lg">
+        <div className="space-y-1 pr-8">
+          <SheetTitle>Leads na automação</SheetTitle>
+          <SheetDescription className="truncate">{cadence?.name}</SheetDescription>
+        </div>
+        <div className="space-y-2">
           {isLoading ? (
             [0, 1, 2].map((i) => <Skeleton key={i} className="h-12 w-full" />)
           ) : !runs?.length ? (
@@ -42,15 +46,20 @@ function RunsSheet({ cadence, onClose }: { cadence: Cadence | null; onClose: () 
             <div className="overflow-x-auto rounded-lg border">
               <table className="w-full text-sm">
                 <thead className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
-                  <tr><th className="px-3 py-2">Lead</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Passo</th><th className="px-3 py-2">Motivo</th></tr>
+                  <tr>
+                    <th className="px-4 py-2.5 font-medium">Lead</th>
+                    <th className="px-4 py-2.5 font-medium">Status</th>
+                    <th className="px-4 py-2.5 font-medium">Passo</th>
+                    <th className="px-4 py-2.5 font-medium">Motivo</th>
+                  </tr>
                 </thead>
                 <tbody>
                   {runs.map((r) => (
-                    <tr key={r.id} className="border-b last:border-0">
-                      <td className="px-3 py-2">{r.lead_name ?? r.lead_id.slice(0, 8)}</td>
-                      <td className="px-3 py-2"><span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', runStatusTone[r.status])}>{runStatusLabel[r.status]}</span></td>
-                      <td className="px-3 py-2 tabular-nums">{r.current_step}</td>
-                      <td className="px-3 py-2 text-muted-foreground">{r.cancel_reason ?? '—'}</td>
+                    <tr key={r.id} className="border-b last:border-0 hover:bg-muted/30">
+                      <td className="px-4 py-3 font-medium">{r.lead_name ?? r.lead_id.slice(0, 8)}</td>
+                      <td className="px-4 py-3"><span className={cn('whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium', runStatusTone[r.status])}>{runStatusLabel[r.status]}</span></td>
+                      <td className="px-4 py-3 tabular-nums">{r.current_step}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{r.cancel_reason ?? '-'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -67,6 +76,8 @@ export default function CadenciasPage() {
   const features = useAuthStore((s) => s.company?.features)
   const [formOpen, setFormOpen] = useState(false)
   const [selected, setSelected] = useState<Cadence | null>(null)
+  const [editing, setEditing] = useState<Cadence | null>(null)
+  const [deleting, setDeleting] = useState<Cadence | null>(null)
   const { data: cadences, isLoading } = useCadences()
   const toggle = useToggleCadence()
 
@@ -92,7 +103,7 @@ export default function CadenciasPage() {
             <p className="text-sm text-muted-foreground">Sequências automáticas de mensagens (drip)</p>
           </div>
         </div>
-        <Button onClick={() => setFormOpen(true)}><Plus className="mr-1.5 h-4 w-4" /> Nova automação</Button>
+        <Button onClick={() => { setEditing(null); setFormOpen(true) }}><Plus className="mr-1.5 h-4 w-4" /> Nova automação</Button>
       </div>
 
       {isLoading ? (
@@ -111,7 +122,7 @@ export default function CadenciasPage() {
                 <th className="px-4 py-2.5 font-medium">Automação</th>
                 <th className="px-4 py-2.5 font-medium">Gatilho</th>
                 <th className="px-4 py-2.5 font-medium">Ativa</th>
-                <th className="px-4 py-2.5 font-medium text-right">Acompanhar</th>
+                <th className="px-4 py-2.5 font-medium text-right">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -126,8 +137,19 @@ export default function CadenciasPage() {
                     />
                   </td>
                   <td className="px-4 py-3 text-right">
+                    <Button variant="ghost" size="sm" onClick={() => { setEditing(c); setFormOpen(true) }}>
+                      <Pencil className="mr-1.5 h-4 w-4" /> Editar
+                    </Button>
                     <Button variant="ghost" size="sm" onClick={() => setSelected(c)}>
-                      <Users className="mr-1.5 h-4 w-4" /> Runs
+                      <Users className="mr-1.5 h-4 w-4" /> Leads
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => setDeleting(c)}
+                    >
+                      <Trash2 className="mr-1.5 h-4 w-4" /> Excluir
                     </Button>
                   </td>
                 </tr>
@@ -137,8 +159,13 @@ export default function CadenciasPage() {
         </div>
       )}
 
-      <CadenceForm open={formOpen} onOpenChange={setFormOpen} />
+      <CadenceForm
+        open={formOpen}
+        onOpenChange={(o) => { setFormOpen(o); if (!o) setTimeout(() => setEditing(null), 200) }}
+        cadence={editing}
+      />
       <RunsSheet cadence={selected} onClose={() => setSelected(null)} />
+      <DeleteCadenceDialog cadence={deleting} onClose={() => setDeleting(null)} />
     </div>
   )
 }
