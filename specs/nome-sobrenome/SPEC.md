@@ -2,7 +2,7 @@
 
 Trilha: G
 Início: 2026-11-03 15:40
-Merge: (preencher no merge)
+Merge: 2026-11-03 16:13
 
 ## Contexto
 - `veltzy.leads.name` é o único campo de nome. Triggers atuais: `on_lead_activity` (AFTER INSERT OR UPDATE, `veltzy.log_lead_activity`, só loga criação e troca de `assigned_to`) e `on_updated` (BEFORE UPDATE, `veltzy.handle_updated_at`).

@@ -2,7 +2,7 @@
 
 Trilha: G
 Início: 2026-11-03 15:40
-Merge: (preencher no merge)
+Merge: 2026-11-03 16:13
 
 ## Problema e objetivo
 Hoje o lead tem só `name` (nome completo, texto livre). A variável `{{nome}}` de campanhas e cadências sai com o nome completo ("Olá, Maria Aparecida Souza"), o que soa robótico. Não existe como tratar o lead só pelo primeiro nome nem usar o sobrenome isolado.
