@@ -17,6 +17,7 @@ import { LeadDealsPanel } from '@/components/inbox/lead-deals-panel'
 import { LeadCadencePanel } from '@/components/inbox/lead-cadence-panel'
 import { CreateTaskModal } from '@/components/tarefas/create-task-modal'
 import { useUpdateLead } from '@/hooks/use-leads'
+import { useLeadDetail } from '@/hooks/use-lead-detail'
 import { useLeadSources } from '@/hooks/use-lead-sources'
 import { useTeamMembers } from '@/hooks/use-team'
 import { useLeadTasks, useCompleteTask } from '@/hooks/use-tasks'
@@ -25,6 +26,7 @@ import { useWhatsAppStatus } from '@/hooks/use-whatsapp-status'
 import { useInboxStore } from '@/stores/inbox.store'
 import { useAuthStore } from '@/stores/auth.store'
 import { leadDisplayName } from '@/lib/phone'
+import { nameParts } from '@/lib/lead-name'
 import { updateLead as updateLeadService } from '@/services/leads.service'
 import { leadTemperatureConfig } from '@/lib/lead-config'
 import type { LeadWithLastMessage, TaskType } from '@/types/database'
@@ -76,7 +78,16 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
   const [createTaskOpen, setCreateTaskOpen] = useState(false)
 
   // --- Editable fields (non-observations) ---
-  const [name, setName] = useState(lead.name ?? '')
+  // Nome/Sobrenome: a RPC da lista de conversas nao traz first/last, entao o
+  // valor vem do detalhe do lead (select *). So vao no payload se o usuario
+  // mexeu neles: sem isso, salvar outro campo antes do detalhe chegar zeraria
+  // first/last no banco.
+  const { data: leadDetail } = useLeadDetail(lead.id)
+  const [firstName, setFirstName] = useState(lead.first_name ?? '')
+  const [lastName, setLastName] = useState(lead.last_name ?? '')
+  const [nameTouched, setNameTouched] = useState(false)
+  const requireFirstName = !!(leadDetail?.first_name ?? lead.first_name)
+  const firstNameMissing = nameTouched && requireFirstName && firstName.trim() === ''
   const [email, setEmail] = useState(lead.email ?? '')
   const [companyName, setCompanyName] = useState(lead.company_name ?? '')
   const [instagramHandle, setInstagramHandle] = useState(lead.instagram_handle ?? '')
@@ -127,11 +138,11 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
 
   // --- Flush all dirty fields ---
   const dirtyRef = useRef(false)
-  const fieldsRef = useRef({ name, email, companyName, instagramHandle, linkedinUrl, sourceId, assignedTo, tags })
+  const fieldsRef = useRef({ firstName, lastName, nameTouched, firstNameMissing, email, companyName, instagramHandle, linkedinUrl, sourceId, assignedTo, tags })
   const leadIdRef = useRef(lead.id)
 
   dirtyRef.current = dirty
-  fieldsRef.current = { name, email, companyName, instagramHandle, linkedinUrl, sourceId, assignedTo, tags }
+  fieldsRef.current = { firstName, lastName, nameTouched, firstNameMissing, email, companyName, instagramHandle, linkedinUrl, sourceId, assignedTo, tags }
   leadIdRef.current = lead.id
 
   const flushFields = useCallback(async () => {
@@ -141,7 +152,7 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
     dirtyRef.current = false
     try {
       await updateLeadService(companyId, lid, {
-        name: f.name || null,
+        ...nameParts(f),
         email: f.email || null,
         company_name: f.companyName || null,
         instagram_handle: f.instagramHandle || null,
@@ -163,7 +174,9 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
 
   // Reset local state to new lead
   useEffect(() => {
-    setName(lead.name ?? '')
+    setFirstName(lead.first_name ?? '')
+    setLastName(lead.last_name ?? '')
+    setNameTouched(false)
     setEmail(lead.email ?? '')
     setCompanyName(lead.company_name ?? '')
     setInstagramHandle(lead.instagram_handle ?? '')
@@ -176,6 +189,13 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
     setObsSaveStatus('idle')
     pendingObsRef.current = null
   }, [lead.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Semeia Nome/Sobrenome quando o detalhe chega (se o usuario ainda nao mexeu)
+  useEffect(() => {
+    if (!leadDetail || leadDetail.id !== lead.id || nameTouched) return
+    setFirstName(leadDetail.first_name ?? '')
+    setLastName(leadDetail.last_name ?? '')
+  }, [leadDetail, lead.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Flush on unmount
   useEffect(() => {
@@ -196,7 +216,7 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
     await updateLead.mutateAsync({
       leadId: lead.id,
       data: {
-        name: name || null,
+        ...nameParts({ firstName, lastName, nameTouched, firstNameMissing }),
         email: email || null,
         company_name: companyName || null,
         instagram_handle: instagramHandle || null,
@@ -283,13 +303,24 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
         <div className="space-y-3 px-4 py-4 border-b">
           <SectionHeader label="Dados" />
 
-          <div className="space-y-1.5">
-            <Label className="text-xs">Nome</Label>
-            <Input
-              value={name}
-              onChange={(e) => { setName(e.target.value); markDirty() }}
-              className="h-8 text-sm"
-            />
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Nome{requireFirstName ? ' *' : ''}</Label>
+              <Input
+                value={firstName}
+                onChange={(e) => { setFirstName(e.target.value); setNameTouched(true); markDirty() }}
+                className="h-8 text-sm"
+              />
+              {firstNameMissing && <p className="text-xs text-destructive">Nome obrigatorio</p>}
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Sobrenome</Label>
+              <Input
+                value={lastName}
+                onChange={(e) => { setLastName(e.target.value); setNameTouched(true); markDirty() }}
+                className="h-8 text-sm"
+              />
+            </div>
           </div>
 
           <div className="space-y-1.5">

@@ -46,6 +46,7 @@ src/components/pipeline/edit-lead-modal.tsx
 src/components/pipeline/edit-lead-modal.test.tsx
 src/components/inbox/contact-panel.tsx
 src/components/inbox/contact-panel.test.ts
+src/lib/lead-name.ts
 src/lib/csv-parser.ts
 src/lib/csv-parser.test.ts
 src/services/import-leads.service.ts
@@ -239,3 +240,5 @@ Regra do trigger (para o client): nunca montar `name` no client. Mandar `first_n
 - Nome obrigatório na criação. Na edição, obrigatório só se o lead já tinha `first_name` (não deixa apagar), para não travar a edição de lead inbound sem nome (placeholder).
 - Import: com coluna de sobrenome, a coluna mapeada como Nome vira `first_name`; sem ela, segue gravando `name` (split no banco).
 - `src/types/database.ts` é atualizado à mão: o arquivo não é saída do `gen types`.
+- Painel do inbox: `first_name`/`last_name` só vão no payload se o usuário mexeu neles (`nameParts` em `src/lib/lead-name.ts`, arquivo novo para ser testável fora do componente). Sem isso, salvar outro campo antes do `useLeadDetail` chegar zeraria first/last no banco.
+- Modais (novo contato e edição do pipeline): Nome e Sobrenome lado a lado; Telefone passa a dividir linha com Email.
