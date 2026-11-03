@@ -11,7 +11,7 @@ function fireStageChanged(companyId: string, leadId: string | null | undefined, 
 
 const DEAL_WITH_LEAD_SELECT = `
   *,
-  leads:lead_id(id, name, phone, email, avatar_url, temperature, tags, is_ai_active, transfer_summary, source_id, company_name, created_at, whatsapp_instance_name,
+  leads:lead_id(id, name, first_name, last_name, phone, email, avatar_url, temperature, tags, is_ai_active, transfer_summary, source_id, company_name, created_at, whatsapp_instance_name,
     lead_sources:source_id(*)
   ),
   pipeline_stages:stage_id(*),

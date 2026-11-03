@@ -89,6 +89,9 @@ export const parseCsvFile = (file: File): Promise<ParsedCsv> => {
 const AUTO_MAP: Record<string, string> = {
   // pt-BR (formato Veltzy export)
   'nome': 'name',
+  'sobrenome': 'last_name',
+  'último nome': 'last_name',
+  'ultimo nome': 'last_name',
   'telefone': 'phone',
   'email': 'email',
   'origem': 'source_id',
@@ -106,6 +109,9 @@ const AUTO_MAP: Record<string, string> = {
   'tags': 'tags',
   // Inglês
   'name': 'name',
+  'last name': 'last_name',
+  'last_name': 'last_name',
+  'surname': 'last_name',
   'phone': 'phone',
   'phone number': 'phone',
   'telephone': 'phone',
@@ -132,10 +138,11 @@ const AUTO_MAP: Record<string, string> = {
   'celular': 'phone',
 }
 
-export type LeadField = 'name' | 'phone' | 'email' | 'source_id' | 'pipeline_id' | 'stage_id' | 'temperature' | 'deal_value' | 'assigned_to' | 'observations' | 'tags'
+export type LeadField = 'name' | 'last_name' | 'phone' | 'email' | 'source_id' | 'pipeline_id' | 'stage_id' | 'temperature' | 'deal_value' | 'assigned_to' | 'observations' | 'tags'
 
 export const LEAD_FIELD_LABELS: Record<LeadField, string> = {
   name: 'Nome',
+  last_name: 'Sobrenome',
   phone: 'Telefone',
   email: 'Email',
   source_id: 'Origem',
@@ -148,20 +155,30 @@ export const LEAD_FIELD_LABELS: Record<LeadField, string> = {
   tags: 'Tags',
 }
 
+// Headers que so viram `name` quando a planilha nao tem um "Nome" de verdade.
+// O export do Veltzy sai com Nome (primeiro nome) + Sobrenome + Nome completo:
+// reimportar nao pode deixar o "Nome completo" ocupar o lugar do Nome, senao o
+// sobrenome duplicaria (first = nome completo, last = sobrenome).
+const NAME_FALLBACK_HEADERS = new Set(['nome completo', 'contact name'])
+
 export const autoMapColumns = (headers: string[]): Record<number, LeadField | null> => {
   const mapping: Record<number, LeadField | null> = {}
   const usedFields = new Set<string>()
+  const normalizedHeaders = headers.map((h) => h.toLowerCase().trim())
 
-  headers.forEach((header, index) => {
-    const normalized = header.toLowerCase().trim()
-    const field = AUTO_MAP[normalized] as LeadField | undefined
-    if (field && !usedFields.has(field)) {
-      mapping[index] = field
-      usedFields.add(field)
-    } else {
-      mapping[index] = null
-    }
-  })
+  // 1a passada: tudo menos os fallbacks de nome. 2a: fallbacks, se o campo sobrou.
+  for (const pass of [false, true]) {
+    normalizedHeaders.forEach((normalized, index) => {
+      if (NAME_FALLBACK_HEADERS.has(normalized) !== pass) return
+      const field = AUTO_MAP[normalized] as LeadField | undefined
+      if (field && !usedFields.has(field)) {
+        mapping[index] = field
+        usedFields.add(field)
+      } else {
+        mapping[index] = null
+      }
+    })
+  }
 
   return mapping
 }

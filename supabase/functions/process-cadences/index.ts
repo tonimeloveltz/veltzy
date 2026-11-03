@@ -2,7 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { isCronAuthorized, cronUnauthorized } from '../_shared/cron-auth.ts'
 import { getCorsHeaders } from '../_shared/cors.ts'
 import { decideCadenceAction, type CadenceStepLite } from '../_shared/cadence-engine.ts'
-import { getTemplateBodyText, renderTemplateBody, resolveTemplateParams } from '../_shared/blast-render.ts'
+import { getTemplateBodyText, renderTemplateBody, renderMessageBody, resolveTemplateParams } from '../_shared/blast-render.ts'
 import { HubClient } from '../_shared/hub-client.ts'
 
 // process-cadences (mkt-ativo Corte B): cron que AVANÇA os cadence_runs ativos e
@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
 
         const { data: lead } = await veltzy
           .from('leads')
-          .select('id, phone, name, tags, marketing_opt_out, whatsapp_instance_name')
+          .select('id, phone, name, first_name, last_name, company_name, tags, marketing_opt_out, whatsapp_instance_name')
           .eq('id', run.lead_id)
           .single()
         if (!lead) { await failRun(veltzy, run.id, 'lead_missing'); failed++; continue }
@@ -151,7 +151,16 @@ async function executeStep(
   // deno-lint-ignore no-explicit-any
   publicDb: any,
   step: CadenceStepLite,
-  lead: { id: string; phone: string; name: string | null; tags: string[] | null; whatsapp_instance_name: string | null },
+  lead: {
+    id: string
+    phone: string
+    name: string | null
+    first_name: string | null
+    last_name: string | null
+    company_name: string | null
+    tags: string[] | null
+    whatsapp_instance_name: string | null
+  },
   companyId: string,
   now: Date,
 ) {
@@ -161,7 +170,9 @@ async function executeStep(
       await veltzy.from('message_queue').insert({
         company_id: companyId,
         lead_id: lead.id,
-        content: String(cfg.content ?? ''),
+        // Variáveis nomeadas ({{nome}}, {{sobrenome}}...) renderizadas aqui:
+        // antes o conteúdo ia cru e {{nome}} chegava literal ao lead.
+        content: renderMessageBody(String(cfg.content ?? ''), lead as unknown as Record<string, unknown>),
         message_type: 'text',
         scheduled_at: now.toISOString(),
         source: 'cadence',

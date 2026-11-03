@@ -23,8 +23,12 @@ import type { CreateLeadInput, UpdateLeadInput, Lead } from '@/types/database'
 
 const NO_OWNER = 'none'
 
-const schema = z.object({
-  name: z.string().min(1, 'Nome obrigatorio'),
+// Nome obrigatorio na criacao. Na edicao, so quando o contato ja tinha primeiro
+// nome (nao deixa apagar): lead que chegou sem nome (placeholder de inbound) segue
+// editavel sem obrigar a preencher.
+const makeSchema = (requireFirstName: boolean) => z.object({
+  first_name: requireFirstName ? z.string().trim().min(1, 'Nome obrigatorio') : z.string(),
+  last_name: z.string().optional(),
   // leads.phone e NOT NULL + UNIQUE(company_id, phone): telefone e obrigatorio.
   phone: z
     .string()
@@ -42,7 +46,7 @@ const schema = z.object({
   linkedin_url: z.string().optional(),
 })
 
-type FormValues = z.infer<typeof schema>
+type FormValues = z.infer<ReturnType<typeof makeSchema>>
 
 interface NewContactModalProps {
   open: boolean
@@ -66,9 +70,12 @@ const NewContactModal = ({ open, onClose, onCreated, contact }: NewContactModalP
     [sources],
   )
 
+  const requireFirstName = !contact || !!contact.first_name
+  const schema = useMemo(() => makeSchema(requireFirstName), [requireFirstName])
+
   const { register, handleSubmit, control, reset, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { name: '', phone: '', tags: [], assigned_to: NO_OWNER, source_id: undefined },
+    defaultValues: { first_name: '', last_name: '', phone: '', tags: [], assigned_to: NO_OWNER, source_id: undefined },
   })
 
   useEffect(() => {
@@ -79,7 +86,8 @@ const NewContactModal = ({ open, onClose, onCreated, contact }: NewContactModalP
       // Select com valor nulo. phone mantem o 55 do banco (PhoneInput exibe
       // mascarado e o updateLead normaliza de novo no submit).
       reset({
-        name: contact.name ?? '',
+        first_name: contact.first_name ?? '',
+        last_name: contact.last_name ?? '',
         phone: contact.phone,
         email: contact.email ?? '',
         company_name: contact.company_name ?? '',
@@ -92,7 +100,7 @@ const NewContactModal = ({ open, onClose, onCreated, contact }: NewContactModalP
       })
     } else {
       reset({
-        name: '', phone: '', email: '', company_name: '',
+        first_name: '', last_name: '', phone: '', email: '', company_name: '',
         source_id: manualSource?.id, assigned_to: NO_OWNER, tags: [],
         observations: '', instagram_handle: '', linkedin_url: '',
       })
@@ -103,8 +111,10 @@ const NewContactModal = ({ open, onClose, onCreated, contact }: NewContactModalP
     if (contact) {
       // Modo edicao: atualiza so dados de pessoa. Nao envia pipeline_id nem
       // stage_id (negocio se edita via deals).
+      // `name` nao e enviado: o trigger sync_name_parts recompoe a partir de first/last.
       const data: UpdateLeadInput = {
-        name: values.name || null,
+        first_name: values.first_name.trim() || null,
+        last_name: values.last_name?.trim() || null,
         phone: values.phone,
         email: values.email || null,
         company_name: values.company_name || null,
@@ -121,7 +131,8 @@ const NewContactModal = ({ open, onClose, onCreated, contact }: NewContactModalP
     }
 
     const input: CreateLeadInput = {
-      name: values.name,
+      first_name: values.first_name.trim(),
+      last_name: values.last_name?.trim() || null,
       phone: values.phone,
       email: values.email || undefined,
       company_name: values.company_name || undefined,
@@ -156,10 +167,17 @@ const NewContactModal = ({ open, onClose, onCreated, contact }: NewContactModalP
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label>Nome *</Label>
-              <Input placeholder="Nome do contato" {...register('name')} />
-              {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
+              <Label>Nome{requireFirstName ? ' *' : ''}</Label>
+              <Input placeholder="Ex: Maria" {...register('first_name')} />
+              {errors.first_name && <p className="text-xs text-destructive">{errors.first_name.message}</p>}
             </div>
+            <div className="space-y-2">
+              <Label>Sobrenome</Label>
+              <Input placeholder="Ex: Souza" {...register('last_name')} />
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Telefone *</Label>
               <Controller
@@ -176,12 +194,11 @@ const NewContactModal = ({ open, onClose, onCreated, contact }: NewContactModalP
               />
               {errors.phone && <p className="text-xs text-destructive">{errors.phone.message}</p>}
             </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Email</Label>
-            <Input type="email" placeholder="email@exemplo.com" {...register('email')} />
-            {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
+            <div className="space-y-2">
+              <Label>Email</Label>
+              <Input type="email" placeholder="email@exemplo.com" {...register('email')} />
+              {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
+            </div>
           </div>
 
           <div className="space-y-2">
