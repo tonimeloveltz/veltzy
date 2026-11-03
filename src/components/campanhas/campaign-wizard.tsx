@@ -11,6 +11,8 @@ import { LeadTagsInput } from '@/components/pipeline/lead-tags-input'
 import { ManualContactPicker } from '@/components/campanhas/manual-contact-picker'
 import { AntiBanSettings, ANTI_BAN_DEFAULTS } from '@/components/campanhas/anti-ban-settings'
 import { SenderNumberSelect } from '@/components/campanhas/sender-number-select'
+import { CampaignVariantsEditor } from '@/components/campanhas/campaign-variants-editor'
+import { allVariantsReady, buildMessageVariants, type VariantDraft } from '@/lib/campaign-variants'
 import { useWhatsAppNumbers } from '@/hooks/use-whatsapp-numbers'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -96,6 +98,10 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
   // Passo 2 — mensagem. Cloud API só aceita template; demais começam em texto livre.
   const [msgMode, setMsgMode] = useState<'free' | 'template'>(isCloudApi ? 'template' : 'free')
   const [messageBody, setMessageBody] = useState('')
+  // Versões geradas com IA (sem a original). Toda versão precisa ser aprovada.
+  const [variants, setVariants] = useState<VariantDraft[]>([])
+  const [variantsCleared, setVariantsCleared] = useState(false)
+  const aiEnabled = useAuthStore((s) => s.company?.features?.ai_msg_enabled) === true
   const [templateId, setTemplateId] = useState('')
   const [varMapping, setVarMapping] = useState<Record<string, string>>({})
 
@@ -136,7 +142,7 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
   const reset = () => {
     setStep(1); setName('')
     setAudienceMode('all'); setStageIds([]); setSourceId(''); setTags([]); setManualIds([]); setExcludeRecent(false); setExcludeDays(7)
-    setMsgMode(isCloudApi ? 'template' : 'free'); setMessageBody(''); setTemplateId(''); setVarMapping({})
+    setMsgMode(isCloudApi ? 'template' : 'free'); setMessageBody(''); setVariants([]); setVariantsCleared(false); setTemplateId(''); setVarMapping({})
     setAntiBan(null); setSender(undefined); setSenderForce(false); setScheduledAt(''); setFollowupCadenceId(''); setFollowupMode('immediate'); setFollowupDays(3)
   }
   const close = () => { onOpenChange(false); setTimeout(reset, 200) }
@@ -146,7 +152,7 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
   const isScheduled = scheduledAt !== '' && !scheduledInPast
 
   const messageOk = msgMode === 'free'
-    ? messageBody.trim() !== ''
+    ? messageBody.trim() !== '' && (variants.length === 0 || allVariantsReady(messageBody, variants))
     : (templateId !== '' && !templateNotApproved)
   const canNext1 = name.trim() !== '' && (audienceCount ?? 0) > 0
   const canNext2 = messageOk
@@ -170,6 +176,7 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
         name: name.trim(),
         template_id: msgMode === 'template' ? templateId : null,
         message_body: msgMode === 'free' ? messageBody.trim() : null,
+        message_variants: msgMode === 'free' ? buildMessageVariants(messageBody, variants) : null,
         variable_mapping: msgMode === 'template' ? buildMapping() : {},
         audience_filter: audienceFilter,
         anti_ban: buildAntiBan(),
@@ -292,7 +299,11 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
                 <textarea
                   id="camp-body"
                   value={messageBody}
-                  onChange={(e) => setMessageBody(e.target.value)}
+                  onChange={(e) => {
+                    setMessageBody(e.target.value)
+                    // Versões derivam do texto anterior: mudou a original, descarta.
+                    if (variants.length) { setVariants([]); setVariantsCleared(true) }
+                  }}
                   rows={5}
                   placeholder="Escreva a mensagem. Variáveis: {{nome}}, {{sobrenome}}, {{nome_completo}}, {{telefone}}, {{empresa}}"
                   className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
@@ -300,6 +311,18 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
                 <p className="text-xs text-muted-foreground">
                   Variáveis: {'{{nome}}'} (primeiro nome) · {'{{sobrenome}}'} · {'{{nome_completo}}'} · {'{{telefone}}'} · {'{{empresa}}'}
                 </p>
+                {variantsCleared && variants.length === 0 && (
+                  <p className="text-xs text-amber-600">A mensagem mudou, então as versões foram descartadas. Gere de novo se quiser.</p>
+                )}
+                <CampaignVariantsEditor
+                  original={messageBody}
+                  value={variants}
+                  onChange={(next) => { setVariants(next); setVariantsCleared(false) }}
+                  aiEnabled={aiEnabled}
+                />
+                {variants.length > 0 && !allVariantsReady(messageBody, variants) && (
+                  <p className="text-xs text-muted-foreground">Aprove todas as versões para continuar.</p>
+                )}
               </div>
             )}
 
@@ -404,7 +427,7 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
           <div className="space-y-4">
             <div className="rounded-md border p-3 text-sm">
               <div className="flex justify-between py-0.5"><span className="text-muted-foreground">Campanha</span><span className="font-medium">{name}</span></div>
-              <div className="flex justify-between py-0.5"><span className="text-muted-foreground">Mensagem</span><span className="font-medium">{msgMode === 'free' ? 'Texto livre' : (selectedTemplate?.name ?? 'Template')}</span></div>
+              <div className="flex justify-between py-0.5"><span className="text-muted-foreground">Mensagem</span><span className="font-medium">{msgMode === 'free' ? (variants.length ? `Texto livre · ${variants.length + 1} versões` : 'Texto livre') : (selectedTemplate?.name ?? 'Template')}</span></div>
               {showSender && (
                 <div className="flex justify-between py-0.5"><span className="text-muted-foreground">Número de envio</span><span className="font-medium">{senderLabel ? `${senderLabel}${senderForce ? ' (todos)' : ''}` : 'Número de cada conversa'}</span></div>
               )}
