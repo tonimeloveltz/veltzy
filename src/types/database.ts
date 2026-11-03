@@ -67,6 +67,8 @@ export interface BlastCampaign {
   template_id: string | null
   /** Texto livre (WAHA/Evolution) renderizável; usado quando template_id IS NULL. */
   message_body: string | null
+  /** Versões da mensagem livre ([0] = original, 2 a 5). null = só message_body. */
+  message_variants: string[] | null
   variable_mapping: Record<string, string>
   audience_filter: AudienceFilter
   throttle_config: ThrottleConfig | null
@@ -94,6 +96,8 @@ export interface BlastRecipient {
   message_queue_id: string | null
   error_message: string | null
   sent_at: string | null
+  /** Índice em blast_campaigns.message_variants da versão enviada. null = sem versões. */
+  variant_index: number | null
   created_at: string
 }
 

@@ -4,6 +4,7 @@ import { buildAudiencePlan, leadIdsInStages } from '../_shared/blast-audience.ts
 import { computeBlastSchedule, type ScheduleItem } from '../_shared/blast-schedule.ts'
 import { getTemplateBodyText, renderTemplateBody, renderMessageBody, resolveTemplateParams } from '../_shared/blast-render.ts'
 import { resolveCloudSenderOverride, resolveSenderInstance, splitAntiBan } from '../_shared/blast-sender.ts'
+import { assignVariants, sameVariables } from '../_shared/campaign-variants.ts'
 
 // blast-dispatch (mkt-ativo · SPEC §2a/§3). Fluxo: gate por-empresa (early-return,
 // precedente sdr-ai) → resolve provider (cloud_api RECUSADO na Fase 1: HSM real =
@@ -122,6 +123,8 @@ Deno.serve(async (req) => {
     let template: any = null
     let bodyText = ''
     const isFreeText = !campaign.template_id
+    // Versões da mensagem livre (campanha-variacoes-ia): [0] = original. Só valem com 2+.
+    let variants: string[] | null = null
 
     if (isFreeText) {
       // Cloud API exige template aprovado (regra da Meta): texto livre nao serve.
@@ -131,6 +134,15 @@ Deno.serve(async (req) => {
       bodyText = (campaign.message_body ?? '').trim()
       if (!bodyText) {
         return jsonResponse({ error: 'Campanha sem template_id e sem message_body' }, corsHeaders, 400)
+      }
+      const raw = campaign.message_variants
+      if (Array.isArray(raw) && raw.length > 1) {
+        const list = raw.map((v: unknown) => (typeof v === 'string' ? v.trim() : ''))
+        // Defesa (o wizard já valida): toda versão precisa ter as MESMAS variáveis da original.
+        if (list.some((v: string) => !v || !sameVariables(list[0], v))) {
+          return jsonResponse({ error: 'Versoes da mensagem invalidas (variaveis diferentes da original)', reason: 'invalid_variants' }, corsHeaders, 422)
+        }
+        variants = list
       }
     } else {
       const { data: tpl } = await veltzy
@@ -236,17 +248,35 @@ Deno.serve(async (req) => {
     const cloudOverrideFor = (l: { cloud_api_number_id?: string | null }) =>
       isCloudApi ? resolveCloudSenderOverride(l.cloud_api_number_id, sender, split.force) : null
 
+    // ---- Versões: atribuição balanceada aleatória (embaralha e reparte em fatias iguais) ----
+    const assigned = variants ? assignVariants(audience.length, variants.length) : null
+
     // ---- Cria blast_recipients (idempotente via UNIQUE(campaign_id, lead_id)) ----
-    const recipientRows = audience.map((l: { id: string; phone: string }) => ({
+    const recipientRows = audience.map((l: { id: string; phone: string }, i: number) => ({
       campaign_id,
       lead_id: l.id,
       phone: l.phone,
       status: 'pending',
+      variant_index: assigned ? assigned[i] : null,
     }))
     const { error: recErr } = await veltzy
       .from('blast_recipients')
       .upsert(recipientRows, { onConflict: 'campaign_id,lead_id', ignoreDuplicates: true })
     if (recErr) return jsonResponse({ error: `Falha ao criar recipients: ${recErr.message}` }, corsHeaders, 500)
+
+    // O upsert ignora recipients já existentes (re-disparo de campanha 'scheduled'): o texto
+    // segue o variant_index GRAVADO, para nunca divergir do que consta no recipient.
+    const variantFor = new Map<string, number>()
+    if (variants && assigned) {
+      const { data: recs, error: recReadErr } = await veltzy
+        .from('blast_recipients').select('lead_id, variant_index').eq('campaign_id', campaign_id)
+      if (recReadErr) return jsonResponse({ error: `Falha ao ler recipients: ${recReadErr.message}` }, corsHeaders, 500)
+      const stored = new Map((recs ?? []).map((r: { lead_id: string; variant_index: number | null }) => [r.lead_id, r.variant_index]))
+      audience.forEach((l: { id: string }, i: number) => {
+        const idx = stored.get(l.id)
+        variantFor.set(l.id, idx != null && idx >= 0 && idx < variants!.length ? idx : assigned[i])
+      })
+    }
 
     // ---- Escalonamento (§4bis). enforce=true (nao-oficial waha/evolution/zapi) aplica o
     // piso anti-ban; cloud_api OFICIAL nao (enforce=false = espacamento leve, limites da Meta). ----
@@ -276,7 +306,9 @@ Deno.serve(async (req) => {
         lead_id: lead.id as string,
         // content carrega o texto renderizado (historico/inbox). Texto livre usa variaveis
         // nomeadas ({{nome}}/{{telefone}}/{{empresa}}); template usa o mapping posicional.
-        content: isFreeText ? renderMessageBody(bodyText, lead) : renderTemplateBody(bodyText, variableMapping, lead),
+        content: isFreeText
+          ? renderMessageBody(variants ? variants[variantFor.get(lead.id as string) ?? 0] : bodyText, lead)
+          : renderTemplateBody(bodyText, variableMapping, lead),
         scheduled_at: schedule[i].scheduled_at,
         source: 'campaign',
         instance_name: isCloudApi
