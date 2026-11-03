@@ -52,9 +52,10 @@ schema é o Hub. Consequência prática:
 - Connection strings e valores de secret NUNCA inline no comando.
 - Nenhuma PII de cliente vai para staging.
 - **Código e banco são trilhos separados.** Merge no git deploya código na
-  Vercel, mas NÃO empurra migration para produção. Migration em produção é
-  sempre `db push` manual e consciente, com o link confirmado no projeto de
-  produção só naquele momento.
+  Vercel, mas NÃO empurra migration para produção. Migration do Central é
+  arquivo no repo do **Hub** (`hub/supabase/migrations/`) e é aplicada a partir
+  de lá, nunca deste repo. A pasta `supabase/migrations/` daqui foi aposentada
+  (`docs/legado/migrations-veltzy/`).
 
 ## Ponto de atenção conhecido (config.toml)
 

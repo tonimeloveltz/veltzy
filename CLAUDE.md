@@ -46,7 +46,7 @@ veltzy/
 │   ├── pages/                   # Route components (leves, delegam para components)
 │   └── styles/                  # CSS global, tokens, animações
 ├── supabase/
-│   ├── migrations/              # SQL migrations consolidadas
+│   ├── config.toml              # [db.migrations] desligado: migration mora no Hub
 │   └── functions/               # Edge Functions (Deno)
 └── public/
 ```
@@ -157,7 +157,8 @@ npm run lint             # Lint
 alias vzpush='git add . && git commit -m "$(date +%H:%M)" && git push'
 
 # Supabase
-npx supabase db push     # Aplica migrations
+# Migration do Central: arquivo novo em hub/supabase/migrations/, nunca aqui.
+# Este repo nao aplica migration (legado em docs/legado/migrations-veltzy/).
 npx supabase functions serve  # Edge Functions local
 ```
 
@@ -168,4 +169,5 @@ npx supabase functions serve  # Edge Functions local
 - NÃO usar `lovable-tagger` ou qualquer dependência do Lovable
 - NÃO usar cores hardcoded. Sempre design tokens
 - NÃO commitar .env com credenciais reais
+- NÃO criar `supabase/migrations/` neste repo nem rodar `db push` daqui. Migration do Central é arquivo no Hub
 - NÃO usar em dash (—) em textos/copy
