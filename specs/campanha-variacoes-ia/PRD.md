@@ -2,7 +2,7 @@
 
 Trilha: G
 Início: 2026-11-03 16:45
-Merge: (preencher no merge)
+Merge: 2026-11-03 17:14
 
 ## Problema e objetivo
 Campanha de mensagem livre ("Escrever agora") manda o mesmo texto para todos os leads. Em número não oficial (WAHA/Evolution), texto idêntico em massa aumenta o risco de bloqueio e soa repetitivo. Objetivo: a IA sugere versões alternativas da mensagem, o usuário revisa e aprova cada uma, e o disparo reparte as versões entre os leads.

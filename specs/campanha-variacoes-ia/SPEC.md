@@ -2,7 +2,7 @@
 
 Trilha: G
 Início: 2026-11-03 16:45
-Merge: (preencher no merge)
+Merge: 2026-11-03 17:14
 
 ## Contexto
 - `blast-dispatch/index.ts`: `isFreeText = !campaign.template_id`; `bodyText = message_body`; cria `blast_recipients` por upsert (`onConflict: 'campaign_id,lead_id', ignoreDuplicates: true`); `computeBlastSchedule` decide `scheduled_at` por índice da audiência; `queueRows` usa `renderMessageBody(bodyText, lead)`. Auth manual (`authenticate`: getUser + `profiles.company_id` + papel admin/manager/super_admin).
