@@ -3,6 +3,11 @@ import { autoMapColumns, LEAD_FIELD_LABELS } from './csv-parser'
 
 describe('csv-parser', () => {
   describe('autoMapColumns', () => {
+    it('Nome completo so vira name quando nao ha coluna Nome (em qualquer ordem)', () => {
+      expect(autoMapColumns(['Nome completo', 'Nome', 'Sobrenome'])).toEqual({ 0: null, 1: 'name', 2: 'last_name' })
+      expect(autoMapColumns(['Nome completo', 'Telefone'])).toEqual({ 0: 'name', 1: 'phone' })
+    })
+
     it('mapeia coluna de sobrenome (pt e en)', () => {
       expect(autoMapColumns(['Nome', 'Sobrenome', 'Telefone'])).toEqual({ 0: 'name', 1: 'last_name', 2: 'phone' })
       expect(autoMapColumns(['First Name', 'Last Name', 'Phone'])).toEqual({ 0: 'name', 1: 'last_name', 2: 'phone' })

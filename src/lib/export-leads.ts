@@ -33,9 +33,17 @@ const temperatureLabel = (temperature?: LeadWithDetails['temperature'] | null) =
 const conversationStatusLabel = (status?: ConversationStatus | null) =>
   (status && conversationStatusLabels[status]) || ''
 
-const getLeadRows = (leads: ExportLeadRow[]) => //recebe leads - dealsasleads aqui
+// Nome = primeiro nome; sem first_name (placeholder ou objeto remontado sem a
+// coluna) cai no name, para a coluna nao sair vazia. Sobrenome so com first_name,
+// para nao duplicar o resto do nome quando Nome ja levou o name inteiro.
+export const exportNameColumns = (l: Pick<ExportLeadRow, 'name' | 'first_name' | 'last_name'>): [string, string, string] => {
+  const first = l.first_name?.trim()
+  return [first || (l.name ?? ''), first ? (l.last_name ?? '') : '', l.name ?? '']
+}
+
+export const getLeadRows = (leads: ExportLeadRow[]) => //recebe leads - dealsasleads aqui
   leads.map((l) => [
-    l.name ?? '',
+    ...exportNameColumns(l),
     l.phone,
     l.email ?? '',
     l.deal?.value != null ? l.deal.value.toString() : '',
@@ -56,12 +64,13 @@ const getLeadRows = (leads: ExportLeadRow[]) => //recebe leads - dealsasleads aq
   ])
 
 
-const EXPORT_HEADERS = ['Nome', 'Telefone', 'Email', 'Valor do Negocio', 'Pipeline', 'Etapa', 'Status', 'Temperatura', 'Responsavel', 'Tags', 'Observações', 'Origem', 'Instagram', 'LinkedIn', 'AI Score', 'Status Conversa', 'Criado em', 'Atualizado em']
+export const EXPORT_HEADERS = ['Nome', 'Sobrenome', 'Nome completo', 'Telefone', 'Email', 'Valor do Negocio', 'Pipeline', 'Etapa', 'Status', 'Temperatura', 'Responsavel', 'Tags', 'Observações', 'Origem', 'Instagram', 'LinkedIn', 'AI Score', 'Status Conversa', 'Criado em', 'Atualizado em']
 
-const TEMPLATE_HEADERS = ['Nome', 'Telefone', 'Email', 'Valor do Negocio', 'Pipeline', 'Etapa', 'Temperatura', 'Responsavel', 'Tags', 'Observações', 'Origem']
+export const TEMPLATE_HEADERS = ['Nome', 'Sobrenome', 'Telefone', 'Email', 'Valor do Negocio', 'Pipeline', 'Etapa', 'Temperatura', 'Responsavel', 'Tags', 'Observações', 'Origem']
 
-const TEMPLATE_EXAMPLE = [
-  'João Silva',
+export const TEMPLATE_EXAMPLE = [
+  'João',
+  'Silva',
   '11999887766',
   'joao@email.com',
   '1500',

@@ -182,7 +182,11 @@ Deno.serve(async (req) => {
     // MODE: meeting-reminders (chamado pelo frontend)
     // =============================================
     if (body.mode === 'meeting-reminders') {
-      const { leadName, meetingDate, meetingLink, companyId: cid } = body
+      const { leadName, leadFirstName, meetingDate, meetingLink, companyId: cid } = body
+      // Saudacao ao lead usa o primeiro nome (leadFirstName, mandado pelo
+      // create-task-modal). Chamador antigo sem leadFirstName: 1a palavra do
+      // leadName, salvo placeholder/telefone. Fallback final: 'cliente'.
+      const greetName = firstNameForGreeting(leadFirstName, leadName)
       const companyId = cid as string | undefined
 
       // Consultar modelo para meeting-reminders (usa sdr-reply)
@@ -196,6 +200,7 @@ Deno.serve(async (req) => {
 
       const prompt = `Voce e um assistente de vendas. Gere 3 mensagens de lembrete para uma reuniao comercial.
 Lead: ${leadName || 'o cliente'}
+Como chamar o lead nas mensagens: ${greetName === 'cliente' ? 'sem nome (use uma saudacao generica)' : greetName} (so o primeiro nome, nunca o nome completo)
 Data/hora: ${meetingDate}
 Link: ${meetingLink || 'nao informado'}
 Tom: profissional mas amigavel, natural, sem ser robotico.
@@ -225,9 +230,9 @@ Retorne apenas o JSON, sem texto adicional.`
       } catch {
         // Fallback generico sem IA
         return new Response(JSON.stringify({
-          reminder_48h: `Ola ${leadName || 'cliente'}! Lembrete: temos uma reuniao agendada para ${meetingDate}. Nos vemos la!`,
-          reminder_2h: `Ola ${leadName || 'cliente'}! Nossa reuniao comeca em 2 horas. ${meetingLink ? `Link: ${meetingLink}` : 'Ate logo!'}`,
-          reminder_15min: `${leadName || 'Cliente'}, nossa reuniao comeca em 15 minutos! ${meetingLink || ''}`,
+          reminder_48h: `Ola ${greetName}! Lembrete: temos uma reuniao agendada para ${meetingDate}. Nos vemos la!`,
+          reminder_2h: `Ola ${greetName}! Nossa reuniao comeca em 2 horas. ${meetingLink ? `Link: ${meetingLink}` : 'Ate logo!'}`,
+          reminder_15min: `${greetName === 'cliente' ? 'Cliente' : greetName}, nossa reuniao comeca em 15 minutos! ${meetingLink || ''}`,
         }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
       }
     }
@@ -470,3 +475,12 @@ Retorne apenas o JSON, sem texto adicional.`
     )
   }
 })
+
+/** Primeiro nome para saudacao em lembrete; 'cliente' quando nao ha nome util. */
+function firstNameForGreeting(leadFirstName: unknown, leadName: unknown): string {
+  const first = typeof leadFirstName === 'string' ? leadFirstName.trim() : ''
+  if (first) return first
+  const name = (typeof leadName === 'string' ? leadName : '').replace(/\s+/g, ' ').trim()
+  if (!name || name === 'o cliente' || /^contato /i.test(name) || /^[0-9+() -]+$/.test(name)) return 'cliente'
+  return name.split(' ')[0]
+}

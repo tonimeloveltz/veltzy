@@ -490,7 +490,7 @@ export interface Deal {
 }
 
 export interface DealWithLead extends Deal {
-  leads?: Pick<Lead, 'id' | 'name' | 'phone' | 'email' | 'avatar_url' | 'temperature' | 'tags' | 'is_ai_active' | 'transfer_summary' | 'source_id' | 'company_name' | 'created_at' | 'whatsapp_instance_name'> & {
+  leads?: Pick<Lead, 'id' | 'name' | 'first_name' | 'last_name' | 'phone' | 'email' | 'avatar_url' | 'temperature' | 'tags' | 'is_ai_active' | 'transfer_summary' | 'source_id' | 'company_name' | 'created_at' | 'whatsapp_instance_name'> & {
     lead_sources?: LeadSourceRecord | null
   }
   profiles?: Partial<Profile> | null
@@ -908,7 +908,7 @@ export interface Task {
 }
 
 export interface TaskWithRelations extends Task {
-  leads?: Pick<Lead, 'id' | 'name' | 'phone'> | null
+  leads?: Pick<Lead, 'id' | 'name' | 'first_name' | 'last_name' | 'phone'> | null
   profiles?: Pick<Profile, 'id' | 'name' | 'email'> | null
 }
 

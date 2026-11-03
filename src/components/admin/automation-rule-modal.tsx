@@ -160,6 +160,11 @@ const AutomationRuleModal = ({ rule, open, onClose }: AutomationRuleModalProps) 
           <div className="space-y-2">
             <Label>Valor da acao</Label>
             <Input placeholder="Mensagem, tag, ID..." {...register('action_value')} />
+            {watch('action_type') === 'send_message' && (
+              <p className="text-xs text-muted-foreground">
+                Variáveis: {'{{nome}}'} (primeiro nome) · {'{{sobrenome}}'} · {'{{nome_completo}}'} · {'{{telefone}}'} · {'{{empresa}}'}
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">
