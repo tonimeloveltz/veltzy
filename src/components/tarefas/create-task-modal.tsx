@@ -23,6 +23,7 @@ import { useAuthStore } from '@/stores/auth.store'
 import { veltzy, supabase } from '@/lib/supabase'
 import { buildMeetingReminders } from '@/services/task-reminders.service'
 import type { TaskType, Task } from '@/types/database'
+import { leadGreetingName } from '@/lib/lead-name'
 
 const useLeadsSimple = () => {
   const companyId = useAuthStore((s) => s.company?.id)
@@ -31,12 +32,12 @@ const useLeadsSimple = () => {
     queryFn: async () => {
       const { data, error } = await veltzy()
         .from('leads')
-        .select('id, name, phone, email')
+        .select('id, name, first_name, phone, email')
         .eq('company_id', companyId!)
         .order('updated_at', { ascending: false })
         .limit(200)
       if (error) throw error
-      return data as Array<{ id: string; name: string | null; phone: string; email: string | null }>
+      return data as Array<{ id: string; name: string | null; first_name: string | null; phone: string; email: string | null }>
     },
     enabled: !!companyId,
     staleTime: 1000 * 60 * 5,
@@ -148,7 +149,10 @@ const CreateTaskModal = ({ open, onClose, defaultLeadId, defaultTitle }: CreateT
     }
   }, [open, defaultLeadId, profile?.id, reset])
 
-  const generateReminders = async (task: Task, leadName: string) => {
+  // leadName (completo) vai so como contexto do prompt; quem aparece na
+  // saudacao ao lead e o primeiro nome (greetName), com fallback 'cliente'.
+  const generateReminders = async (task: Task, leadName: string, greetName: string) => {
+    const greet = greetName || 'cliente'
     setGeneratingAI(true)
     try {
       const meetingDateFmt = task.meeting_date
@@ -162,6 +166,7 @@ const CreateTaskModal = ({ open, onClose, defaultLeadId, defaultTitle }: CreateT
         body: {
           mode: 'meeting-reminders',
           leadName: leadName || 'o cliente',
+          leadFirstName: greetName,
           meetingDate: meetingDateFmt,
           meetingLink: task.meeting_link || '',
         },
@@ -171,15 +176,15 @@ const CreateTaskModal = ({ open, onClose, defaultLeadId, defaultTitle }: CreateT
 
       const parsed = typeof data === 'string' ? JSON.parse(data) : data
       const reminders: AIReminders = {
-        reminder_48h: parsed.reminder_48h ?? `Ola ${leadName}! Lembrete: temos uma reuniao agendada para ${meetingDateFmt}. Nos vemos la!`,
-        reminder_2h: parsed.reminder_2h ?? `Ola ${leadName}! Nossa reuniao comeca em 2 horas. ${task.meeting_link ? `Link: ${task.meeting_link}` : 'Ate logo!'}`,
-        reminder_15min: parsed.reminder_15min ?? `${leadName}, nossa reuniao comeca em 15 minutos! ${task.meeting_link ? task.meeting_link : ''}`,
+        reminder_48h: parsed.reminder_48h ?? `Ola ${greet}! Lembrete: temos uma reuniao agendada para ${meetingDateFmt}. Nos vemos la!`,
+        reminder_2h: parsed.reminder_2h ?? `Ola ${greet}! Nossa reuniao comeca em 2 horas. ${task.meeting_link ? `Link: ${task.meeting_link}` : 'Ate logo!'}`,
+        reminder_15min: parsed.reminder_15min ?? `${greet}, nossa reuniao comeca em 15 minutos! ${task.meeting_link ? task.meeting_link : ''}`,
       }
       setAiReminders(reminders)
       setEditableReminders(reminders)
     } catch {
       // Fallback: mensagens genericas
-      const leadDisplay = leadName || 'o cliente'
+      const leadDisplay = greet
       const fallback: AIReminders = {
         reminder_48h: `Ola ${leadDisplay}! Lembrete: temos uma reuniao agendada. Nos vemos la!`,
         reminder_2h: `Ola ${leadDisplay}! Nossa reuniao comeca em 2 horas.`,
@@ -217,7 +222,7 @@ const CreateTaskModal = ({ open, onClose, defaultLeadId, defaultTitle }: CreateT
       setCreatedTask(task)
       setStep('reminders')
       const lead = allLeads?.find((l) => l.id === values.lead_id)
-      await generateReminders(task, lead?.name || lead?.phone || '')
+      await generateReminders(task, lead?.name || '', leadGreetingName(lead))
     } else {
       reset()
       onClose()
