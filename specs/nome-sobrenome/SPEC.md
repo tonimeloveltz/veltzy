@@ -27,6 +27,7 @@ Não entra: writers automáticos (edge functions), exibição do nome no app, RP
 2. **B2 (Veltzy, depende do B1):** tipos + render + cadência + campanha.
 3. **B3 (Veltzy, depende do B1):** formulários + import.
 B2 e B3 podem rodar em sequência na mesma branch `feature/nome-sobrenome`.
+4. **B4 (Veltzy, fix achado no B3):** painel do contato no inbox apagando campos que a RPC da lista não traz. Ver seção "B4: causa raiz".
 
 ## Arquivos
 Hub (B1, fora do diff deste repo): `supabase/migrations/<ts>_veltzy_leads_first_last_name.sql`.
@@ -46,7 +47,7 @@ src/components/pipeline/edit-lead-modal.tsx
 src/components/pipeline/edit-lead-modal.test.tsx
 src/components/inbox/contact-panel.tsx
 src/components/inbox/contact-panel.test.ts
-src/lib/lead-name.ts
+src/lib/contact-panel-payload.ts
 src/lib/csv-parser.ts
 src/lib/csv-parser.test.ts
 src/services/import-leads.service.ts
@@ -190,6 +191,15 @@ Depois do B1: `supabase gen types` não se aplica ao Veltzy (tipos à mão); o B
 - `import-leads.service.ts`: `ImportableRow.last_name?`; `mapCsvRowToLead` trata `last_name`; no insert, se a linha tem `last_name`, grava `first_name = row.name` + `last_name` (name sai do trigger); senão grava só `name`. Nome do negócio criado no import usa o nome composto (`[name, last_name].join(' ')`).
 - `csv-parser.test.ts`, `import-leads.test.ts`: auto-map de `sobrenome`/`last name`; linha com e sem sobrenome.
 
+### B4: causa raiz e correção (painel do contato no inbox)
+Causa raiz: `src/pages/inbox.tsx` passa ao `ContactPanel` o lead da lista de conversas (`conversationLead`, vindo da RPC `veltzy.get_conversation_list`). A RPC devolve colunas explícitas e não inclui `company_name`, `instagram_handle`, `linkedin_url`, `first_name`, `last_name` (nem `cloud_api_number_id`, `first_response_at`, não editáveis). O painel semeava o estado local desse objeto parcial (campos ausentes nascem `''`) e tanto o `handleSave` quanto o `flushFields` (troca de conversa / fechar / desmontar) mandavam o objeto inteiro (`company_name: companyName || null` etc.). Resultado: editar qualquer campo de um lead aberto pela lista gravava `null` em empresa, Instagram e LinkedIn. Só não acontecia com lead aberto pelo caminho `directLead` (`getLeadById`, `select *`).
+
+Correção (sem mexer na RPC):
+- `src/lib/contact-panel-payload.ts` (novo): `buildContactPanelPayload(values, touched, firstNameMissing)` monta o payload só com os campos tocados; first/last vão juntos se qualquer um foi tocado; nada de nome se o Nome obrigatório ficou vazio; `name` nunca vai.
+- `contact-panel.tsx`: `touched: Set<ContactPanelField>` (zerado na troca de lead e após salvar); `markDirty(field)` marca o campo; efeito semeia TODOS os campos editáveis pelo `useLeadDetail(lead.id)` quando o detalhe chega, sem sobrescrever campo já tocado (observações só se não há edição pendente); `handleSave` e `flushFields` usam o builder e não chamam o update com payload vazio.
+- `contact-panel.test.ts`: regressão (lead da RPC sem `company_name`, salvar `email` → payload só `{ email }`) + casos de nome.
+- Outros pontos do inbox com o mesmo padrão (estado semeado de objeto parcial + save do objeto inteiro): nenhum. `chat-header`, `chat-window`, `conversation-item` só leem o lead; únicas escritas de lead no inbox estão no `contact-panel`.
+
 ## Contratos não óbvios
 ```ts
 // leads.service.ts createLead (insert)
@@ -222,6 +232,7 @@ Regra do trigger (para o client): nunca montar `name` no client. Mandar `first_n
 - [ ] Novo contato: Nome obrigatório, Sobrenome opcional; `name` gravado composto.
 - [ ] Editar Sobrenome no modal do pipeline e no painel do inbox atualiza `name` exibido.
 - [ ] Import com coluna `Sobrenome` grava first/last; sem a coluna, comportamento atual.
+- [ ] B4: no inbox, abrir lead pela lista (com empresa/Instagram/LinkedIn preenchidos), editar só o email e salvar ou trocar de conversa → empresa, Instagram e LinkedIn continuam no banco; os campos aparecem preenchidos no painel depois que o detalhe carrega.
 - [ ] `npm run build` e testes verdes; `deno check` sem erro novo nas edge functions tocadas.
 
 ## Decisões tomadas
@@ -240,5 +251,7 @@ Regra do trigger (para o client): nunca montar `name` no client. Mandar `first_n
 - Nome obrigatório na criação. Na edição, obrigatório só se o lead já tinha `first_name` (não deixa apagar), para não travar a edição de lead inbound sem nome (placeholder).
 - Import: com coluna de sobrenome, a coluna mapeada como Nome vira `first_name`; sem ela, segue gravando `name` (split no banco).
 - `src/types/database.ts` é atualizado à mão: o arquivo não é saída do `gen types`.
-- Painel do inbox: `first_name`/`last_name` só vão no payload se o usuário mexeu neles (`nameParts` em `src/lib/lead-name.ts`, arquivo novo para ser testável fora do componente). Sem isso, salvar outro campo antes do `useLeadDetail` chegar zeraria first/last no banco.
+- Painel do inbox: `first_name`/`last_name` só vão no payload se o usuário mexeu neles (regra hoje em `buildContactPanelPayload`, `src/lib/contact-panel-payload.ts`, ver B4). Sem isso, salvar outro campo antes do `useLeadDetail` chegar zeraria first/last no banco.
 - Modais (novo contato e edição do pipeline): Nome e Sobrenome lado a lado; Telefone passa a dividir linha com Email.
+- B4: correção no client (só campos tocados + semeadura pelo detalhe) em vez de ampliar a RPC `get_conversation_list`: não precisa de migration, e mesmo com a RPC completa mandar o objeto inteiro seguiria sujeito a sobrescrever com valor velho.
+- B4: o efeito de semeadura chama setState dentro do efeito (`react-hooks/set-state-in-effect`, +1 erro de lint no arquivo), mesmo padrão do efeito de reset que já existe ali; reestruturar o painel para evitar isso fica fora do escopo.

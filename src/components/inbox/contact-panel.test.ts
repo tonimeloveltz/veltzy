@@ -97,23 +97,53 @@ describe('ContactPanel - observations auto-save logic', () => {
   })
 })
 
-describe('ContactPanel - nameParts (nome e sobrenome)', async () => {
-  const { nameParts } = await import('@/lib/lead-name')
-  const base = { firstName: ' Maria ', lastName: ' Souza ', nameTouched: true, firstNameMissing: false }
+describe('ContactPanel - payload do save (so campos tocados)', async () => {
+  const { buildContactPanelPayload } = await import('@/lib/contact-panel-payload')
+  type Field = import('@/lib/contact-panel-payload').ContactPanelField
 
-  it('nao mexeu no nome: nao envia first/last (nao zera o banco)', () => {
-    expect(nameParts({ ...base, nameTouched: false })).toEqual({})
+  // Lead como vem da RPC get_conversation_list: sem company_name,
+  // instagram_handle, linkedin_url, first_name, last_name. O estado do painel
+  // nasce vazio nesses campos.
+  const fromRpc = {
+    firstName: '', lastName: '', email: 'maria@x.com', companyName: '',
+    instagramHandle: '', linkedinUrl: '', sourceId: 'src-1', assignedTo: 'u1', tags: ['vip'],
+  }
+  const touched = (...f: Field[]) => new Set<Field>(f)
+
+  it('regressao: lead da RPC sem company_name, salvar outro campo nao manda company_name', () => {
+    const payload = buildContactPanelPayload({ ...fromRpc, email: 'nova@x.com' }, touched('email'), false)
+    expect(payload).toEqual({ email: 'nova@x.com' })
+    expect('company_name' in payload).toBe(false)
+    expect('instagram_handle' in payload).toBe(false)
+    expect('linkedin_url' in payload).toBe(false)
+    expect('first_name' in payload).toBe(false)
+    expect('last_name' in payload).toBe(false)
   })
 
-  it('mexeu: envia first/last com trim e nunca name', () => {
-    expect(nameParts(base)).toEqual({ first_name: 'Maria', last_name: 'Souza' })
+  it('nada tocado: payload vazio', () => {
+    expect(buildContactPanelPayload(fromRpc, touched(), false)).toEqual({})
   })
 
-  it('sobrenome vazio vira null', () => {
-    expect(nameParts({ ...base, lastName: '  ' })).toEqual({ first_name: 'Maria', last_name: null })
+  it('campo tocado e apagado vira null', () => {
+    expect(buildContactPanelPayload({ ...fromRpc, companyName: '' }, touched('company_name'), false))
+      .toEqual({ company_name: null })
   })
 
-  it('Nome obrigatorio vazio: nao envia nada de nome', () => {
-    expect(nameParts({ ...base, firstName: '', firstNameMissing: true })).toEqual({})
+  it('nome: tocar so o sobrenome manda first e last, com trim, nunca name', () => {
+    const payload = buildContactPanelPayload(
+      { ...fromRpc, firstName: ' Maria ', lastName: ' Souza ' }, touched('last_name'), false,
+    )
+    expect(payload).toEqual({ first_name: 'Maria', last_name: 'Souza' })
+    expect('name' in payload).toBe(false)
+  })
+
+  it('nome: sobrenome vazio vira null', () => {
+    expect(buildContactPanelPayload({ ...fromRpc, firstName: 'Maria', lastName: '  ' }, touched('first_name'), false))
+      .toEqual({ first_name: 'Maria', last_name: null })
+  })
+
+  it('nome: Nome obrigatorio vazio nao manda nada de nome, mas manda o resto', () => {
+    expect(buildContactPanelPayload({ ...fromRpc, firstName: '' }, touched('first_name', 'tags'), true))
+      .toEqual({ tags: ['vip'] })
   })
 })

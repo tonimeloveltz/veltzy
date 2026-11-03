@@ -26,7 +26,7 @@ import { useWhatsAppStatus } from '@/hooks/use-whatsapp-status'
 import { useInboxStore } from '@/stores/inbox.store'
 import { useAuthStore } from '@/stores/auth.store'
 import { leadDisplayName } from '@/lib/phone'
-import { nameParts } from '@/lib/lead-name'
+import { buildContactPanelPayload, type ContactPanelField } from '@/lib/contact-panel-payload'
 import { updateLead as updateLeadService } from '@/services/leads.service'
 import { leadTemperatureConfig } from '@/lib/lead-config'
 import type { LeadWithLastMessage, TaskType } from '@/types/database'
@@ -78,16 +78,17 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
   const [createTaskOpen, setCreateTaskOpen] = useState(false)
 
   // --- Editable fields (non-observations) ---
-  // Nome/Sobrenome: a RPC da lista de conversas nao traz first/last, entao o
-  // valor vem do detalhe do lead (select *). So vao no payload se o usuario
-  // mexeu neles: sem isso, salvar outro campo antes do detalhe chegar zeraria
-  // first/last no banco.
+  // O `lead` pode vir da RPC get_conversation_list, que nao traz todas as
+  // colunas (company_name, instagram_handle, linkedin_url, first/last). Por isso:
+  // (1) os campos sao semeados pelo detalhe do lead (select *) quando ele chega;
+  // (2) o save manda SO os campos tocados (buildContactPanelPayload). Antes o
+  // save mandava o objeto inteiro e gravava null por cima do que estava no banco.
   const { data: leadDetail } = useLeadDetail(lead.id)
+  const [touched, setTouched] = useState<Set<ContactPanelField>>(() => new Set())
   const [firstName, setFirstName] = useState(lead.first_name ?? '')
   const [lastName, setLastName] = useState(lead.last_name ?? '')
-  const [nameTouched, setNameTouched] = useState(false)
   const requireFirstName = !!(leadDetail?.first_name ?? lead.first_name)
-  const firstNameMissing = nameTouched && requireFirstName && firstName.trim() === ''
+  const firstNameMissing = touched.has('first_name') && requireFirstName && firstName.trim() === ''
   const [email, setEmail] = useState(lead.email ?? '')
   const [companyName, setCompanyName] = useState(lead.company_name ?? '')
   const [instagramHandle, setInstagramHandle] = useState(lead.instagram_handle ?? '')
@@ -138,11 +139,12 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
 
   // --- Flush all dirty fields ---
   const dirtyRef = useRef(false)
-  const fieldsRef = useRef({ firstName, lastName, nameTouched, firstNameMissing, email, companyName, instagramHandle, linkedinUrl, sourceId, assignedTo, tags })
+  const fieldValues = { firstName, lastName, email, companyName, instagramHandle, linkedinUrl, sourceId, assignedTo, tags }
+  const fieldsRef = useRef({ values: fieldValues, touched, firstNameMissing })
   const leadIdRef = useRef(lead.id)
 
   dirtyRef.current = dirty
-  fieldsRef.current = { firstName, lastName, nameTouched, firstNameMissing, email, companyName, instagramHandle, linkedinUrl, sourceId, assignedTo, tags }
+  fieldsRef.current = { values: fieldValues, touched, firstNameMissing }
   leadIdRef.current = lead.id
 
   const flushFields = useCallback(async () => {
@@ -150,17 +152,10 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
     const f = fieldsRef.current
     const lid = leadIdRef.current
     dirtyRef.current = false
+    const payload = buildContactPanelPayload(f.values, f.touched, f.firstNameMissing)
+    if (Object.keys(payload).length === 0) return
     try {
-      await updateLeadService(companyId, lid, {
-        ...nameParts(f),
-        email: f.email || null,
-        company_name: f.companyName || null,
-        instagram_handle: f.instagramHandle || null,
-        linkedin_url: f.linkedinUrl || null,
-        source_id: f.sourceId || null,
-        assigned_to: f.assignedTo || null,
-        tags: f.tags,
-      })
+      await updateLeadService(companyId, lid, payload)
       invalidateAll()
     } catch {
       // Non-critical
@@ -174,9 +169,9 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
 
   // Reset local state to new lead
   useEffect(() => {
+    setTouched(new Set())
     setFirstName(lead.first_name ?? '')
     setLastName(lead.last_name ?? '')
-    setNameTouched(false)
     setEmail(lead.email ?? '')
     setCompanyName(lead.company_name ?? '')
     setInstagramHandle(lead.instagram_handle ?? '')
@@ -190,11 +185,23 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
     pendingObsRef.current = null
   }, [lead.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Semeia Nome/Sobrenome quando o detalhe chega (se o usuario ainda nao mexeu)
+  // Semeia os campos pelo detalhe completo quando ele chega, sem sobrescrever o
+  // que o usuario ja tocou. Observacoes so se nao ha edicao pendente.
   useEffect(() => {
-    if (!leadDetail || leadDetail.id !== lead.id || nameTouched) return
-    setFirstName(leadDetail.first_name ?? '')
-    setLastName(leadDetail.last_name ?? '')
+    if (!leadDetail || leadDetail.id !== lead.id) return
+    const t = touched
+    if (!t.has('first_name') && !t.has('last_name')) {
+      setFirstName(leadDetail.first_name ?? '')
+      setLastName(leadDetail.last_name ?? '')
+    }
+    if (!t.has('email')) setEmail(leadDetail.email ?? '')
+    if (!t.has('company_name')) setCompanyName(leadDetail.company_name ?? '')
+    if (!t.has('instagram_handle')) setInstagramHandle(leadDetail.instagram_handle ?? '')
+    if (!t.has('linkedin_url')) setLinkedinUrl(leadDetail.linkedin_url ?? '')
+    if (!t.has('source_id')) setSourceId(leadDetail.source_id ?? '')
+    if (!t.has('assigned_to')) setAssignedTo(leadDetail.assigned_to ?? '')
+    if (!t.has('tags')) setTags(leadDetail.tags ?? [])
+    if (!pendingObsRef.current) setObservations(leadDetail.observations ?? '')
   }, [leadDetail, lead.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Flush on unmount
@@ -210,24 +217,19 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
     }
   }, [obsSaveStatus])
 
-  const markDirty = () => setDirty(true)
+  const markDirty = (field: ContactPanelField) => {
+    setTouched((prev) => (prev.has(field) ? prev : new Set(prev).add(field)))
+    setDirty(true)
+  }
 
   const handleSave = async () => {
-    await updateLead.mutateAsync({
-      leadId: lead.id,
-      data: {
-        ...nameParts({ firstName, lastName, nameTouched, firstNameMissing }),
-        email: email || null,
-        company_name: companyName || null,
-        instagram_handle: instagramHandle || null,
-        linkedin_url: linkedinUrl || null,
-        source_id: sourceId || null,
-        assigned_to: assignedTo || null,
-        tags,
-      },
-    })
-    invalidateAll()
+    const data = buildContactPanelPayload(fieldValues, touched, firstNameMissing)
+    if (Object.keys(data).length > 0) {
+      await updateLead.mutateAsync({ leadId: lead.id, data })
+      invalidateAll()
+    }
     setDirty(false)
+    setTouched(new Set())
   }
 
   const handleClose = () => {
@@ -308,7 +310,7 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
               <Label className="text-xs">Nome{requireFirstName ? ' *' : ''}</Label>
               <Input
                 value={firstName}
-                onChange={(e) => { setFirstName(e.target.value); setNameTouched(true); markDirty() }}
+                onChange={(e) => { setFirstName(e.target.value); markDirty('first_name') }}
                 className="h-8 text-sm"
               />
               {firstNameMissing && <p className="text-xs text-destructive">Nome obrigatorio</p>}
@@ -317,7 +319,7 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
               <Label className="text-xs">Sobrenome</Label>
               <Input
                 value={lastName}
-                onChange={(e) => { setLastName(e.target.value); setNameTouched(true); markDirty() }}
+                onChange={(e) => { setLastName(e.target.value); markDirty('last_name') }}
                 className="h-8 text-sm"
               />
             </div>
@@ -330,7 +332,7 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
               <Input
                 type="email"
                 value={email}
-                onChange={(e) => { setEmail(e.target.value); markDirty() }}
+                onChange={(e) => { setEmail(e.target.value); markDirty('email') }}
                 className="h-8 pl-8 text-sm"
               />
             </div>
@@ -342,7 +344,7 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
               <Building2 className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
                 value={companyName}
-                onChange={(e) => { setCompanyName(e.target.value); markDirty() }}
+                onChange={(e) => { setCompanyName(e.target.value); markDirty('company_name') }}
                 className="h-8 pl-8 text-sm"
                 placeholder="Empresa do cliente"
               />
@@ -356,7 +358,7 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
                 <AtSign className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
                 <Input
                   value={instagramHandle}
-                  onChange={(e) => { setInstagramHandle(e.target.value); markDirty() }}
+                  onChange={(e) => { setInstagramHandle(e.target.value); markDirty('instagram_handle') }}
                   className="h-8 pl-8 text-sm"
                   placeholder="@usuario"
                 />
@@ -368,7 +370,7 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
                 <Link2 className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
                 <Input
                   value={linkedinUrl}
-                  onChange={(e) => { setLinkedinUrl(e.target.value); markDirty() }}
+                  onChange={(e) => { setLinkedinUrl(e.target.value); markDirty('linkedin_url') }}
                   className="h-8 pl-8 text-sm"
                   placeholder="URL"
                 />
@@ -378,7 +380,7 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
 
           <div className="space-y-1.5">
             <Label className="text-xs">Origem</Label>
-            <Select value={sourceId} onValueChange={(v) => { setSourceId(v); markDirty() }}>
+            <Select value={sourceId} onValueChange={(v) => { setSourceId(v); markDirty('source_id') }}>
               <SelectTrigger className="h-8 text-sm">
                 <SelectValue placeholder="Selecione" />
               </SelectTrigger>
@@ -393,7 +395,7 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
           {(isAdmin || isManager) && (
             <div className="space-y-1.5">
               <Label className="text-xs">Responsavel</Label>
-              <Select value={assignedTo} onValueChange={(v) => { setAssignedTo(v); markDirty() }}>
+              <Select value={assignedTo} onValueChange={(v) => { setAssignedTo(v); markDirty('assigned_to') }}>
                 <SelectTrigger className="h-8 text-sm">
                   <SelectValue placeholder={assigneeName ?? 'Sem responsavel'} />
                 </SelectTrigger>
@@ -467,7 +469,7 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
           <SectionHeader label="Tags" />
           <LeadTagsInput
             value={tags}
-            onChange={(newTags) => { setTags(newTags); markDirty() }}
+            onChange={(newTags) => { setTags(newTags); markDirty('tags') }}
           />
         </div>
 
