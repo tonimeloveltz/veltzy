@@ -154,7 +154,7 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
 
   const buildMapping = (): Record<string, string> => {
     const out: Record<string, string> = {}
-    for (const v of variables) out[v] = varMapping[v] || 'lead.name'
+    for (const v of variables) out[v] = varMapping[v] || 'lead.first_name'
     return out
   }
 
@@ -294,10 +294,12 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
                   value={messageBody}
                   onChange={(e) => setMessageBody(e.target.value)}
                   rows={5}
-                  placeholder="Escreva a mensagem. Variáveis: {{nome}}, {{telefone}}, {{empresa}}"
+                  placeholder="Escreva a mensagem. Variáveis: {{nome}}, {{sobrenome}}, {{nome_completo}}, {{telefone}}, {{empresa}}"
                   className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 />
-                <p className="text-xs text-muted-foreground">Variáveis: {'{{nome}}'} · {'{{telefone}}'} · {'{{empresa}}'}</p>
+                <p className="text-xs text-muted-foreground">
+                  Variáveis: {'{{nome}}'} (primeiro nome) · {'{{sobrenome}}'} · {'{{nome_completo}}'} · {'{{telefone}}'} · {'{{empresa}}'}
+                </p>
               </div>
             )}
 
@@ -325,7 +327,7 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
                   <div className="space-y-2">
                     <Label>Variáveis do template</Label>
                     {variables.map((v) => {
-                      const current = varMapping[v] ?? 'lead.name'
+                      const current = varMapping[v] ?? 'lead.first_name'
                       const isFixed = !current.startsWith('lead.')
                       return (
                         <div key={v} className="flex items-center gap-2">
@@ -333,7 +335,9 @@ export function CampaignWizard({ open, onOpenChange }: Props) {
                           <Select value={isFixed ? '__fixed__' : current} onValueChange={(val) => setVarMapping((m) => ({ ...m, [v]: val === '__fixed__' ? '' : val }))}>
                             <SelectTrigger className="flex-1"><SelectValue /></SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="lead.name">Nome do contato</SelectItem>
+                              <SelectItem value="lead.first_name">Primeiro nome</SelectItem>
+                              <SelectItem value="lead.last_name">Sobrenome</SelectItem>
+                              <SelectItem value="lead.name">Nome completo</SelectItem>
                               <SelectItem value="lead.company_name">Empresa do contato</SelectItem>
                               <SelectItem value="lead.phone">Telefone</SelectItem>
                               <SelectItem value="__fixed__">Texto fixo</SelectItem>

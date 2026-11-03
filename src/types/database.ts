@@ -370,6 +370,10 @@ export interface Lead {
   id: string
   company_id: string
   name: string | null
+  // Mantidos pelo trigger veltzy.sync_name_parts: o client grava first/last e o
+  // banco recompoe `name`; writers que gravam so `name` recebem o split.
+  first_name: string | null
+  last_name: string | null
   phone: string
   email: string | null
   instagram_id: string | null
@@ -409,6 +413,8 @@ export interface LeadWithDetails extends Lead {
 
 export interface CreateLeadInput {
   name?: string
+  first_name?: string
+  last_name?: string | null
   phone: string
   email?: string
   company_name?: string
@@ -434,6 +440,8 @@ export interface UpdateLeadInput {
   // Campos de negocio (stage_id, status, deal_value) saiu daqui: negocio se
   // edita via deals; o espelho replica para leads. pipeline_id nunca esteve.
   name?: string | null
+  first_name?: string | null
+  last_name?: string | null
   phone?: string
   email?: string | null
   company_name?: string | null
