@@ -8,6 +8,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 export interface ImportableRow {
   name?: string
+  /** Coluna de sobrenome da planilha. Quando vem, `name` e gravado como first_name. */
+  last_name?: string
   phone: string
   email?: string
   source_id?: string
@@ -59,6 +61,10 @@ const normalizeText = (text: string): string =>
 
 const normalizePhone = normalizePhoneBR
 
+/** Nome completo da linha importada (nome + sobrenome), para o nome do negocio. */
+export const fullImportName = (row: Pick<ImportableRow, 'name' | 'last_name'>): string =>
+  [row.name, row.last_name].filter(Boolean).join(' ')
+
 export const mapCsvRowToLead = (
   row: string[],
   columnMapping: Record<number, LeadField | null>,
@@ -81,6 +87,9 @@ export const mapCsvRowToLead = (
     switch (field) {
       case 'name':
         lead.name = value
+        break
+      case 'last_name':
+        lead.last_name = value
         break
       case 'phone':
         lead.phone = normalizePhone(value)
@@ -215,7 +224,7 @@ const createDealsForImportedLeads = async (
     return {
       company_id: companyId,
       lead_id: id,
-      name: row.name ? `Negocio - ${row.name}` : 'Negocio',
+      name: fullImportName(row) ? `Negocio - ${fullImportName(row)}` : 'Negocio',
       value: row.deal_value ?? 0,
       stage_id: row.stage_id,
       pipeline_id: row.pipeline_id,
@@ -298,7 +307,11 @@ export const importLeads = async (
         const instanceName = await resolveInstance(row.assigned_to, row.pipeline_id)
         const record: Record<string, unknown> = {
           company_id: companyId,
-          name: row.name ?? null,
+          // Com sobrenome: grava first/last e o trigger sync_name_parts compoe
+          // `name`. Sem sobrenome: grava `name` e o banco faz o split.
+          ...(row.last_name
+            ? { first_name: row.name ?? null, last_name: row.last_name }
+            : { name: row.name ?? null }),
           phone: row.phone,
           email: row.email ?? null,
           source_id: row.source_id ?? null,

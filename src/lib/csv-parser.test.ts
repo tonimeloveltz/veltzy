@@ -3,6 +3,13 @@ import { autoMapColumns, LEAD_FIELD_LABELS } from './csv-parser'
 
 describe('csv-parser', () => {
   describe('autoMapColumns', () => {
+    it('mapeia coluna de sobrenome (pt e en)', () => {
+      expect(autoMapColumns(['Nome', 'Sobrenome', 'Telefone'])).toEqual({ 0: 'name', 1: 'last_name', 2: 'phone' })
+      expect(autoMapColumns(['First Name', 'Last Name', 'Phone'])).toEqual({ 0: 'name', 1: 'last_name', 2: 'phone' })
+      expect(autoMapColumns(['name', 'last_name', 'surname'])[1]).toBe('last_name')
+      expect(LEAD_FIELD_LABELS.last_name).toBe('Sobrenome')
+    })
+
     it('mapeia headers em português corretamente', () => {
       const headers = ['Nome', 'Telefone', 'Email', 'Origem', 'Fase', 'Temperatura', 'Valor']
       const mapping = autoMapColumns(headers)

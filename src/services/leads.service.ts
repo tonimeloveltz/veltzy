@@ -158,7 +158,11 @@ export const createLead = async (companyId: string, input: CreateLeadInput): Pro
     .from('leads')
     .insert({
       company_id: companyId,
-      name: normalized.name,
+      // Com first_name, o trigger sync_name_parts compoe `name`; sem ele (caminho
+      // legado), `name` e gravado e o banco faz o split.
+      first_name: normalized.first_name || undefined,
+      last_name: normalized.last_name || undefined,
+      name: normalized.first_name ? undefined : normalized.name,
       phone: normalized.phone,
       email: normalized.email,
       company_name: normalized.company_name,

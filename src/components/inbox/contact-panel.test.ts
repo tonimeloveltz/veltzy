@@ -96,3 +96,24 @@ describe('ContactPanel - observations auto-save logic', () => {
     expect(savedCalls).toHaveLength(1)
   })
 })
+
+describe('ContactPanel - nameParts (nome e sobrenome)', async () => {
+  const { nameParts } = await import('@/lib/lead-name')
+  const base = { firstName: ' Maria ', lastName: ' Souza ', nameTouched: true, firstNameMissing: false }
+
+  it('nao mexeu no nome: nao envia first/last (nao zera o banco)', () => {
+    expect(nameParts({ ...base, nameTouched: false })).toEqual({})
+  })
+
+  it('mexeu: envia first/last com trim e nunca name', () => {
+    expect(nameParts(base)).toEqual({ first_name: 'Maria', last_name: 'Souza' })
+  })
+
+  it('sobrenome vazio vira null', () => {
+    expect(nameParts({ ...base, lastName: '  ' })).toEqual({ first_name: 'Maria', last_name: null })
+  })
+
+  it('Nome obrigatorio vazio: nao envia nada de nome', () => {
+    expect(nameParts({ ...base, firstName: '', firstNameMissing: true })).toEqual({})
+  })
+})
