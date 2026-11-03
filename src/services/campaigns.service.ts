@@ -81,6 +81,8 @@ export interface CreateCampaignInput {
   template_id?: string | null
   /** Texto livre (quando sem template). */
   message_body?: string | null
+  /** Versões aprovadas da mensagem livre ([0] = original). null = sem versões. */
+  message_variants?: string[] | null
   variable_mapping: Record<string, string>
   audience_filter: AudienceFilter
   /** Override anti-ban por campanha + número de envio (AntiBanConfig). null = defaults do servidor. */
@@ -103,6 +105,7 @@ export const createCampaign = async (
       name: input.name,
       template_id: input.template_id ?? null,
       message_body: input.message_body ?? null,
+      message_variants: input.message_variants ?? null,
       variable_mapping: input.variable_mapping,
       audience_filter: input.audience_filter,
       anti_ban: input.anti_ban ?? null,
@@ -204,4 +207,41 @@ export const getCampaignRecipientsDetailed = async (
     }
   }
   return recipients
+}
+
+export type CampaignVariantsErrorReason =
+  | 'mkt_ativo_disabled' | 'ai_not_enabled' | 'forbidden' | 'limit_exceeded' | 'ai_error' | 'unknown'
+
+export class CampaignVariantsError extends Error {
+  readonly reason: CampaignVariantsErrorReason
+  constructor(reason: CampaignVariantsErrorReason, message: string) {
+    super(message)
+    this.name = 'CampaignVariantsError'
+    this.reason = reason
+  }
+}
+
+/**
+ * Gera `count` versões NOVAS da mensagem livre (edge campaign-variants, IA via Hub).
+ * `avoid` = textos que a IA não pode repetir (original + versões atuais).
+ */
+export const generateCampaignVariants = async (
+  message: string,
+  count: number,
+  avoid: string[] = [],
+): Promise<{ variants: string[]; incomplete: boolean }> => {
+  const { data, error } = await supabase.functions.invoke('campaign-variants', {
+    body: { message, count, avoid },
+  })
+  if (error) {
+    // Erro HTTP da edge: o corpo traz `reason` (403/402/502).
+    let reason: CampaignVariantsErrorReason = 'unknown'
+    try {
+      const ctx = (error as { context?: Response }).context
+      const body = ctx ? await ctx.json() : null
+      if (body?.reason) reason = body.reason
+    } catch { /* corpo ausente */ }
+    throw new CampaignVariantsError(reason, error.message)
+  }
+  return { variants: data?.variants ?? [], incomplete: !!data?.incomplete }
 }
