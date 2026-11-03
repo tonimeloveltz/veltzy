@@ -9,12 +9,10 @@
 
 ## 1. Supabase
 
-### Aplicar migrations
-```bash
-npx supabase login --token SEU_TOKEN
-npx supabase link --project-ref SEU_PROJECT_REF
-npx supabase db push
-```
+### Migrations
+Este repo não aplica migration. O banco é o Central, compartilhado com o Hub, e as
+migrations dele moram em `hub/supabase/migrations/`. O legado daqui foi para
+`docs/legado/migrations-veltzy/` e não está no histórico do banco.
 
 ### Deploy Edge Functions
 ```bash
