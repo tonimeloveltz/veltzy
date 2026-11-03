@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 import { getCorsHeaders } from '../_shared/cors.ts'
 import { decideAutomationSend } from '../_shared/webhook-welcome-instance.ts'
+import { renderMessageBody } from '../_shared/blast-render.ts'
 
 interface Condition {
   field: string
@@ -175,7 +176,9 @@ Deno.serve(async (req) => {
             await supabase.from('messages').insert({
               lead_id: leadId,
               company_id: companyId,
-              content: actionData.message as string,
+              // Variáveis ({{nome}}, {{sobrenome}}...) renderizadas contra o lead
+              // (select * acima traz first_name/last_name/name/phone/company_name).
+              content: renderMessageBody(String(actionData.message ?? ''), lead),
               sender_type: 'ai',
               message_type: 'text',
               source: 'manual',
@@ -197,7 +200,7 @@ Deno.serve(async (req) => {
             await supabase.from('message_queue').insert({
               company_id: companyId,
               lead_id: leadId,
-              content: actionData.message as string,
+              content: renderMessageBody(String(actionData.message ?? ''), lead),
               message_type: (actionData.message_type as string) ?? 'text',
               file_url: (actionData.file_url as string) ?? null,
               scheduled_at: new Date(Date.now() + executed * 3000).toISOString(),
