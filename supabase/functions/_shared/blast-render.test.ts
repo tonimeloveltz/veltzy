@@ -1,5 +1,5 @@
 import { assertEquals } from 'jsr:@std/assert@1'
-import { getTemplateBodyText, renderTemplateBody, resolveTemplateParams } from './blast-render.ts'
+import { getTemplateBodyText, renderTemplateBody, renderMessageBody, resolveTemplateParams } from './blast-render.ts'
 
 Deno.test('getTemplateBodyText: pega o BODY, ignora HEADER/FOOTER', () => {
   const components = [
@@ -76,4 +76,42 @@ Deno.test('resolveTemplateParams: ordem segue o indice, nao a ocorrencia', () =>
     resolveTemplateParams('{{2}} antes de {{1}}', { '1': 'A', '2': 'B' }, {}),
     ['A', 'B'],
   )
+})
+
+const leadNome = {
+  name: 'Maria Aparecida Souza',
+  first_name: 'Maria',
+  last_name: 'Aparecida Souza',
+  phone: '5511999999999',
+  company_name: 'Clinica Silva',
+}
+
+Deno.test('renderMessageBody: {{nome}} = primeiro nome', () => {
+  assertEquals(renderMessageBody('Oi, {{nome}}!', leadNome), 'Oi, Maria!')
+})
+
+Deno.test('renderMessageBody: {{sobrenome}} e {{nome_completo}}', () => {
+  assertEquals(
+    renderMessageBody('{{sobrenome}} / {{nome_completo}}', leadNome),
+    'Aparecida Souza / Maria Aparecida Souza',
+  )
+})
+
+Deno.test('renderMessageBody: {{telefone}} e {{empresa}} seguem iguais', () => {
+  assertEquals(renderMessageBody('{{telefone}} {{empresa}}', leadNome), '5511999999999 Clinica Silva')
+})
+
+Deno.test('renderMessageBody: case-insensitive e espacos nas chaves', () => {
+  assertEquals(renderMessageBody('{{NOME}} {{ Sobrenome }}', leadNome), 'Maria Aparecida Souza')
+})
+
+Deno.test('renderMessageBody: first_name nulo (placeholder) → vazio, sem fallback', () => {
+  assertEquals(
+    renderMessageBody('Oi, {{nome}}', { name: 'Contato 1234', first_name: null, last_name: null }),
+    'Oi, ',
+  )
+})
+
+Deno.test('renderMessageBody: variavel desconhecida → vazio', () => {
+  assertEquals(renderMessageBody('a{{cidade}}b', leadNome), 'ab')
 })
