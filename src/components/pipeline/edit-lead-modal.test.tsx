@@ -33,7 +33,8 @@ const { EditLeadModal } = await import('@/components/pipeline/edit-lead-modal')
 const STAGE = { id: '11111111-1111-4111-8111-111111111111', name: 'Etapa A', pipeline_id: 'p1', color: '#000', position: 0 }
 const DEAL = { id: 'd1', pipeline_id: 'p1', stage_id: STAGE.id, name: 'Negocio', value: 100, observations: '', assigned_to: null }
 const LEAD = {
-  id: 'l1', name: 'Fulano', phone: '5511999998888', email: '', company_name: '',
+  id: 'l1', name: 'Fulano de Tal', first_name: 'Fulano', last_name: 'de Tal',
+  phone: '5511999998888', email: '', company_name: '',
   source_id: null, observations: '', tags: [], instagram_handle: '', linkedin_url: '',
   temperature: 'warm',
 }
@@ -85,5 +86,25 @@ describe('EditLeadModal: preenchimento da Fase', () => {
     const { rerender } = renderModal()
     await act(async () => { state.deals = [DEAL]; state.stages = [STAGE]; rerenderModal(rerender) })
     expect(faseTrigger().textContent).toBe('Etapa A')
+  })
+})
+
+describe('EditLeadModal: nome e sobrenome', () => {
+  beforeEach(() => { state.deals = [DEAL]; state.stages = [STAGE] })
+
+  it('semeia Nome com first_name e Sobrenome com last_name', async () => {
+    await act(async () => { renderModal() })
+    expect(screen.getByDisplayValue('Fulano')).toBeTruthy()
+    expect(screen.getByDisplayValue('de Tal')).toBeTruthy()
+    expect(screen.getByText('Nome *')).toBeTruthy()
+  })
+
+  it('lead sem primeiro nome (placeholder): Nome nao obrigatorio', async () => {
+    const placeholder = { ...LEAD, name: 'Contato 8888', first_name: null, last_name: null }
+    await act(async () => {
+      render(<EditLeadModal lead={placeholder as never} open onClose={() => {}} dealId="d1" />)
+    })
+    expect(screen.queryByText('Nome *')).toBeNull()
+    expect(screen.getByText('Nome')).toBeTruthy()
   })
 })

@@ -269,13 +269,18 @@ export function CadenceForm({ open, onOpenChange, cadence }: Props) {
                 </div>
 
                 {s.action_type === 'send_message' && (
-                  <textarea
-                    placeholder="Mensagem (texto livre). Variáveis: {{nome}}, {{telefone}}, {{empresa}}"
-                    value={String(s.config.content ?? '')}
-                    onChange={(e) => setStepConfig(i, 'content', e.target.value)}
-                    rows={3}
-                    className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                  />
+                  <div className="space-y-1">
+                    <textarea
+                      placeholder="Mensagem (texto livre). Variáveis: {{nome}}, {{sobrenome}}, {{nome_completo}}, {{telefone}}, {{empresa}}"
+                      value={String(s.config.content ?? '')}
+                      onChange={(e) => setStepConfig(i, 'content', e.target.value)}
+                      rows={3}
+                      className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Variáveis: {'{{nome}}'} (primeiro nome) · {'{{sobrenome}}'} · {'{{nome_completo}}'} · {'{{telefone}}'} · {'{{empresa}}'}
+                    </p>
+                  </div>
                 )}
                 {s.action_type === 'generate_ai' && (
                   <div className="space-y-1">

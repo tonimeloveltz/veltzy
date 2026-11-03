@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -36,9 +36,12 @@ import { CreateTaskModal } from '@/components/tarefas/create-task-modal'
 import { leadTemperatureConfig } from '@/lib/lead-config'
 import type { LeadWithDetails, TaskType, UpdateLeadInput } from '@/types/database'
 
-const schema = z.object({
+// Nome obrigatorio so quando o lead ja tem primeiro nome (nao deixa apagar).
+// Lead sem nome (placeholder de inbound) segue editavel sem obrigar a preencher.
+const makeSchema = (requireFirstName: boolean) => z.object({
   // Contato
-  name: z.string().optional(),
+  first_name: requireFirstName ? z.string().trim().min(1, 'Nome obrigatorio') : z.string().optional(),
+  last_name: z.string().optional(),
   phone: z
     .string()
     .min(1, 'Telefone obrigatorio')
@@ -57,7 +60,7 @@ const schema = z.object({
   stage_id: z.string().uuid(),
 })
 
-type FormValues = z.infer<typeof schema>
+type FormValues = z.infer<ReturnType<typeof makeSchema>>
 
 interface EditLeadModalProps {
   lead: LeadWithDetails | null
@@ -94,6 +97,8 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
   // Select vai de `undefined` para uuid, ou seja uncontrolled -> controlled, e
   // essa transicao deixa o campo sem texto ate o usuario interagir. Com `''` a
   // transicao e controlled -> controlled.
+  const requireFirstName = !!lead?.first_name
+  const schema = useMemo(() => makeSchema(requireFirstName), [requireFirstName])
   const { register, handleSubmit, control, reset, formState: { errors, dirtyFields } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { tags: [], stage_id: '' },
@@ -118,7 +123,8 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
       setTransferOpen(false)
       setDeleteDealOpen(false)
       reset({
-        name: lead.name ?? '',
+        first_name: lead.first_name ?? '',
+        last_name: lead.last_name ?? '',
         // lead.phone vem com 55: PhoneInput/formatPhoneBR removem para exibir mascarado
         // e o submit e idempotente via normalizePhoneBR na service.
         phone: lead.phone,
@@ -151,7 +157,9 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
     // service repassa o payload direto para o .update(), e um campo que o
     // usuario nao encostou nao pode viajar para o banco de forma alguma.
     const contactData: UpdateLeadInput = {}
-    if (dirtyFields.name) contactData.name = values.name || null
+    // `name` nunca vai no payload: o trigger sync_name_parts recompoe de first/last.
+    if (dirtyFields.first_name) contactData.first_name = values.first_name?.trim() || null
+    if (dirtyFields.last_name) contactData.last_name = values.last_name?.trim() || null
     if (dirtyFields.phone) contactData.phone = values.phone
     if (dirtyFields.email) contactData.email = values.email || null
     if (dirtyFields.company_name) contactData.company_name = values.company_name || null
@@ -406,6 +414,18 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
+                  <Label>Nome{requireFirstName ? ' *' : ''}</Label>
+                  <Input {...register('first_name')} />
+                  {errors.first_name && <p className="text-xs text-destructive">{errors.first_name.message}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label>Sobrenome</Label>
+                  <Input {...register('last_name')} />
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
                   <Label>Telefone *</Label>
                   <Controller
                     control={control}
@@ -422,14 +442,9 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
                   {errors.phone && <p className="text-xs text-destructive">{errors.phone.message}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label>Nome</Label>
-                  <Input {...register('name')} />
+                  <Label>Email</Label>
+                  <Input type="email" {...register('email')} />
                 </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Email</Label>
-                <Input type="email" {...register('email')} />
               </div>
 
               <div className="space-y-2">

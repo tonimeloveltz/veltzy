@@ -49,12 +49,16 @@ export function renderTemplateBody(
 }
 
 /**
- * Renderiza MENSAGEM LIVRE (campanha sem template, WAHA/Evolution) substituindo
- * variáveis NOMEADas {{nome}}/{{telefone}}/{{empresa}} pelos campos do lead.
- * Variável desconhecida vira '' (nunca vaza {{x}} cru no envio). Case-insensitive.
+ * Renderiza MENSAGEM LIVRE (campanha sem template e cadência send_message)
+ * substituindo variáveis NOMEADAS pelos campos do lead: {{nome}} = primeiro nome,
+ * {{sobrenome}}, {{nome_completo}}, {{telefone}}, {{empresa}}.
+ * Variável desconhecida ou campo nulo vira '' (nunca vaza {{x}} cru no envio).
+ * Case-insensitive.
  */
 const FREE_VAR_MAP: Record<string, string> = {
-  nome: 'name',
+  nome: 'first_name',
+  sobrenome: 'last_name',
+  nome_completo: 'name',
   telefone: 'phone',
   empresa: 'company_name',
 }

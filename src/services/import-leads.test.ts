@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { mapCsvRowToLead, validateRow } from './import-leads.service'
+import { mapCsvRowToLead, validateRow, fullImportName } from './import-leads.service'
 import type { PipelineStage, LeadSourceRecord } from '@/types/database'
 
 const mockStages: PipelineStage[] = [
@@ -79,6 +79,31 @@ describe('import-leads.service', () => {
       const lead = mapCsvRowToLead(row, mapping, 'pipe-1', 'stage-1', undefined, lookups)
 
       expect(lead.tags).toEqual(['vip', 'premium', 'b2b'])
+    })
+  })
+
+  describe('sobrenome', () => {
+    it('mapeia coluna de sobrenome para last_name', () => {
+      const row = ['Maria', 'Souza', '11999887766']
+      const mapping = { 0: 'name' as const, 1: 'last_name' as const, 2: 'phone' as const }
+      const lead = mapCsvRowToLead(row, mapping, 'pipe-1', 'stage-1', undefined, lookups)
+      expect(lead.name).toBe('Maria')
+      expect(lead.last_name).toBe('Souza')
+    })
+
+    it('sem coluna de sobrenome: last_name ausente, name intacto', () => {
+      const row = ['Maria Souza', '11999887766']
+      const mapping = { 0: 'name' as const, 1: 'phone' as const }
+      const lead = mapCsvRowToLead(row, mapping, 'pipe-1', 'stage-1', undefined, lookups)
+      expect(lead.name).toBe('Maria Souza')
+      expect(lead.last_name).toBeUndefined()
+    })
+
+    it('fullImportName junta nome e sobrenome', () => {
+      expect(fullImportName({ name: 'Maria', last_name: 'Souza' })).toBe('Maria Souza')
+      expect(fullImportName({ name: 'Maria Souza' })).toBe('Maria Souza')
+      expect(fullImportName({ last_name: 'Souza' })).toBe('Souza')
+      expect(fullImportName({})).toBe('')
     })
   })
 

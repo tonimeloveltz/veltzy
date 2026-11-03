@@ -89,6 +89,9 @@ export const parseCsvFile = (file: File): Promise<ParsedCsv> => {
 const AUTO_MAP: Record<string, string> = {
   // pt-BR (formato Veltzy export)
   'nome': 'name',
+  'sobrenome': 'last_name',
+  'último nome': 'last_name',
+  'ultimo nome': 'last_name',
   'telefone': 'phone',
   'email': 'email',
   'origem': 'source_id',
@@ -106,6 +109,9 @@ const AUTO_MAP: Record<string, string> = {
   'tags': 'tags',
   // Inglês
   'name': 'name',
+  'last name': 'last_name',
+  'last_name': 'last_name',
+  'surname': 'last_name',
   'phone': 'phone',
   'phone number': 'phone',
   'telephone': 'phone',
@@ -132,10 +138,11 @@ const AUTO_MAP: Record<string, string> = {
   'celular': 'phone',
 }
 
-export type LeadField = 'name' | 'phone' | 'email' | 'source_id' | 'pipeline_id' | 'stage_id' | 'temperature' | 'deal_value' | 'assigned_to' | 'observations' | 'tags'
+export type LeadField = 'name' | 'last_name' | 'phone' | 'email' | 'source_id' | 'pipeline_id' | 'stage_id' | 'temperature' | 'deal_value' | 'assigned_to' | 'observations' | 'tags'
 
 export const LEAD_FIELD_LABELS: Record<LeadField, string> = {
   name: 'Nome',
+  last_name: 'Sobrenome',
   phone: 'Telefone',
   email: 'Email',
   source_id: 'Origem',
