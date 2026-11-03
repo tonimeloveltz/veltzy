@@ -2,7 +2,7 @@
 
 Trilha: M
 Início: 2026-11-03 16:20
-Merge: (preencher no merge)
+Merge: 2026-11-03 16:27
 
 Referência: `specs/nome-sobrenome/SPEC.md` (colunas `first_name`/`last_name`, trigger `sync_name_parts`, `renderMessageBody` com `{{nome}}` = primeiro nome). Sem schema, sem Hub.
 
