@@ -1,11 +1,12 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { isCronAuthorized, cronUnauthorized } from '../_shared/cron-auth.ts'
 import { getCorsHeaders } from '../_shared/cors.ts'
-import { queueStatusToRecipient, isCampaignComplete, followupTargets, type RecipientLite } from '../_shared/blast-followup.ts'
+import { queueStatusToRecipient, isCampaignComplete, followupTargets, scheduledStartAt, type RecipientLite } from '../_shared/blast-followup.ts'
 
 // process-blast-followups (mkt-ativo Fase 2, cron): ADITIVO, NÃO toca o process-message-queue.
 // (1) reconcilia blast_recipients.status ← message_queue.status; (2) marca campanha 'completed'
-// quando todos os recipients terminam (resolve o débito de acompanhamento da Fase 1);
+// quando todos os recipients terminam (inclui 'scheduled': o passo (1b) leva a 'running'
+// quando scheduled_at chega) (resolve o débito de acompanhamento da Fase 1);
 // (3) dispara follow-up (immediate | no_reply após delay) inscrevendo os leads na cadência.
 
 const DAY_MS = 86_400_000
@@ -39,8 +40,23 @@ Deno.serve(async (req) => {
       }
     }
 
-    // (2) COMPLETION: campanhas em voo cujos recipients estão todos terminais.
-    const { data: camps } = await veltzy.from('blast_campaigns').select('id').in('status', ['queued', 'running']).limit(200)
+    // (1b) AGENDADAS: 'scheduled' cujo scheduled_at chegou → 'running' (started_at = scheduled_at).
+    const { data: due } = await veltzy
+      .from('blast_campaigns')
+      .select('id, scheduled_at')
+      .eq('status', 'scheduled')
+      .lte('scheduled_at', now.toISOString())
+      .limit(200)
+    for (const c of due ?? []) {
+      const startedAt = scheduledStartAt(c.scheduled_at, now)
+      if (!startedAt) continue
+      await veltzy.from('blast_campaigns').update({ status: 'running', started_at: startedAt })
+        .eq('id', c.id).eq('status', 'scheduled')
+    }
+
+    // (2) COMPLETION: campanhas em voo cujos recipients estão todos terminais. Inclui
+    // 'scheduled' para o caso de tudo já estar terminal (ex.: todos skipped).
+    const { data: camps } = await veltzy.from('blast_campaigns').select('id').in('status', ['scheduled', 'queued', 'running']).limit(200)
     for (const c of camps ?? []) {
       const { data: recs } = await veltzy.from('blast_recipients').select('status').eq('campaign_id', c.id)
       const statuses = (recs ?? []).map((x: { status: string }) => x.status)

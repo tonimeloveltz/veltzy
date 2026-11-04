@@ -1,5 +1,5 @@
 import { assertEquals } from 'jsr:@std/assert@1'
-import { queueStatusToRecipient, isCampaignComplete, followupTargets } from './blast-followup.ts'
+import { queueStatusToRecipient, isCampaignComplete, followupTargets, scheduledStartAt } from './blast-followup.ts'
 
 Deno.test('queueStatusToRecipient: mapeia terminais; pending mantém (null)', () => {
   assertEquals(queueStatusToRecipient('sent'), 'sent')
@@ -35,4 +35,13 @@ Deno.test('followupTargets no_reply: SENT que NÃO responderam', () => {
 
 Deno.test('followupTargets: ignora recipient sem lead_id', () => {
   assertEquals(followupTargets([{ lead_id: null, status: 'sent' }], 'immediate', new Set()), [])
+})
+
+Deno.test('scheduledStartAt: horario chegou → started_at = scheduled_at; futuro/nulo → null', () => {
+  const now = new Date('2026-11-04T12:00:00Z')
+  assertEquals(scheduledStartAt('2026-11-04T11:30:00Z', now), '2026-11-04T11:30:00.000Z')
+  assertEquals(scheduledStartAt('2026-11-04T12:00:00Z', now), '2026-11-04T12:00:00.000Z')
+  assertEquals(scheduledStartAt('2026-11-04T12:00:01Z', now), null)
+  assertEquals(scheduledStartAt(null, now), null)
+  assertEquals(scheduledStartAt('invalido', now), null)
 })
