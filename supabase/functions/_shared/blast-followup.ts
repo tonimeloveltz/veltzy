@@ -18,6 +18,17 @@ export function isCampaignComplete(recipientStatuses: string[]): boolean {
   return recipientStatuses.length > 0 && recipientStatuses.every((s) => TERMINAL.has(s))
 }
 
+/**
+ * Campanha 'scheduled' cujo horário chegou: devolve o started_at (= scheduled_at) para
+ * transicionar a 'running'. null = ainda no futuro ou sem horário.
+ */
+export function scheduledStartAt(scheduledAt: string | null, now: Date): string | null {
+  if (!scheduledAt) return null
+  const t = new Date(scheduledAt).getTime()
+  if (Number.isNaN(t) || t > now.getTime()) return null
+  return new Date(t).toISOString()
+}
+
 export interface RecipientLite {
   lead_id: string | null
   status: string
