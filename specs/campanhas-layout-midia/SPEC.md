@@ -50,8 +50,6 @@ src/components/campanhas/template-message-fields.tsx
 src/components/campanhas/campaign-summary-panel.tsx
 src/components/campanhas/campaign-media-input.tsx
 src/components/campanhas/campaign-row-actions.tsx
-src/components/campanhas/anti-ban-settings.tsx
-src/components/campanhas/sender-number-select.tsx
 src/hooks/use-campaigns.ts
 src/services/campaigns.service.ts
 src/lib/campaign-media.ts
@@ -153,3 +151,4 @@ interface CampaignMediaFields {
 - `blast-dispatch`: anexo com `media_type` inválido ou sem `media_url` responde 422 `media_invalid` (defesa). `queued_count` passa a contar destinatários, não itens da fila (par texto+áudio gera 2 itens).
 - Expurgo: pré-filtro no banco por `created_at < now() - 30 dias` (condição necessária nos dois casos), lote de até 200 candidatos, regra fina em `isPurgeDue` (testada em `campaign-media-purge.test.ts`). Falha no expurgo não derruba os passos (1) a (3) do cron.
 - Erros 422 do `blast-dispatch` viram mensagem de negócio no toast (`media_expired` → "O anexo expirou. Anexe de novo.").
+- `anti-ban-settings.tsx` e `sender-number-select.tsx` saem do bloco de arquivos: não tinham cor fixa (item 9), nada a mudar.
