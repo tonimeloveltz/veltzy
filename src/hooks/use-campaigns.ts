@@ -87,3 +87,39 @@ export const useDispatchCampaign = () => {
     onError: (err: Error) => toast.error(err.message),
   })
 }
+
+export const useUpdateCampaign = () => {
+  const queryClient = useQueryClient()
+  const companyId = useAuthStore((s) => s.company?.id)
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: campaignsService.CreateCampaignInput }) =>
+      campaignsService.updateCampaign(companyId!, id, input),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: ['campaigns'] })
+      queryClient.invalidateQueries({ queryKey: ['campaign', companyId, id] })
+    },
+    onError: (err: Error) => toast.error(err.message),
+  })
+}
+
+/** Cancela os envios pendentes e volta a campanha para rascunho (antes de salvar a edição). */
+export const useResetCampaign = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (campaignId: string) => campaignsService.manageCampaign(campaignId, 'reset'),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['campaigns'] }),
+    onError: () => toast.error('Não foi possível atualizar a campanha. Tente de novo.'),
+  })
+}
+
+export const useDeleteCampaign = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (campaignId: string) => campaignsService.manageCampaign(campaignId, 'delete'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['campaigns'] })
+      toast.success('Campanha excluída.')
+    },
+    onError: () => toast.error('Não foi possível excluir a campanha. Tente de novo.'),
+  })
+}

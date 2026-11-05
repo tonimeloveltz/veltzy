@@ -82,6 +82,10 @@ export interface BlastCampaign {
   queued_count: number
   sent_count: number
   failed_count: number
+  /** Follow-up pós-campanha (cadência). */
+  followup_cadence_id: string | null
+  followup_mode: 'none' | 'immediate' | 'no_reply'
+  followup_delay_days: number
   created_by: string | null
   created_at: string
   updated_at: string

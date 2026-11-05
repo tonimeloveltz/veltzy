@@ -122,6 +122,51 @@ export const createCampaign = async (
   return data as unknown as BlastCampaign
 }
 
+/** Atualiza uma campanha ainda não enviada (draft/scheduled). Status segue a data. */
+export const updateCampaign = async (
+  companyId: string,
+  id: string,
+  input: CreateCampaignInput,
+): Promise<BlastCampaign> => {
+  const { data, error } = await veltzy()
+    .from('blast_campaigns')
+    .update({
+      name: input.name,
+      template_id: input.template_id ?? null,
+      message_body: input.message_body ?? null,
+      message_variants: input.message_variants ?? null,
+      variable_mapping: input.variable_mapping,
+      audience_filter: input.audience_filter,
+      anti_ban: input.anti_ban ?? null,
+      status: input.scheduled_at ? 'scheduled' : 'draft',
+      scheduled_at: input.scheduled_at ?? null,
+      followup_cadence_id: input.followup_cadence_id ?? null,
+      followup_mode: input.followup_mode ?? 'none',
+      followup_delay_days: input.followup_delay_days ?? 0,
+    })
+    .eq('company_id', companyId)
+    .eq('id', id)
+    .in('status', ['draft', 'scheduled'])
+    .select()
+    .single()
+  if (error) throw error
+  return data as unknown as BlastCampaign
+}
+
+export type CampaignManageAction = 'reset' | 'delete'
+
+/** reset: cancela pendentes e volta a rascunho. delete: cancela pendentes e apaga. */
+export const manageCampaign = async (
+  campaignId: string,
+  action: CampaignManageAction,
+): Promise<{ ok: boolean; cancelled: number }> => {
+  const { data, error } = await supabase.functions.invoke('blast-campaign-manage', {
+    body: { campaign_id: campaignId, action },
+  })
+  if (error) throw error
+  return data
+}
+
 /** Dispara a campanha: a edge faz gate + audiencia + expande na message_queue. */
 export const dispatchCampaign = async (
   campaignId: string,
