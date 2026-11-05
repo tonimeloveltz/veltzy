@@ -25,6 +25,8 @@ interface CampaignSummaryPanelProps {
   /** Mobile: bloco acima dos botões, sem o nome da campanha. */
   compact?: boolean
   className?: string
+  /** Passo 1 (Destinatários): ainda não há mensagem, então sem o celular. */
+  showPreview?: boolean
 }
 
 const Row = ({ label, value }: { label: string; value: string }) => (
@@ -34,16 +36,16 @@ const Row = ({ label, value }: { label: string; value: string }) => (
   </div>
 )
 
-export function CampaignSummaryPanel({ summary: s, compact = false, className }: CampaignSummaryPanelProps) {
+export function CampaignSummaryPanel({ summary: s, compact = false, className, showPreview = true }: CampaignSummaryPanelProps) {
   return (
     <Card className={cn('space-y-4 p-4', className)}>
       {!compact && (
         <p className="truncate text-base font-semibold">{s.name.trim() || 'Nova campanha'}</p>
       )}
 
-      <CampaignPhonePreview texts={s.previewTexts} mapping={s.previewMapping} media={s.media} />
+      {showPreview && <CampaignPhonePreview texts={s.previewTexts} mapping={s.previewMapping} media={s.media} />}
 
-      <div className="space-y-1.5 border-t pt-3">
+      <div className={cn('space-y-1.5', showPreview && 'border-t pt-3')}>
         <div className="space-y-0.5 pb-1">
           {s.audienceLoading ? (
             <Skeleton className="h-5 w-40" />
