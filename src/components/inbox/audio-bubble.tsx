@@ -4,6 +4,8 @@ import { Mic2, Play, Pause, Sparkles, ImageOff } from 'lucide-react'
 interface AudioBubbleProps {
   fileUrl: string
   transcription: string | null
+  /** Prévia (campanha): sem a linha de transcrição. */
+  hideTranscription?: boolean
 }
 
 const formatTime = (seconds: number) => {
@@ -12,7 +14,7 @@ const formatTime = (seconds: number) => {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
-const AudioBubble = ({ fileUrl, transcription }: AudioBubbleProps) => {
+const AudioBubble = ({ fileUrl, transcription, hideTranscription = false }: AudioBubbleProps) => {
   const audioRef = useRef<HTMLAudioElement>(null)
   const [playing, setPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
@@ -108,7 +110,7 @@ const AudioBubble = ({ fileUrl, transcription }: AudioBubbleProps) => {
         </div>
       </div>
 
-      {transcription && (
+      {!hideTranscription && transcription && (
         <div className="mt-2 border-t border-border/30 pt-2">
           <p className="text-sm italic text-muted-foreground">
             <Sparkles className="mr-1 inline-block h-3 w-3 text-primary/60" />
@@ -117,7 +119,7 @@ const AudioBubble = ({ fileUrl, transcription }: AudioBubbleProps) => {
         </div>
       )}
 
-      {!transcription && (
+      {!hideTranscription && !transcription && (
         <div className="mt-2 border-t border-border/30 pt-2">
           <p className="text-xs italic text-muted-foreground/50">Transcricao indisponivel</p>
         </div>
