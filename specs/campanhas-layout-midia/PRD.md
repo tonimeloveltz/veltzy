@@ -2,7 +2,7 @@
 
 Trilha: G
 Início: 2026-11-05 10:28
-Merge: 2026-11-05 15:05
+Merge: (preencher no merge)
 
 ## Problema e objetivo
 O wizard de campanha (popup) está apertado para o volume de informação e a seleção de público ficou poluída (todas as etapas de todos os funis como chips). Faltam anexo de mídia na mensagem e editar/excluir na lista.
