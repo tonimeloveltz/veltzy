@@ -18,6 +18,8 @@ import { assignVariants, sameVariables } from '../_shared/campaign-variants.ts'
 // Fuso da company: o Veltzy opera em America/Sao_Paulo (CLAUDE.md). Sem coluna de
 // tz por empresa hoje; BRT como default. TODO: tz por-company quando existir.
 const BRT_OFFSET_MINUTES = -180
+// Áudio com texto: o áudio sai logo depois do texto.
+const AUDIO_AFTER_TEXT_MS = 3_000
 
 interface AuthResult {
   profileId: string
@@ -117,6 +119,23 @@ Deno.serve(async (req) => {
     const provider = (companyProvider?.active_whatsapp_provider as string) ?? 'zapi'
     const isCloudApi = provider === 'cloud_api'
 
+    // ---- Anexo (campanhas-layout-midia): só texto livre em número não oficial. ----
+    const mediaType = campaign.media_path ? (campaign.media_type as string | null) : null
+    if (campaign.media_path) {
+      if (campaign.media_purged_at) {
+        return jsonResponse({ error: 'O anexo expirou. Anexe de novo.', reason: 'media_expired' }, corsHeaders, 422)
+      }
+      if (isCloudApi) {
+        return jsonResponse({ error: 'Canal oficial (Cloud API) nao envia anexo em campanha.', reason: 'media_not_supported_official' }, corsHeaders, 422)
+      }
+      if (campaign.template_id) {
+        return jsonResponse({ error: 'Anexo so vale para mensagem livre, nao para template.', reason: 'media_requires_free_text' }, corsHeaders, 422)
+      }
+      if (!mediaType || !['image', 'audio', 'video', 'document'].includes(mediaType) || !campaign.media_url) {
+        return jsonResponse({ error: 'Anexo da campanha invalido', reason: 'media_invalid' }, corsHeaders, 422)
+      }
+    }
+
     // ---- Fonte do conteudo. Com template_id: HSM (Cloud API) / BODY renderizado (waha/evo).
     // Sem template_id: MENSAGEM LIVRE (campaign.message_body) — so nao-oficial. ----
     // deno-lint-ignore no-explicit-any
@@ -132,7 +151,7 @@ Deno.serve(async (req) => {
         return jsonResponse({ error: 'Canal oficial (Cloud API) exige template aprovado pela Meta; mensagem livre nao e permitida.', reason: 'template_required' }, corsHeaders, 422)
       }
       bodyText = (campaign.message_body ?? '').trim()
-      if (!bodyText) {
+      if (!bodyText && !mediaType) {
         return jsonResponse({ error: 'Campanha sem template_id e sem message_body' }, corsHeaders, 400)
       }
       const raw = campaign.message_variants
@@ -298,8 +317,12 @@ Deno.serve(async (req) => {
     // ---- EXPANDE em message_queue (source='campaign'), um item por recipient. O consumidor
     // (process-message-queue) envia pelo provider da company. cloud_api = message_type='template'
     // + metadata (name/language/params resolvidos por-recipient); demais = texto renderizado. ----
+    // metadata.campaign_id em todo item: blast-campaign-manage cancela por ele (inclui o
+    // item de texto do par áudio). Anexo: image/video/document = 1 item com legenda;
+    // audio = texto em scheduled_at + áudio 3s depois (WhatsApp não aceita legenda em áudio).
     const variableMapping = (campaign.variable_mapping ?? {}) as Record<string, string>
-    const queueRows = audience.map((lead: Record<string, unknown>, i: number) => {
+    const campaignMeta = { campaign_id }
+    const queueRows = audience.flatMap((lead: Record<string, unknown>, i: number) => {
       const cloudOverride = cloudOverrideFor(lead as { cloud_api_number_id?: string | null })
       const base = {
         company_id: companyId,
@@ -316,32 +339,46 @@ Deno.serve(async (req) => {
           : senderFor(lead as { whatsapp_instance_name: string | null }),
       }
       if (isCloudApi) {
-        return {
+        return [{
           ...base,
           message_type: 'template',
           metadata: {
+            ...campaignMeta,
             template_name: template.name,
             language: template.language,
             params: resolveTemplateParams(bodyText, variableMapping, lead),
             // Lido pelo process-message-queue antes do vinculo do lead/default.
             ...(cloudOverride ? { phone_number_id: cloudOverride } : {}),
           },
-        }
+        }]
       }
-      return { ...base, message_type: 'text' }
+      if (!mediaType) return [{ ...base, message_type: 'text', metadata: campaignMeta }]
+      const mediaItem = { ...base, message_type: mediaType, file_url: campaign.media_url as string, metadata: campaignMeta }
+      if (mediaType !== 'audio') return [mediaItem]
+      if (!base.content.trim()) return [{ ...mediaItem, content: '' }]
+      const audioAt = new Date(new Date(base.scheduled_at).getTime() + AUDIO_AFTER_TEXT_MS).toISOString()
+      return [
+        { ...base, message_type: 'text', metadata: campaignMeta },
+        { ...mediaItem, content: '', scheduled_at: audioAt },
+      ]
     })
     const { data: inserted, error: queueErr } = await veltzy
       .from('message_queue')
       .insert(queueRows)
-      .select('id, lead_id')
+      .select('id, lead_id, message_type')
     if (queueErr) return jsonResponse({ error: `Falha ao enfileirar: ${queueErr.message}` }, corsHeaders, 500)
 
-    // Liga cada recipient ao item da fila (fonte do status) e marca 'queued'.
+    // Liga cada recipient ao item da fila (fonte do status) e marca 'queued'. No par
+    // texto+áudio o recipient aponta para o áudio (último a sair).
+    const queueIdByLead = new Map<string, string>()
     for (const item of inserted ?? []) {
+      if (!queueIdByLead.has(item.lead_id) || item.message_type !== 'text') queueIdByLead.set(item.lead_id, item.id)
+    }
+    for (const [leadId, queueId] of queueIdByLead) {
       await veltzy.from('blast_recipients')
-        .update({ message_queue_id: item.id, status: 'queued' })
+        .update({ message_queue_id: queueId, status: 'queued' })
         .eq('campaign_id', campaign_id)
-        .eq('lead_id', item.lead_id)
+        .eq('lead_id', leadId)
     }
 
     // Marca a campanha: 'scheduled' se futura, 'queued' se imediata.
@@ -350,7 +387,7 @@ Deno.serve(async (req) => {
       .update({
         status: isScheduled ? 'scheduled' : 'queued',
         total_recipients: audience.length,
-        queued_count: inserted?.length ?? 0,
+        queued_count: queueIdByLead.size,
         started_at: isScheduled ? null : new Date().toISOString(),
       })
       .eq('id', campaign_id)
@@ -360,7 +397,7 @@ Deno.serve(async (req) => {
       gate: 'passed',
       provider,
       recipients: audience.length,
-      queued: inserted?.length ?? 0,
+      queued: queueIdByLead.size,
       campaign_status: isScheduled ? 'scheduled' : 'queued',
       schedule_preview: schedule.slice(0, 3),
       note: 'Campanha expandida na message_queue; o process-message-queue envia via provider da company.',

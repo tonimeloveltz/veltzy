@@ -7,6 +7,7 @@ import type {
 } from '@/types/database'
 import type { WhatsAppTemplate } from '@/types/whatsapp-template'
 import { leadIdsInStages } from '@/lib/stage-audience'
+import { buildMediaPath, MEDIA_BUCKET } from '@/lib/campaign-media'
 
 /** Campanha com o template embedado (nome/status) para a lista. */
 export interface CampaignWithTemplate extends BlastCampaign {
@@ -83,6 +84,11 @@ export interface CreateCampaignInput {
   message_body?: string | null
   /** Versões aprovadas da mensagem livre ([0] = original). null = sem versões. */
   message_variants?: string[] | null
+  /** Anexo (texto livre, número não oficial). */
+  media_url?: string | null
+  media_type?: BlastCampaign['media_type']
+  media_name?: string | null
+  media_path?: string | null
   variable_mapping: Record<string, string>
   audience_filter: AudienceFilter
   /** Override anti-ban por campanha + número de envio (AntiBanConfig). null = defaults do servidor. */
@@ -106,6 +112,10 @@ export const createCampaign = async (
       template_id: input.template_id ?? null,
       message_body: input.message_body ?? null,
       message_variants: input.message_variants ?? null,
+      media_url: input.media_url ?? null,
+      media_type: input.media_type ?? null,
+      media_name: input.media_name ?? null,
+      media_path: input.media_path ?? null,
       variable_mapping: input.variable_mapping,
       audience_filter: input.audience_filter,
       anti_ban: input.anti_ban ?? null,
@@ -122,6 +132,80 @@ export const createCampaign = async (
   return data as unknown as BlastCampaign
 }
 
+/** Atualiza uma campanha ainda não enviada (draft/scheduled). Status segue a data. */
+export const updateCampaign = async (
+  companyId: string,
+  id: string,
+  input: CreateCampaignInput,
+): Promise<BlastCampaign> => {
+  const { data, error } = await veltzy()
+    .from('blast_campaigns')
+    .update({
+      name: input.name,
+      template_id: input.template_id ?? null,
+      message_body: input.message_body ?? null,
+      message_variants: input.message_variants ?? null,
+      media_url: input.media_url ?? null,
+      media_type: input.media_type ?? null,
+      media_name: input.media_name ?? null,
+      media_path: input.media_path ?? null,
+      // Anexo novo (ou nenhum) zera a marca de expurgo.
+      media_purged_at: null,
+      variable_mapping: input.variable_mapping,
+      audience_filter: input.audience_filter,
+      anti_ban: input.anti_ban ?? null,
+      status: input.scheduled_at ? 'scheduled' : 'draft',
+      scheduled_at: input.scheduled_at ?? null,
+      followup_cadence_id: input.followup_cadence_id ?? null,
+      followup_mode: input.followup_mode ?? 'none',
+      followup_delay_days: input.followup_delay_days ?? 0,
+    })
+    .eq('company_id', companyId)
+    .eq('id', id)
+    .in('status', ['draft', 'scheduled'])
+    .select()
+    .single()
+  if (error) throw error
+  return data as unknown as BlastCampaign
+}
+
+export type CampaignManageAction = 'reset' | 'delete'
+
+/** reset: cancela pendentes e volta a rascunho. delete: cancela pendentes e apaga. */
+export const manageCampaign = async (
+  campaignId: string,
+  action: CampaignManageAction,
+): Promise<{ ok: boolean; cancelled: number }> => {
+  const { data, error } = await supabase.functions.invoke('blast-campaign-manage', {
+    body: { campaign_id: campaignId, action },
+  })
+  if (error) throw error
+  return data
+}
+
+/** Sobe o anexo da campanha para a pasta da empresa. */
+export const uploadCampaignMedia = async (
+  companyId: string,
+  file: File,
+): Promise<{ url: string; path: string }> => {
+  const path = buildMediaPath(companyId, file)
+  const { error } = await supabase.storage.from(MEDIA_BUCKET).upload(path, file, { contentType: file.type || undefined })
+  if (error) throw error
+  const { data } = supabase.storage.from(MEDIA_BUCKET).getPublicUrl(path)
+  return { url: data.publicUrl, path }
+}
+
+export const removeCampaignMedia = async (path: string): Promise<void> => {
+  const { error } = await supabase.storage.from(MEDIA_BUCKET).remove([path])
+  if (error) throw error
+}
+
+const DISPATCH_REASON_MESSAGES: Record<string, string> = {
+  media_expired: 'O anexo expirou. Anexe de novo.',
+  media_not_supported_official: 'O número oficial não envia anexo em campanha.',
+  media_requires_free_text: 'Anexo só vale para mensagem escrita na hora, não para template.',
+}
+
 /** Dispara a campanha: a edge faz gate + audiencia + expande na message_queue. */
 export const dispatchCampaign = async (
   campaignId: string,
@@ -129,7 +213,16 @@ export const dispatchCampaign = async (
   const { data, error } = await supabase.functions.invoke('blast-dispatch', {
     body: { campaign_id: campaignId },
   })
-  if (error) throw error
+  if (error) {
+    // Erro HTTP da edge: o corpo traz `reason`/`error`.
+    let body: { reason?: string; error?: string } | null = null
+    try {
+      const ctx = (error as { context?: Response }).context
+      body = ctx ? await ctx.json() : null
+    } catch { /* corpo ausente */ }
+    const friendly = body?.reason ? DISPATCH_REASON_MESSAGES[body.reason] : undefined
+    throw new Error(friendly ?? body?.error ?? error.message)
+  }
   return data
 }
 

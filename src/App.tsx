@@ -27,6 +27,7 @@ const AceitarConvitePage = lazy(() => import('@/pages/aceitar-convite'))
 const AcessoNegadoPage = lazy(() => import('@/pages/acesso-negado'))
 const SdrIaPage = lazy(() => import('@/pages/sdr-ia'))
 const CampanhasPage = lazy(() => import('@/pages/campanhas'))
+const CampanhaFormPage = lazy(() => import('@/pages/campanha-form'))
 const CampanhaDetalhePage = lazy(() => import('@/pages/campanha-detalhe'))
 const CadenciasPage = lazy(() => import('@/pages/cadencias'))
 const ProspeccaoPage = lazy(() => import('@/pages/prospeccao'))
@@ -119,6 +120,8 @@ const App = () => {
                 <Route path="/sdr-ia" element={<ProtectedRoute requireRole={['admin', 'manager', 'super_admin']} requireFeature="sdr_agent_v2"><SdrIaPage /></ProtectedRoute>} />
                 {/* Gate de feature (mkt_ativo_enabled) e na propria pagina via company.features (fonte unica = companies.features, mesma da edge). */}
                 <Route path="/campanhas" element={<ProtectedRoute requireRole={['admin', 'manager', 'super_admin']}><CampanhasPage /></ProtectedRoute>} />
+                <Route path="/campanhas/nova" element={<ProtectedRoute requireRole={['admin', 'manager', 'super_admin']}><CampanhaFormPage /></ProtectedRoute>} />
+                <Route path="/campanhas/:id/editar" element={<ProtectedRoute requireRole={['admin', 'manager', 'super_admin']}><CampanhaFormPage /></ProtectedRoute>} />
                 <Route path="/campanhas/:id" element={<ProtectedRoute requireRole={['admin', 'manager', 'super_admin']}><CampanhaDetalhePage /></ProtectedRoute>} />
                 <Route path="/automacoes" element={<ProtectedRoute requireRole={['admin', 'manager', 'super_admin']}><CadenciasPage /></ProtectedRoute>} />
                 {/* Gate de feature (prospect_groups_enabled) e na propria pagina via company.features. */}
