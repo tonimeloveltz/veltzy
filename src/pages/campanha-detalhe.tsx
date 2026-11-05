@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, AlertCircle } from 'lucide-react'
+import { ArrowLeft, AlertCircle, FileText, Music, Paperclip, Video } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth.store'
 import { useCampaign, useCampaignRecipients } from '@/hooks/use-campaigns'
@@ -7,7 +7,7 @@ import { CampaignSummaryCards } from '@/components/campanhas/campaign-summary-ca
 import { RecipientList } from '@/components/campanhas/recipient-list'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import type { BlastCampaignStatus } from '@/types/database'
+import type { BlastCampaign, BlastCampaignStatus } from '@/types/database'
 
 const statusLabel: Record<BlastCampaignStatus, string> = {
   draft: 'Rascunho',
@@ -29,6 +29,28 @@ const statusTone: Record<BlastCampaignStatus, string> = {
   failed: 'bg-red-500/15 text-red-600',
   paused: 'bg-amber-500/15 text-amber-600',
   cancelled: 'bg-muted text-muted-foreground',
+}
+
+// Anexo da campanha: miniatura (imagem) ou ícone + nome; expurgado vira "Anexo expirado".
+const CampaignMedia = ({ campaign: c }: { campaign: BlastCampaign }) => {
+  if (!c.media_path) return null
+  if (c.media_purged_at) {
+    return <p className="flex items-center gap-1.5 text-sm text-muted-foreground"><Paperclip className="h-4 w-4" /> Anexo expirado</p>
+  }
+  const name = c.media_name ?? c.media_path.split('/').pop()
+  if (c.media_type === 'image' && c.media_url) {
+    return (
+      <a href={c.media_url} target="_blank" rel="noreferrer" className="block w-fit">
+        <img src={c.media_url} alt={name} className="h-24 rounded-md border object-cover" />
+      </a>
+    )
+  }
+  const Icon = c.media_type === 'video' ? Video : c.media_type === 'audio' ? Music : FileText
+  return (
+    <a href={c.media_url ?? undefined} target="_blank" rel="noreferrer" className="flex w-fit items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted/50">
+      <Icon className="h-4 w-4 text-muted-foreground" /> {name}
+    </a>
+  )
 }
 
 const fmtDate = (iso: string | null) => (iso ? new Date(iso).toLocaleString('pt-BR') : null)
@@ -98,11 +120,13 @@ export default function CampanhaDetalhePage() {
         </span>
       </div>
       <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted-foreground">
-        <span>Template: {campaign.template?.name ?? 'Sem template'}</span>
+        <span>Template: {campaign.template?.name ?? 'Texto livre'}</span>
         <span>Criada em {fmtDate(campaign.created_at)}</span>
         {campaign.started_at && <span>Iniciada em {fmtDate(campaign.started_at)}</span>}
         {campaign.completed_at && <span>Concluída em {fmtDate(campaign.completed_at)}</span>}
       </div>
+
+      <CampaignMedia campaign={campaign} />
 
       <CampaignSummaryCards recipients={recipients ?? []} />
 

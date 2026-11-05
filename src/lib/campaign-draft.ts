@@ -3,11 +3,19 @@
 // e payload de gravação.
 import { buildMessageVariants, type VariantDraft } from '@/lib/campaign-variants'
 import type { CreateCampaignInput } from '@/services/campaigns.service'
-import type { AntiBanConfig, AudienceFilter, BlastCampaign, ThrottleConfig } from '@/types/database'
+import type { AntiBanConfig, AudienceFilter, BlastCampaign, CampaignMediaType, ThrottleConfig } from '@/types/database'
 
 export type AudienceMode = 'all' | 'stage' | 'source' | 'tag' | 'manual'
 export type MessageMode = 'free' | 'template'
 export type FollowupMode = 'immediate' | 'no_reply'
+
+export interface CampaignMedia {
+  url: string
+  type: CampaignMediaType
+  /** Nome original, para exibir. */
+  name: string
+  path: string
+}
 
 export interface CampaignDraft {
   name: string
@@ -25,6 +33,10 @@ export interface CampaignDraft {
   variantsCleared: boolean
   templateId: string
   varMapping: Record<string, string>
+  /** Anexo (texto livre, número não oficial). Mesmo anexo para todas as versões. */
+  media: CampaignMedia | null
+  /** Campanha salva tinha anexo já expurgado: a UI pede para anexar de novo. */
+  mediaExpired: boolean
   antiBan: ThrottleConfig | null
   /** undefined = ainda não escolhido (o seletor aplica o default); null = nenhum. */
   sender: string | null | undefined
@@ -41,7 +53,7 @@ export type DraftPatch = Partial<CampaignDraft>
 export const emptyDraft = (isCloudApi: boolean): CampaignDraft => ({
   name: '',
   audienceMode: 'all', stageIds: [], sourceId: '', tags: [], manualIds: [], excludeRecent: false, excludeDays: 7,
-  msgMode: isCloudApi ? 'template' : 'free', messageBody: '', variants: [], variantsCleared: false, templateId: '', varMapping: {},
+  msgMode: isCloudApi ? 'template' : 'free', messageBody: '', variants: [], variantsCleared: false, templateId: '', varMapping: {}, media: null, mediaExpired: false,
   antiBan: null, sender: undefined, senderForce: false, scheduledAt: '',
   followupCadenceId: '', followupMode: 'immediate', followupDays: 3,
 })
@@ -82,6 +94,10 @@ export const draftFromCampaign = (c: BlastCampaign, isCloudApi: boolean): Campai
     variants: versions.map((text) => ({ text, status: 'approved' as const })),
     templateId: c.template_id ?? '',
     varMapping: c.variable_mapping ?? {},
+    media: c.media_path && c.media_url && c.media_type && !c.media_purged_at
+      ? { url: c.media_url, type: c.media_type, name: c.media_name ?? c.media_path.split('/').pop() ?? 'arquivo', path: c.media_path }
+      : null,
+    mediaExpired: !!c.media_path && !!c.media_purged_at,
     antiBan: hasThrottle ? throttle : null,
     sender: c.anti_ban ? (sender_instance ?? null) : undefined,
     senderForce: !!sender_force,
@@ -122,11 +138,16 @@ export const buildCampaignInput = (d: CampaignDraft, opts: BuildInputOptions): C
     ? { ...(d.antiBan ?? {}), sender_instance: d.sender, sender_force: d.senderForce }
     : d.antiBan
   const free = d.msgMode === 'free'
+  const media = free ? d.media : null
   return {
     name: d.name.trim(),
     template_id: free ? null : d.templateId,
     message_body: free ? d.messageBody.trim() : null,
     message_variants: free ? buildMessageVariants(d.messageBody, d.variants) : null,
+    media_url: media?.url ?? null,
+    media_type: media?.type ?? null,
+    media_name: media?.name ?? null,
+    media_path: media?.path ?? null,
     variable_mapping: free ? {} : mapping,
     audience_filter: buildAudienceFilter(d),
     anti_ban: antiBan,

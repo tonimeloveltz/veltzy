@@ -20,6 +20,8 @@ import { MessageStep } from '@/components/campanhas/message-step'
 import { SettingsStep } from '@/components/campanhas/settings-step'
 import { ReviewStep } from '@/components/campanhas/review-step'
 import { CampaignSummaryPanel, type CampaignSummary } from '@/components/campanhas/campaign-summary-panel'
+import { CampaignMediaInput } from '@/components/campanhas/campaign-media-input'
+import { removeCampaignMedia } from '@/services/campaigns.service'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 
@@ -77,8 +79,11 @@ export function CampaignWizard({ campaignId }: CampaignWizardProps) {
   const scheduledInPast = draft.scheduledAt !== '' && new Date(draft.scheduledAt).getTime() <= Date.now()
   const isScheduled = draft.scheduledAt !== '' && !scheduledInPast
 
+  // Com anexo, o texto é opcional (vira legenda); versões continuam exigindo texto.
+  const hasText = draft.messageBody.trim() !== ''
+  const hasMedia = isNonOfficial && !!draft.media
   const messageOk = draft.msgMode === 'free'
-    ? draft.messageBody.trim() !== '' && (draft.variants.length === 0 || allVariantsReady(draft.messageBody, draft.variants))
+    ? (hasText || hasMedia) && (draft.variants.length === 0 || allVariantsReady(draft.messageBody, draft.variants))
     : (draft.templateId !== '' && !templateNotApproved)
   const canNext1 = draft.name.trim() !== '' && (audienceCount ?? 0) > 0
   const canSend = (audienceCount ?? 0) > 0 && messageOk && !busy && !scheduledInPast
@@ -101,7 +106,7 @@ export function CampaignWizard({ campaignId }: CampaignWizardProps) {
     audienceLoading: countLoading,
     previewText: isFree ? draft.messageBody : templateBody,
     versions: isFree && draft.variants.length ? draft.variants.length + 1 : 0,
-    media: null,
+    media: isFree && hasMedia && draft.media ? { type: draft.media.type, name: draft.media.name, url: draft.media.url } : null,
     showSender,
     senderLabel: draft.sender ? (numbers?.find((n) => n.ref === draft.sender)?.displayNumber ?? draft.sender) : null,
     whenLabel: isScheduled ? new Date(draft.scheduledAt).toLocaleString('pt-BR') : 'Agora',
@@ -112,13 +117,17 @@ export function CampaignWizard({ campaignId }: CampaignWizardProps) {
     : (selectedTemplate?.name ?? 'Template')
 
   const handleSave = async (send: boolean) => {
-    const input = buildCampaignInput(draft, { showSender, templateVariables: variables })
+    const built = buildCampaignInput(draft, { showSender, templateVariables: variables })
+    const input = isNonOfficial ? built : { ...built, media_url: null, media_type: null, media_name: null, media_path: null }
     try {
       let id = campaignId
       if (campaignId) {
         // Agendada já tem fila: cancela e volta a rascunho antes de regravar.
         if (existing?.status === 'scheduled') await resetCampaign.mutateAsync(campaignId)
         await updateCampaign.mutateAsync({ id: campaignId, input: send ? input : { ...input, scheduled_at: null } })
+        // Anexo trocado/removido: o arquivo antigo sai do storage.
+        const oldPath = existing?.media_path
+        if (oldPath && !existing?.media_purged_at && oldPath !== input.media_path) removeCampaignMedia(oldPath).catch(() => {})
       } else {
         id = (await createCampaign.mutateAsync(input)).id
       }
@@ -149,6 +158,15 @@ export function CampaignWizard({ campaignId }: CampaignWizardProps) {
             templateBody={templateBody}
             templateVariables={variables}
             templateNotApproved={templateNotApproved}
+            mediaSlot={isNonOfficial && (
+              <CampaignMediaInput
+                value={draft.media}
+                onChange={(media) => patch({ media })}
+                savedPath={existing?.media_path ?? null}
+                expired={draft.mediaExpired}
+                hasText={hasText}
+              />
+            )}
           />
         )}
         {step === 3 && (

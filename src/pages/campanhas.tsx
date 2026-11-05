@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { Megaphone, Plus, AlertCircle } from 'lucide-react'
+import { Megaphone, Plus, AlertCircle, Paperclip } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth.store'
 import { useCampaigns } from '@/hooks/use-campaigns'
@@ -102,7 +102,12 @@ export default function CampanhasPage() {
                   className="cursor-pointer border-b last:border-0 hover:bg-muted/30"
                 >
                   <td className="px-4 py-3 font-medium">{c.name}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{c.template?.name ?? 'Texto livre'}</td>
+                  <td className="px-4 py-3 text-muted-foreground">
+                    <span className="inline-flex items-center gap-1.5">
+                      {c.template?.name ?? 'Texto livre'}
+                      {c.media_path && <Paperclip className="h-3.5 w-3.5" aria-label="Com anexo" />}
+                    </span>
+                  </td>
                   <td className="px-4 py-3"><StatusBadge status={c.status} /></td>
                   <td className="px-4 py-3 text-right tabular-nums">
                     {c.sent_count} / {c.total_recipients}
