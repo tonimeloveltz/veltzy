@@ -2,7 +2,7 @@
 
 Trilha: G
 Início: 2026-11-05 10:28
-Merge: (preencher no merge)
+Merge: 2026-11-05 15:05
 
 PRD: `specs/campanhas-layout-midia/PRD.md`
 
