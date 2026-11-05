@@ -20,7 +20,6 @@ import { MessageStep } from '@/components/campanhas/message-step'
 import { SettingsStep } from '@/components/campanhas/settings-step'
 import { ReviewStep } from '@/components/campanhas/review-step'
 import { CampaignSummaryPanel, type CampaignSummary } from '@/components/campanhas/campaign-summary-panel'
-import { CampaignMediaInput } from '@/components/campanhas/campaign-media-input'
 import { removeCampaignMedia } from '@/services/campaigns.service'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -104,9 +103,11 @@ export function CampaignWizard({ campaignId }: CampaignWizardProps) {
     name: draft.name,
     audienceCount,
     audienceLoading: countLoading,
-    previewText: isFree ? draft.messageBody : templateBody,
-    versions: isFree && draft.variants.length ? draft.variants.length + 1 : 0,
-    media: isFree && hasMedia && draft.media ? { type: draft.media.type, name: draft.media.name, url: draft.media.url } : null,
+    previewTexts: isFree ? [draft.messageBody, ...draft.variants.map((v) => v.text)] : [templateBody],
+    previewMapping: isFree ? null : draft.varMapping,
+    media: isFree && hasMedia && draft.media
+      ? { type: draft.media.type, name: draft.media.name, url: draft.media.url, size: draft.media.size }
+      : null,
     showSender,
     senderLabel: draft.sender ? (numbers?.find((n) => n.ref === draft.sender)?.displayNumber ?? draft.sender) : null,
     whenLabel: isScheduled ? new Date(draft.scheduledAt).toLocaleString('pt-BR') : 'Agora',
@@ -158,15 +159,12 @@ export function CampaignWizard({ campaignId }: CampaignWizardProps) {
             templateBody={templateBody}
             templateVariables={variables}
             templateNotApproved={templateNotApproved}
-            mediaSlot={isNonOfficial && (
-              <CampaignMediaInput
-                value={draft.media}
-                onChange={(media) => patch({ media })}
-                savedPath={existing?.media_path ?? null}
-                expired={draft.mediaExpired}
-                hasText={hasText}
-              />
-            )}
+            media={isNonOfficial ? {
+              value: draft.media,
+              onChange: (media) => patch({ media }),
+              savedPath: existing?.media_path ?? null,
+              expired: draft.mediaExpired,
+            } : undefined}
           />
         )}
         {step === 3 && (

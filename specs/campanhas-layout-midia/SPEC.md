@@ -48,7 +48,14 @@ src/components/campanhas/settings-step.tsx
 src/components/campanhas/review-step.tsx
 src/components/campanhas/template-message-fields.tsx
 src/components/campanhas/campaign-summary-panel.tsx
-src/components/campanhas/campaign-media-input.tsx
+src/components/campanhas/campaign-composer.tsx
+src/components/campanhas/campaign-attach-menu.tsx
+src/components/campanhas/campaign-phone-preview.tsx
+src/components/inbox/audio-recorder.tsx
+src/components/inbox/audio-bubble.tsx
+src/components/inbox/message-bubble.tsx
+src/lib/campaign-preview.ts
+src/lib/campaign-preview.test.ts
 src/components/campanhas/campaign-row-actions.tsx
 src/hooks/use-campaigns.ts
 src/services/campaigns.service.ts
@@ -152,3 +159,10 @@ interface CampaignMediaFields {
 - Expurgo: pré-filtro no banco por `created_at < now() - 30 dias` (condição necessária nos dois casos), lote de até 200 candidatos, regra fina em `isPurgeDue` (testada em `campaign-media-purge.test.ts`). Falha no expurgo não derruba os passos (1) a (3) do cron.
 - Erros 422 do `blast-dispatch` viram mensagem de negócio no toast (`media_expired` → "O anexo expirou. Anexe de novo.").
 - `anti-ban-settings.tsx` e `sender-number-select.tsx` saem do bloco de arquivos: não tinham cor fixa (item 9), nada a mudar.
+- B4 (compositor e prévia WhatsApp): `campaign-media-input.tsx` vira `campaign-composer.tsx` (barra com clipe, texto, microfone, chip do anexo, chips de variáveis) + `campaign-attach-menu.tsx` (popover com 3 origens; um input de arquivo só, `accept` trocado por opção).
+- B4: `AudioRecorder` do inbox ganha `onSend(file)` opcional (e `leadId` opcional); sem `onSend` o fluxo do inbox fica igual. A gravação vira `audio-<ts>.webm` e sobe pelo mesmo `uploadCampaignMedia` (path de campanha, `media_type` audio).
+- B4: gravar ou anexar com anexo já escolhido troca o anexo (o anterior é descartado pela regra de sempre).
+- B4: `AudioBubble` ganha `hideTranscription` (a prévia não mostra "Transcrição indisponível"); `MediaImage`/`MediaVideo` exportados do `message-bubble` e `MediaVideo` aceita `maxWidth`.
+- B4: prévia resolve variáveis com o mesmo mapa do `blast-render.ts` (variável desconhecida some, como no envio); template usa `variable_mapping` com o mesmo contato de exemplo. Lógica pura em `campaign-preview.ts`, testada.
+- B4: tamanho do documento na prévia só quando o arquivo foi escolhido nesta sessão (`CampaignMedia.size`, não gravado); na edição mostra só o tipo.
+- B4: moldura do celular `border-foreground/80` e padrão de pontos via `radial-gradient` com `hsl(var(--border))` (token, sem imagem). O resumo mostra a prévia também no bloco compacto do mobile; o nome da campanha segue só no desktop.
