@@ -174,7 +174,7 @@ export function CampaignWizard({ campaignId }: CampaignWizardProps) {
           <ReviewStep summary={summary} messageLabel={messageLabel} senderForce={draft.senderForce} isNonOfficial={isNonOfficial} />
         )}
 
-        <CampaignSummaryPanel summary={summary} compact className="lg:hidden" />
+        <CampaignSummaryPanel summary={summary} compact showPreview={step > 1} className="lg:hidden" />
 
         <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-4">
           <Button variant="ghost" onClick={() => (step === 1 ? navigate('/campanhas') : setStep(step - 1))} disabled={busy}>
@@ -199,7 +199,7 @@ export function CampaignWizard({ campaignId }: CampaignWizardProps) {
       </div>
 
       <aside className="hidden lg:block">
-        <CampaignSummaryPanel summary={summary} className="lg:sticky lg:top-6" />
+        <CampaignSummaryPanel summary={summary} showPreview={step > 1} className="lg:sticky lg:top-6" />
       </aside>
     </div>
   )
