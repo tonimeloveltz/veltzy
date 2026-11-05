@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { CheckCheck, FileText } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { documentMeta, renderPreviewSegments, SAMPLE_LEAD } from '@/lib/campaign-preview'
+import { documentMeta, parseWhatsAppFormatting, renderPreviewText, SAMPLE_LEAD } from '@/lib/campaign-preview'
 import { AudioBubble } from '@/components/inbox/audio-bubble'
 import { MediaImage, MediaVideo } from '@/components/inbox/message-bubble'
 
@@ -56,10 +56,11 @@ const Bubble = ({ children, caption, time }: { children?: ReactNode; caption?: R
   </div>
 )
 
+// Variáveis já trocadas pelo contato de exemplo; formatação do WhatsApp aplicada.
 const captionOf = (text: string, mapping: Record<string, string> | null): ReactNode =>
-  renderPreviewSegments(text, mapping).map((s, i) =>
-    <span key={i} className={s.isVar ? 'font-medium' : undefined}>{s.text}</span>,
-  )
+  parseWhatsAppFormatting(renderPreviewText(text, mapping)).map((r, i) => (
+    <span key={i} className={cn(r.bold && 'font-semibold', r.italic && 'italic', r.strike && 'line-through')}>{r.text}</span>
+  ))
 
 const DocumentCard = ({ media }: { media: PreviewMedia }) => (
   <div className="flex items-center gap-2 rounded-lg bg-background/20 px-2 py-2">
@@ -123,21 +124,16 @@ export function CampaignPhonePreview({ texts, mapping, media, compact = false, c
           <div className="mt-auto space-y-1.5">
             {isEmpty && <p className="pb-24 text-center text-xs text-muted-foreground">A prévia aparece aqui.</p>}
 
-            {/* Áudio não leva legenda: o texto vai antes, em outra mensagem. */}
-            {media?.type === 'audio' ? (
-              <>
-                {caption && <Bubble time={time} caption={caption} />}
-                <Bubble time={time}><AudioBubble fileUrl={media.url} transcription={null} hideTranscription /></Bubble>
-              </>
-            ) : media ? (
-              <Bubble time={time} caption={caption}>
+            {/* Anexo sempre em mensagem própria, depois do texto (sem legenda). */}
+            {caption && <Bubble time={time} caption={caption} />}
+            {media && (
+              <Bubble time={time}>
                 {media.type === 'image' && <MediaImage src={media.url} alt={media.name} maxWidth="max-w-full" />}
                 {media.type === 'video' && <MediaVideo src={media.url} maxWidth="max-w-full" />}
                 {media.type === 'document' && <DocumentCard media={media} />}
+                {media.type === 'audio' && <AudioBubble fileUrl={media.url} transcription={null} hideTranscription />}
               </Bubble>
-            ) : caption ? (
-              <Bubble time={time} caption={caption} />
-            ) : null}
+            )}
           </div>
         </div>
       </div>

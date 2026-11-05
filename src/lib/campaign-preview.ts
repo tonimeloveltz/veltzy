@@ -28,12 +28,6 @@ export const FREE_VARIABLES = [
   { key: 'empresa', label: 'Empresa' },
 ] as const
 
-export interface PreviewSegment {
-  text: string
-  /** Trecho que veio de variável (destacado na bolha). */
-  isVar: boolean
-}
-
 const VAR_RE = /\{\{\s*([a-zA-Z_0-9]+)\s*\}\}/g
 
 const resolve = (name: string, mapping: Record<string, string> | null): string => {
@@ -45,19 +39,50 @@ const resolve = (name: string, mapping: Record<string, string> | null): string =
   return field ? SAMPLE_LEAD[field] : ''
 }
 
-/** Texto com as variáveis trocadas pelo contato de exemplo, em segmentos. */
-export const renderPreviewSegments = (text: string, mapping: Record<string, string> | null = null): PreviewSegment[] => {
-  const out: PreviewSegment[] = []
-  let last = 0
-  for (const m of text.matchAll(VAR_RE)) {
-    const at = m.index ?? 0
-    if (at > last) out.push({ text: text.slice(last, at), isVar: false })
-    const value = resolve(m[1], mapping)
-    if (value) out.push({ text: value, isVar: true })
-    last = at + m[0].length
+/** Texto com as variáveis trocadas pelo contato de exemplo (desconhecida some, como no envio). */
+export const renderPreviewText = (text: string, mapping: Record<string, string> | null = null): string =>
+  text.replace(VAR_RE, (_m, name: string) => resolve(name, mapping))
+
+export interface FormattedRun {
+  text: string
+  bold: boolean
+  italic: boolean
+  strike: boolean
+}
+
+type Style = Omit<FormattedRun, 'text'>
+const MARKERS: { char: string; style: keyof Style }[] = [
+  { char: '*', style: 'bold' },
+  { char: '_', style: 'italic' },
+  { char: '~', style: 'strike' },
+]
+
+// Marcador colado no texto, sem espaço por dentro, sem letra/número por fora e sem o
+// próprio marcador dobrado (por isso `**x**` fica literal, como no WhatsApp). Uma linha só.
+const markerRe = (c: string) => {
+  const m = c === '*' ? '\\*' : c // no modo /u, só o * pode (e precisa) ser escapado
+  return new RegExp(`(^|[^\\p{L}\\p{N}${m}])${m}(?![\\s${m}])([^\\n${m}]*?[^\\s${m}])${m}(?![\\p{L}\\p{N}${m}])`, 'u')
+}
+const MARKER_RES = MARKERS.map((mk) => ({ ...mk, re: markerRe(mk.char) }))
+
+/** Formatação do WhatsApp: *negrito*, _itálico_, ~tachado~ (aninháveis). */
+export const parseWhatsAppFormatting = (
+  text: string,
+  style: Style = { bold: false, italic: false, strike: false },
+): FormattedRun[] => {
+  let best: { index: number; inner: string; length: number; style: keyof Style } | null = null
+  for (const mk of MARKER_RES) {
+    const m = mk.re.exec(text)
+    if (!m) continue
+    const index = m.index + m[1].length
+    if (!best || index < best.index) best = { index, inner: m[2], length: m[0].length - m[1].length, style: mk.style }
   }
-  if (last < text.length) out.push({ text: text.slice(last), isVar: false })
-  return out
+  if (!best) return text ? [{ text, ...style }] : []
+  return [
+    ...(best.index > 0 ? [{ text: text.slice(0, best.index), ...style }] : []),
+    ...parseWhatsAppFormatting(best.inner, { ...style, [best.style]: true }),
+    ...parseWhatsAppFormatting(text.slice(best.index + best.length), style),
+  ]
 }
 
 /** "PDF · 1,2 MB" (tamanho só quando conhecido). */
