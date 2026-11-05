@@ -8,8 +8,11 @@ import { useAuthStore } from '@/stores/auth.store'
 import { supabase } from '@/lib/supabase'
 
 interface AudioRecorderProps {
-  leadId: string
+  /** Inbox: sobe a gravação na pasta do lead e envia como mensagem. */
+  leadId?: string
   onRecordingChange: (recording: boolean) => void
+  /** Destino alternativo da gravação (ex.: anexo de campanha). Substitui o envio ao lead. */
+  onSend?: (file: File) => Promise<void>
 }
 
 const MAX_DURATION = 5 * 60 // 5 minutos
@@ -21,7 +24,7 @@ const formatTime = (seconds: number) => {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
-const AudioRecorder = ({ leadId, onRecordingChange }: AudioRecorderProps) => {
+const AudioRecorder = ({ leadId, onRecordingChange, onSend }: AudioRecorderProps) => {
   const [isRecording, setIsRecording] = useState(false)
   const [duration, setDuration] = useState(0)
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null)
@@ -123,29 +126,35 @@ const AudioRecorder = ({ leadId, onRecordingChange }: AudioRecorderProps) => {
     onRecordingChange(false)
   }
 
+  const sendToLead = async (blob: Blob) => {
+    if (!companyId || !leadId) throw new Error('Conversa indisponivel')
+    const path = `${companyId}/${leadId}/audio-${Date.now()}.webm`
+    const { error: uploadError } = await supabase.storage
+      .from('chat-attachments')
+      .upload(path, blob)
+    if (uploadError) throw uploadError
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('chat-attachments')
+      .getPublicUrl(path)
+
+    await sendMessage.mutateAsync({
+      leadId,
+      content: '',
+      messageType: 'audio',
+      fileUrl: publicUrl,
+      fileName: `audio-${Date.now()}.webm`,
+      mimeType: 'audio/webm',
+    })
+  }
+
   const handleSend = async () => {
-    if (!audioBlob || !companyId) return
+    if (!audioBlob) return
 
     setUploading(true)
     try {
-      const path = `${companyId}/${leadId}/audio-${Date.now()}.webm`
-      const { error: uploadError } = await supabase.storage
-        .from('chat-attachments')
-        .upload(path, audioBlob)
-      if (uploadError) throw uploadError
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('chat-attachments')
-        .getPublicUrl(path)
-
-      await sendMessage.mutateAsync({
-        leadId,
-        content: '',
-        messageType: 'audio',
-        fileUrl: publicUrl,
-        fileName: `audio-${Date.now()}.webm`,
-        mimeType: 'audio/webm',
-      })
+      if (onSend) await onSend(new File([audioBlob], `audio-${Date.now()}.webm`, { type: 'audio/webm' }))
+      else await sendToLead(audioBlob)
 
       setAudioBlob(null)
       if (audioUrl) {

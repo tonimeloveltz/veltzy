@@ -60,6 +60,8 @@ export interface AntiBanConfig extends ThrottleConfig {
   sender_force?: boolean
 }
 
+export type CampaignMediaType = 'image' | 'audio' | 'video' | 'document'
+
 export interface BlastCampaign {
   id: string
   company_id: string
@@ -82,6 +84,19 @@ export interface BlastCampaign {
   queued_count: number
   sent_count: number
   failed_count: number
+  /** Follow-up pós-campanha (cadência). */
+  followup_cadence_id: string | null
+  followup_mode: 'none' | 'immediate' | 'no_reply'
+  followup_delay_days: number
+  /** Anexo da mensagem livre (só número não oficial). */
+  media_url: string | null
+  media_type: CampaignMediaType | null
+  /** Nome original, para exibir. */
+  media_name: string | null
+  /** <company_id>/campaigns/<uuid>/<nome-sanitizado> no bucket chat-attachments. */
+  media_path: string | null
+  /** Preenchido quando o expurgo apagou o arquivo (30 dias após terminar). */
+  media_purged_at: string | null
   created_by: string | null
   created_at: string
   updated_at: string
