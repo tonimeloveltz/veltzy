@@ -78,7 +78,7 @@ export function CampaignWizard({ campaignId }: CampaignWizardProps) {
   const scheduledInPast = draft.scheduledAt !== '' && new Date(draft.scheduledAt).getTime() <= Date.now()
   const isScheduled = draft.scheduledAt !== '' && !scheduledInPast
 
-  // Com anexo, o texto é opcional (vira legenda); versões continuam exigindo texto.
+  // Com anexo, o texto é opcional (vai antes, em mensagem própria); versões continuam exigindo texto.
   const hasText = draft.messageBody.trim() !== ''
   const hasMedia = isNonOfficial && !!draft.media
   const messageOk = draft.msgMode === 'free'
