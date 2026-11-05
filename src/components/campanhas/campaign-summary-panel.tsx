@@ -43,7 +43,7 @@ export function CampaignSummaryPanel({ summary: s, compact = false, className, s
         <p className="truncate text-base font-semibold">{s.name.trim() || 'Nova campanha'}</p>
       )}
 
-      {showPreview && <CampaignPhonePreview texts={s.previewTexts} mapping={s.previewMapping} media={s.media} />}
+      {showPreview && <CampaignPhonePreview texts={s.previewTexts} mapping={s.previewMapping} media={s.media} compact={compact} />}
 
       <div className={cn('space-y-1.5', showPreview && 'border-t pt-3')}>
         <div className="space-y-0.5 pb-1">
