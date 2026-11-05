@@ -62,6 +62,7 @@ supabase/functions/blast-dispatch/index.ts
 supabase/functions/blast-campaign-manage/index.ts
 supabase/functions/process-blast-followups/index.ts
 supabase/functions/_shared/campaign-media-purge.ts
+supabase/functions/_shared/campaign-media-purge.test.ts
 supabase/config.toml
 <!-- /arquivos -->
 
@@ -147,3 +148,8 @@ interface CampaignMediaFields {
 - `BlastCampaign` passa a tipar `followup_cadence_id/followup_mode/followup_delay_days` (já existiam no banco) para a edição carregar o follow-up.
 - Aviso de canal não oficial com `bg-muted/40` + `text-muted-foreground` + ícone `Info`: o design system não tem token de aviso.
 - Lista: contador de falhas passa de `text-red-600` para `text-destructive`; badges de status ficam como estão (fora do escopo).
+- Anexo enviado e descartado na mesma edição (Trocar/Remover) sai do storage na hora; o arquivo já salvo só sai depois que a edição grava. Upload abandonado sem salvar fica órfão (não está no banco; aceito).
+- Upload sem barra de porcentagem (o client do Storage não expõe progresso): botão com spinner "Enviando arquivo…".
+- `blast-dispatch`: anexo com `media_type` inválido ou sem `media_url` responde 422 `media_invalid` (defesa). `queued_count` passa a contar destinatários, não itens da fila (par texto+áudio gera 2 itens).
+- Expurgo: pré-filtro no banco por `created_at < now() - 30 dias` (condição necessária nos dois casos), lote de até 200 candidatos, regra fina em `isPurgeDue` (testada em `campaign-media-purge.test.ts`). Falha no expurgo não derruba os passos (1) a (3) do cron.
+- Erros 422 do `blast-dispatch` viram mensagem de negócio no toast (`media_expired` → "O anexo expirou. Anexe de novo.").

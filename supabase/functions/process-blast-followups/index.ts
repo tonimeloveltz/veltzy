@@ -1,13 +1,15 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { isCronAuthorized, cronUnauthorized } from '../_shared/cron-auth.ts'
 import { getCorsHeaders } from '../_shared/cors.ts'
+import { purgeCampaignMedia } from '../_shared/campaign-media-purge.ts'
 import { queueStatusToRecipient, isCampaignComplete, followupTargets, scheduledStartAt, type RecipientLite } from '../_shared/blast-followup.ts'
 
 // process-blast-followups (mkt-ativo Fase 2, cron): ADITIVO, NÃO toca o process-message-queue.
 // (1) reconcilia blast_recipients.status ← message_queue.status; (2) marca campanha 'completed'
 // quando todos os recipients terminam (inclui 'scheduled': o passo (1b) leva a 'running'
 // quando scheduled_at chega) (resolve o débito de acompanhamento da Fase 1);
-// (3) dispara follow-up (immediate | no_reply após delay) inscrevendo os leads na cadência.
+// (3) dispara follow-up (immediate | no_reply após delay) inscrevendo os leads na cadência;
+// (4) expurga o anexo de campanhas terminadas há 30+ dias (campanhas-layout-midia).
 
 const DAY_MS = 86_400_000
 
@@ -20,8 +22,9 @@ Deno.serve(async (req) => {
     const url = Deno.env.get('SUPABASE_URL')!
     const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const veltzy = createClient(url, key, { db: { schema: 'veltzy' } })
+    const storageClient = createClient(url, key)
     const now = new Date()
-    let reconciled = 0, completed = 0, followedUp = 0
+    let reconciled = 0, completed = 0, followedUp = 0, mediaPurged = 0
 
     // (1) RECONCILIAÇÃO: recipients ainda não-terminais que já têm item na fila.
     const { data: pend } = await veltzy
@@ -118,7 +121,14 @@ Deno.serve(async (req) => {
       await veltzy.from('blast_campaigns').update({ followup_done_at: now.toISOString() }).eq('id', c.id)
     }
 
-    return new Response(JSON.stringify({ reconciled, completed, followedUp }), {
+    // (4) EXPURGO do anexo: falha aqui não derruba os passos anteriores.
+    try {
+      mediaPurged = await purgeCampaignMedia(veltzy, storageClient, now)
+    } catch (err) {
+      console.error('[process-blast-followups] purge error:', err)
+    }
+
+    return new Response(JSON.stringify({ reconciled, completed, followedUp, mediaPurged }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (err) {

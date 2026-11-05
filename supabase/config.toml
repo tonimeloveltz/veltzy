@@ -466,6 +466,11 @@ verify_jwt = false
 [functions.blast-dispatch]
 verify_jwt = false
 
+# blast-campaign-manage (campanhas-layout-midia): reset/delete de campanha. Auth manual
+# igual ao blast-dispatch (getUser + papel admin/manager/super_admin).
+[functions.blast-campaign-manage]
+verify_jwt = false
+
 # prospect-classify (agente-grupos-whatsapp V1): edge interno, chamado pelo
 # prospect-process-windows (V4) com service_role. Sem caller de browser; valida
 # service_role no Bearer dentro da function, por isso verify_jwt=false.
