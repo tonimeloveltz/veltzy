@@ -1,7 +1,7 @@
-import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth.store'
 import { CampaignVariantsEditor } from '@/components/campanhas/campaign-variants-editor'
+import { CampaignComposer, type ComposerMediaProps } from '@/components/campanhas/campaign-composer'
 import { TemplateMessageFields } from '@/components/campanhas/template-message-fields'
 import { Label } from '@/components/ui/label'
 import { allVariantsReady } from '@/lib/campaign-variants'
@@ -16,8 +16,8 @@ interface MessageStepProps {
   templateBody: string
   templateVariables: string[]
   templateNotApproved: boolean
-  /** Slot do anexo (modo "Escrever agora", número não oficial). */
-  mediaSlot?: ReactNode
+  /** Anexo no compositor (modo "Escrever agora", número não oficial). */
+  media?: ComposerMediaProps
 }
 
 const modeButton = (on: boolean, disabled = false) => cn(
@@ -27,7 +27,7 @@ const modeButton = (on: boolean, disabled = false) => cn(
 )
 
 export function MessageStep({
-  draft, onChange, isCloudApi, templates, templateBody, templateVariables, templateNotApproved, mediaSlot,
+  draft, onChange, isCloudApi, templates, templateBody, templateVariables, templateNotApproved, media,
 }: MessageStepProps) {
   const aiEnabled = useAuthStore((s) => s.company?.features?.ai_msg_enabled) === true
   const { messageBody, variants } = draft
@@ -49,23 +49,14 @@ export function MessageStep({
       {draft.msgMode === 'free' && !isCloudApi && (
         <div className="space-y-1.5">
           <Label htmlFor="camp-body">Mensagem</Label>
-          <textarea
-            id="camp-body"
-            value={messageBody}
-            onChange={(e) => {
-              // Versões derivam do texto anterior: mudou a original, descarta.
-              onChange(variants.length
-                ? { messageBody: e.target.value, variants: [], variantsCleared: true }
-                : { messageBody: e.target.value })
-            }}
-            rows={6}
-            placeholder="Escreva a mensagem. Variáveis: {{nome}}, {{sobrenome}}, {{nome_completo}}, {{telefone}}, {{empresa}}"
-            className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          <CampaignComposer
+            body={messageBody}
+            // Versões derivam do texto anterior: mudou a original, descarta.
+            onBodyChange={(text) => onChange(variants.length
+              ? { messageBody: text, variants: [], variantsCleared: true }
+              : { messageBody: text })}
+            media={media}
           />
-          <p className="text-xs text-muted-foreground">
-            Variáveis: {'{{nome}}'} (primeiro nome) · {'{{sobrenome}}'} · {'{{nome_completo}}'} · {'{{telefone}}'} · {'{{empresa}}'}
-          </p>
-          {mediaSlot}
           {draft.variantsCleared && variants.length === 0 && (
             <p className="text-xs text-muted-foreground">A mensagem mudou, então as versões foram descartadas. Gere de novo se quiser.</p>
           )}

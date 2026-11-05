@@ -15,6 +15,8 @@ export interface CampaignMedia {
   /** Nome original, para exibir. */
   name: string
   path: string
+  /** Bytes, só quando o arquivo foi escolhido nesta sessão (não é gravado). */
+  size?: number
 }
 
 export interface CampaignDraft {

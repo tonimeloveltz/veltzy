@@ -4,8 +4,11 @@ import type { CampaignMediaType } from '@/types/database'
 
 export const MEDIA_BUCKET = 'chat-attachments'
 export const MEDIA_MAX_BYTES = 16 * 1024 * 1024
-export const MEDIA_ACCEPT =
-  'image/*,video/*,audio/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip'
+
+/** Opções do clipe do compositor. */
+export const MEDIA_ACCEPT_VISUAL = 'image/*,video/*'
+export const MEDIA_ACCEPT_DOCUMENT = 'application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip'
+export const MEDIA_ACCEPT_AUDIO = 'audio/*'
 
 export const mediaTypeFromMime = (mime: string): CampaignMediaType =>
   mime.startsWith('image/') ? 'image'

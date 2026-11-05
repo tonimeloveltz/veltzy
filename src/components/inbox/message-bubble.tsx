@@ -36,14 +36,14 @@ const MediaImage = ({ src, alt, maxWidth = 'max-w-[240px]' }: { src: string; alt
   )
 }
 
-const MediaVideo = ({ src }: { src: string }) => {
+const MediaVideo = ({ src, maxWidth = 'max-w-[280px]' }: { src: string; maxWidth?: string }) => {
   const [error, setError] = useState(false)
   if (error) return <MediaFallback label="Video indisponivel" />
   return (
     <video
       controls
       src={src}
-      className="max-w-[280px] rounded-lg"
+      className={`${maxWidth} rounded-lg`}
       onError={() => setError(true)}
     />
   )
@@ -185,4 +185,4 @@ const MessageBubble = ({ message, senderName }: MessageBubbleProps) => {
   )
 }
 
-export { MessageBubble }
+export { MessageBubble, MediaImage, MediaVideo }
