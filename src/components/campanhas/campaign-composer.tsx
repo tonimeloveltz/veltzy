@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { FileText, Music, Video, X } from 'lucide-react'
 import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth.store'
 import { removeCampaignMedia, uploadCampaignMedia } from '@/services/campaigns.service'
 import { MEDIA_MAX_BYTES, mediaTypeFromMime } from '@/lib/campaign-media'
@@ -24,7 +25,9 @@ interface CampaignComposerProps {
   media?: ComposerMediaProps
 }
 
-const MAX_TEXTAREA_PX = 240
+// 1 linha (20px + 24px de padding) a 8 linhas; acima disso, rolagem.
+const MIN_TEXTAREA_PX = 44
+const MAX_TEXTAREA_PX = 184
 
 const MediaChip = ({ media, onRemove, disabled }: { media: CampaignMedia; onRemove: () => void; disabled: boolean }) => {
   const Icon = media.type === 'video' ? Video : media.type === 'audio' ? Music : FileText
@@ -53,7 +56,7 @@ export function CampaignComposer({ body, onBodyChange, media }: CampaignComposer
     const el = textareaRef.current
     if (!el) return
     el.style.height = 'auto'
-    el.style.height = `${Math.min(el.scrollHeight, MAX_TEXTAREA_PX)}px`
+    el.style.height = `${Math.min(Math.max(el.scrollHeight, MIN_TEXTAREA_PX), MAX_TEXTAREA_PX)}px`
   }, [])
   useEffect(adjustHeight, [body, recording, adjustHeight])
 
@@ -98,12 +101,18 @@ export function CampaignComposer({ body, onBodyChange, media }: CampaignComposer
 
   return (
     <div className="space-y-2">
-      <div className="flex flex-col gap-2 rounded-2xl border bg-background p-2 shadow-sm focus-within:ring-1 focus-within:ring-ring">
+      <div className="flex flex-col gap-2 rounded-2xl border bg-background px-2 py-1 shadow-sm focus-within:ring-1 focus-within:ring-ring">
         {current && (
-          <MediaChip media={current} disabled={uploading} onRemove={() => { discard(current); media?.onChange(null) }} />
+          <div className="pt-1">
+            <MediaChip media={current} disabled={uploading} onRemove={() => { discard(current); media?.onChange(null) }} />
+          </div>
         )}
+        {/* Ícones em caixas da altura de 1 linha, presos à base: ficam no meio da primeira linha
+            e descem junto quando o texto cresce. */}
         <div className="flex items-end gap-1">
-          {media && !recording && <CampaignAttachMenu onFile={attach} uploading={uploading} />}
+          {media && !recording && (
+            <div className="flex h-11 shrink-0 items-center"><CampaignAttachMenu onFile={attach} uploading={uploading} /></div>
+          )}
           {!recording && (
             <textarea
               ref={textareaRef}
@@ -111,16 +120,15 @@ export function CampaignComposer({ body, onBodyChange, media }: CampaignComposer
               aria-label="Mensagem"
               value={body}
               onChange={(e) => onBodyChange(e.target.value)}
-              rows={3}
+              rows={1}
               placeholder={current ? 'Adicione uma legenda (opcional)' : 'Escreva a mensagem'}
-              className="min-h-[72px] flex-1 resize-none bg-transparent px-2 py-1.5 text-sm placeholder:text-muted-foreground focus-visible:outline-none"
+              className="focus-glow-none h-11 flex-1 resize-none overflow-y-auto border-0 bg-transparent px-2 py-3 text-sm leading-5 shadow-none outline-none placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
             />
           )}
           {media && (
-            <AudioRecorder
-              onRecordingChange={setRecording}
-              onSend={attach}
-            />
+            <div className={cn('flex h-11 items-center', recording ? 'flex-1' : 'shrink-0')}>
+              <AudioRecorder onRecordingChange={setRecording} onSend={attach} />
+            </div>
           )}
         </div>
       </div>

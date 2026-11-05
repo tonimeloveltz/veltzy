@@ -56,6 +56,7 @@ src/components/inbox/audio-bubble.tsx
 src/components/inbox/message-bubble.tsx
 src/lib/campaign-preview.ts
 src/lib/campaign-preview.test.ts
+src/styles/globals.css
 src/components/campanhas/campaign-row-actions.tsx
 src/hooks/use-campaigns.ts
 src/services/campaigns.service.ts
@@ -165,4 +166,7 @@ interface CampaignMediaFields {
 - B4: `AudioBubble` ganha `hideTranscription` (a prévia não mostra "Transcrição indisponível"); `MediaImage`/`MediaVideo` exportados do `message-bubble` e `MediaVideo` aceita `maxWidth`.
 - B4: prévia resolve variáveis com o mesmo mapa do `blast-render.ts` (variável desconhecida some, como no envio); template usa `variable_mapping` com o mesmo contato de exemplo. Lógica pura em `campaign-preview.ts`, testada.
 - B4: tamanho do documento na prévia só quando o arquivo foi escolhido nesta sessão (`CampaignMedia.size`, não gravado); na edição mostra só o tipo.
-- B4: moldura do celular `border-foreground/80` e padrão de pontos via `radial-gradient` com `hsl(var(--border))` (token, sem imagem). O resumo mostra a prévia também no bloco compacto do mobile; o nome da campanha segue só no desktop.
+- B4: ~~moldura do celular `border-foreground/80`~~ (trocada no B5) e padrão de pontos via `radial-gradient` com `hsl(var(--border))` (token, sem imagem). O resumo mostra a prévia também no bloco compacto do mobile; o nome da campanha segue só no desktop.
+- B5: resumo sem o celular no passo 1 (Destinatários), em desktop e no bloco compacto; prop `showPreview` (`step > 1`) no `CampaignSummaryPanel`. Sem o celular, a lista de público/quando perde a borda superior.
+- B5: borda quadrada dentro da barra do compositor vinha do glow global de foco (`textarea:focus-visible` com `box-shadow !important` em `globals.css`). Classe opt-out `focus-glow-none` no `globals.css`; foco fica só no contêiner (`focus-within:ring-1`). Textarea de 1 a 8 linhas (44 a 184 px) com rolagem acima; clipe e microfone em caixas de 44 px presas à base.
+- B5: prévia vira janela de chat limpa (`rounded-xl border shadow-sm`, sem moldura), altura fixa 480 px (360 px no compacto), header fixo e mensagens com rolagem interna ancoradas embaixo (`mt-auto` no conteúdo + scroll para o fim quando texto/anexo mudam; `justify-end` cortaria o topo ao rolar). Bolha `rounded-lg rounded-br-sm px-3 py-2 leading-snug`, URL longa quebra (`overflow-wrap:anywhere`), hora + ✓✓ flutuando na última linha do texto; variável em `font-medium`.

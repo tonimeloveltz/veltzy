@@ -242,6 +242,15 @@
       0 0 16px 0 hsl(var(--ring) / 0.04) !important;
   }
 
+  /* Campo dentro de um contêiner que já mostra o foco (ex.: compositor de campanha):
+     sem o glow próprio. Especificidade acima das regras globais e do .dark. */
+  .dark input.focus-glow-none:focus-visible,
+  .dark textarea.focus-glow-none:focus-visible,
+  input.focus-glow-none:focus-visible,
+  textarea.focus-glow-none:focus-visible {
+    box-shadow: none !important;
+  }
+
   /* Inputs */
   .input-clean {
     @apply bg-secondary/50 transition-all duration-200 ease-out;
