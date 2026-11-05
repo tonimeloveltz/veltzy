@@ -18,8 +18,8 @@ import { assignVariants, sameVariables } from '../_shared/campaign-variants.ts'
 // Fuso da company: o Veltzy opera em America/Sao_Paulo (CLAUDE.md). Sem coluna de
 // tz por empresa hoje; BRT como default. TODO: tz por-company quando existir.
 const BRT_OFFSET_MINUTES = -180
-// Áudio com texto: o áudio sai logo depois do texto.
-const AUDIO_AFTER_TEXT_MS = 3_000
+// Texto + anexo: o anexo sai em mensagem própria logo depois do texto.
+const MEDIA_AFTER_TEXT_MS = 3_000
 
 interface AuthResult {
   profileId: string
@@ -318,8 +318,8 @@ Deno.serve(async (req) => {
     // (process-message-queue) envia pelo provider da company. cloud_api = message_type='template'
     // + metadata (name/language/params resolvidos por-recipient); demais = texto renderizado. ----
     // metadata.campaign_id em todo item: blast-campaign-manage cancela por ele (inclui o
-    // item de texto do par áudio). Anexo: image/video/document = 1 item com legenda;
-    // audio = texto em scheduled_at + áudio 3s depois (WhatsApp não aceita legenda em áudio).
+    // item de texto do par). Anexo de qualquer tipo vai em mensagem separada, sem legenda:
+    // texto em scheduled_at + anexo 3s depois; sem texto, só o anexo.
     const variableMapping = (campaign.variable_mapping ?? {}) as Record<string, string>
     const campaignMeta = { campaign_id }
     const queueRows = audience.flatMap((lead: Record<string, unknown>, i: number) => {
@@ -353,13 +353,12 @@ Deno.serve(async (req) => {
         }]
       }
       if (!mediaType) return [{ ...base, message_type: 'text', metadata: campaignMeta }]
-      const mediaItem = { ...base, message_type: mediaType, file_url: campaign.media_url as string, metadata: campaignMeta }
-      if (mediaType !== 'audio') return [mediaItem]
-      if (!base.content.trim()) return [{ ...mediaItem, content: '' }]
-      const audioAt = new Date(new Date(base.scheduled_at).getTime() + AUDIO_AFTER_TEXT_MS).toISOString()
+      const mediaItem = { ...base, message_type: mediaType, file_url: campaign.media_url as string, content: '', metadata: campaignMeta }
+      if (!base.content.trim()) return [mediaItem]
+      const mediaAt = new Date(new Date(base.scheduled_at).getTime() + MEDIA_AFTER_TEXT_MS).toISOString()
       return [
         { ...base, message_type: 'text', metadata: campaignMeta },
-        { ...mediaItem, content: '', scheduled_at: audioAt },
+        { ...mediaItem, scheduled_at: mediaAt },
       ]
     })
     const { data: inserted, error: queueErr } = await veltzy
@@ -369,7 +368,7 @@ Deno.serve(async (req) => {
     if (queueErr) return jsonResponse({ error: `Falha ao enfileirar: ${queueErr.message}` }, corsHeaders, 500)
 
     // Liga cada recipient ao item da fila (fonte do status) e marca 'queued'. No par
-    // texto+áudio o recipient aponta para o áudio (último a sair).
+    // texto+anexo o recipient aponta para o anexo (último a sair).
     const queueIdByLead = new Map<string, string>()
     for (const item of inserted ?? []) {
       if (!queueIdByLead.has(item.lead_id) || item.message_type !== 'text') queueIdByLead.set(item.lead_id, item.id)

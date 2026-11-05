@@ -121,7 +121,7 @@ export function CampaignComposer({ body, onBodyChange, media }: CampaignComposer
               value={body}
               onChange={(e) => onBodyChange(e.target.value)}
               rows={1}
-              placeholder={current ? 'Adicione uma legenda (opcional)' : 'Escreva a mensagem'}
+              placeholder={current ? 'Escreva a mensagem (opcional)' : 'Escreva a mensagem'}
               className="focus-glow-none h-11 flex-1 resize-none overflow-y-auto border-0 bg-transparent px-2 py-3 text-sm leading-5 shadow-none outline-none placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
             />
           )}
@@ -149,10 +149,11 @@ export function CampaignComposer({ body, onBodyChange, media }: CampaignComposer
 
       {error && <p className="text-xs text-destructive">{error}</p>}
       {media?.expired && !current && <p className="text-xs text-destructive">O anexo expirou. Anexe de novo.</p>}
-      {current?.type === 'audio' && hasText && (
-        <p className="text-xs text-muted-foreground">O texto vai em uma mensagem e o áudio logo depois.</p>
+      {media && (
+        <p className="text-xs text-muted-foreground">
+          {current && hasText ? 'O anexo vai em uma mensagem logo depois do texto.' : 'Imagem, vídeo, áudio ou arquivo de até 16 MB.'}
+        </p>
       )}
-      {media && <p className="text-xs text-muted-foreground">Imagem, vídeo, áudio ou arquivo de até 16 MB.</p>}
     </div>
   )
 }
