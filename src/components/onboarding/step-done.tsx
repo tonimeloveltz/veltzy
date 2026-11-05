@@ -8,6 +8,7 @@ import { StepFooter } from './step-footer'
 
 interface StepDoneProps {
   imported: boolean
+  selfServe: boolean
   onFinish: (to: '/' | '/inbox') => void
   onBack: () => void
   disabled: boolean
@@ -34,7 +35,7 @@ const SummaryRow = ({ done, label, detail }: SummaryRowProps) => (
   </div>
 )
 
-export const StepDone = ({ imported, onFinish, onBack, disabled }: StepDoneProps) => {
+export const StepDone = ({ imported, selfServe, onFinish, onBack, disabled }: StepDoneProps) => {
   const { data: numbers } = useWhatsAppNumbers()
   const { data: invites } = useInvites()
   const connected = numbers?.find((n) => n.status === 'connected')
@@ -55,12 +56,14 @@ export const StepDone = ({ imported, onFinish, onBack, disabled }: StepDoneProps
           detail={connected?.displayNumber ?? (connected ? connected.providerLabel : 'Nenhum número conectado')}
         />
         <SummaryRow
-          done={pendingCount > 0}
+          done={pendingCount > 0 || selfServe}
           label="Equipe"
           detail={
             pendingCount > 0
               ? `${pendingCount} ${pendingCount === 1 ? 'convite enviado' : 'convites enviados'}`
-              : 'Pulada. Dá para convidar depois em Gestão.'
+              : selfServe
+                ? 'Você mesmo atende os leads. Dá para convidar depois em Gestão.'
+                : 'Pulada. Dá para convidar depois em Gestão.'
           }
         />
         <SummaryRow
@@ -72,7 +75,7 @@ export const StepDone = ({ imported, onFinish, onBack, disabled }: StepDoneProps
 
       <StepFooter onBack={onBack} disabled={disabled}>
         <Button variant="outline" size="lg" onClick={() => onFinish('/')} disabled={disabled}>
-          Ir para o painel
+          Ir para o Dashboard
         </Button>
         <Button size="lg" onClick={() => onFinish('/inbox')} disabled={disabled}>
           Abrir o Inbox
