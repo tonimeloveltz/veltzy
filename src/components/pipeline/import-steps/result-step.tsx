@@ -2,6 +2,7 @@ import { CheckCircle2, AlertTriangle, XCircle, Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { ImportBatchResult } from '@/services/import-leads.service'
 import { cn } from '@/lib/utils'
+import { UpdateExistingLeads } from '@/components/pipeline/import-steps/update-existing-leads'
 
 interface ResultStepProps {
   result: ImportBatchResult
@@ -42,7 +43,7 @@ const ResultStep = ({ result, onClose }: ResultStepProps) => {
   const problemRows = result.results.filter((r) => r.status !== 'success')
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 overflow-y-auto min-h-0">
       <p className="text-sm font-medium">Resultado da importacao</p>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -50,6 +51,10 @@ const ResultStep = ({ result, onClose }: ResultStepProps) => {
         <StatCard icon={AlertTriangle} label="Pulados" value={result.skipped} color="text-amber-600" />
         <StatCard icon={XCircle} label="Erros" value={result.errors} color="text-destructive" />
       </div>
+
+      {result.updateSuggestions.length > 0 && (
+        <UpdateExistingLeads suggestions={result.updateSuggestions} />
+      )}
 
       {problemRows.length > 0 && (
         <div className="space-y-2">

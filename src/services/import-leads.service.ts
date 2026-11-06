@@ -3,6 +3,11 @@ import type { LeadTemperature, PipelineStage, LeadSourceRecord, Pipeline, Profil
 import type { LeadField } from '@/lib/csv-parser'
 import { normalizePhoneBR } from '@/lib/phone'
 import { resolveWhatsAppInstance } from '@/services/leads.service'
+import {
+  buildLeadUpdateSuggestion,
+  type ExistingLead,
+  type LeadUpdateSuggestion,
+} from '@/lib/import-lead-updates'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -33,6 +38,13 @@ export interface ImportBatchResult {
   inserted: number
   skipped: number
   errors: number
+  /** Leads já cadastrados que a planilha pode completar (nome/email vazios no CRM). */
+  updateSuggestions: LeadUpdateSuggestion[]
+}
+
+export interface ApplyUpdatesResult {
+  updated: number
+  failed: number
 }
 
 export interface Lookups {
@@ -184,13 +196,41 @@ const translateDbError = (message: string): string => {
 
 const BATCH_SIZE = 50
 
-export const checkDuplicates = async (companyId: string, phones: string[]): Promise<Set<string>> => {
+export const checkDuplicates = async (companyId: string, phones: string[]): Promise<Map<string, ExistingLead>> => {
   const { data } = await veltzy()
     .from('leads')
-    .select('phone')
+    .select('id, phone, name, email')
     .eq('company_id', companyId)
     .in('phone', phones)
-  return new Set((data ?? []).map((d: { phone: string }) => d.phone))
+  const map = new Map<string, ExistingLead>()
+  for (const d of (data ?? []) as (ExistingLead & { phone: string })[]) {
+    if (!map.has(d.phone)) map.set(d.phone, { id: d.id, name: d.name, email: d.email })
+  }
+  return map
+}
+
+/** Completa os leads escolhidos, um update por lead, só nos campos sugeridos. */
+export const applyLeadUpdates = async (
+  companyId: string,
+  suggestions: LeadUpdateSuggestion[],
+): Promise<ApplyUpdatesResult> => {
+  let updated = 0
+  let failed = 0
+  for (const s of suggestions) {
+    const { data, error } = await veltzy()
+      .from('leads')
+      .update(s.fields)
+      .eq('company_id', companyId)
+      .eq('id', s.leadId)
+      .select('id')
+    if (error || !data?.length) {
+      if (error) console.error('[import-leads] Falha ao completar lead:', error.message)
+      failed++
+    } else {
+      updated++
+    }
+  }
+  return { updated, failed }
 }
 
 // Status do deal espelhando o estagio do lead importado (consistente com o
@@ -251,6 +291,8 @@ export const importLeads = async (
   let skipped = 0
   let errors = 0
   const nowIso = new Date().toISOString()
+  const updateSuggestions: LeadUpdateSuggestion[] = []
+  const suggestedLeadIds = new Set<string>()
 
   for (let i = 0; i < rows.length; i += BATCH_SIZE) {
     const batch = rows.slice(i, i + BATCH_SIZE)
@@ -282,8 +324,21 @@ export const importLeads = async (
     const toInsert: ImportableRow[] = []
     const toInsertIndices: number[] = []
     validRows.forEach((row, idx) => {
-      if (existing.has(row.phone)) {
-        allResults.push({ rowIndex: validIndices[idx], status: 'skipped', reason: 'Telefone já cadastrado' })
+      const existingLead = existing.get(row.phone)
+      if (existingLead) {
+        // Telefone repetido na planilha: vale a primeira linha com dado.
+        const suggestion = suggestedLeadIds.has(existingLead.id)
+          ? null
+          : buildLeadUpdateSuggestion(existingLead, row, validIndices[idx], row.phone)
+        if (suggestion) {
+          updateSuggestions.push(suggestion)
+          suggestedLeadIds.add(existingLead.id)
+        }
+        allResults.push({
+          rowIndex: validIndices[idx],
+          status: 'skipped',
+          reason: suggestion ? 'Telefone já cadastrado, dá para completar os dados' : 'Telefone já cadastrado',
+        })
         skipped++
       } else {
         toInsert.push(row)
@@ -369,5 +424,5 @@ export const importLeads = async (
   }
 
   allResults.sort((a, b) => a.rowIndex - b.rowIndex)
-  return { results: allResults, inserted, skipped, errors }
+  return { results: allResults, inserted, skipped, errors, updateSuggestions }
 }
