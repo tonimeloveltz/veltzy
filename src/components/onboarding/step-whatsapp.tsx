@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { AlertTriangle, Check, Loader2, QrCode } from 'lucide-react'
+import { AlertTriangle, Check, Loader2, Mail, QrCode } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ConnectNumberDialog } from '@/components/admin/connect-number-dialog'
 import { useWhatsAppNumbers } from '@/hooks/use-whatsapp-numbers'
@@ -18,6 +18,7 @@ interface StepWhatsappProps {
 }
 
 const EYEBROW = 'Passo 2 de 5 · Essencial'
+const SUPPORT_EMAIL = 'workveltzgroup@gmail.com'
 
 export const StepWhatsapp = ({ onContinue, onBack, onSkip, disabled }: StepWhatsappProps) => {
   const activeProvider = useAuthStore((s) => s.company?.active_whatsapp_provider)
@@ -92,6 +93,17 @@ export const StepWhatsapp = ({ onContinue, onBack, onSkip, disabled }: StepWhats
           </div>
         </section>
       )}
+
+      <p className="mt-6 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+        <Mail className="h-4 w-4 shrink-0" aria-hidden="true" />
+        Precisa de ajuda com a conexão? Escreva para
+        <a
+          href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Ajuda para conectar o WhatsApp no Veltzy')}`}
+          className="font-semibold text-primary underline-offset-4 hover:underline"
+        >
+          {SUPPORT_EMAIL}
+        </a>
+      </p>
 
       <StepFooter onBack={onBack} disabled={disabled}>
         {!categoriesLoading && !qrProvider && (

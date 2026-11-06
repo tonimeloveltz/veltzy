@@ -19,6 +19,8 @@ export const OnboardingWizard = () => {
   const [step, setStep] = useState<Step>(0)
   // Estado de UI: so troca o rotulo do rodape da planilha e o resumo final.
   const [imported, setImported] = useState(false)
+  // "Serei eu mesmo": so UI. O admin ja recebe os leads pelo fallback da distribuicao.
+  const [selfServe, setSelfServe] = useState(false)
 
   const next = () => setStep((s) => Math.min(s + 1, 4) as Step)
   const back = () => setStep((s) => Math.max(s - 1, 0) as Step)
@@ -39,11 +41,13 @@ export const OnboardingWizard = () => {
       <main className="mx-auto w-full max-w-[760px] px-4 pb-12 pt-10 sm:px-6 sm:pt-14">
         {step === 0 && <StepWelcome userName={profileName} companyName={companyName} onStart={next} />}
         {step === 1 && <StepWhatsapp onContinue={next} onBack={back} onSkip={skip} disabled={mark.isPending} />}
-        {step === 2 && <StepTeam onNext={next} onBack={back} />}
+        {step === 2 && (
+          <StepTeam selfServe={selfServe} onSelfServeChange={setSelfServe} onNext={next} onBack={back} />
+        )}
         {step === 3 && (
           <StepImport imported={imported} onImported={() => setImported(true)} onNext={next} onBack={back} />
         )}
-        {step === 4 && <StepDone imported={imported} onFinish={finish} onBack={back} disabled={mark.isPending} />}
+        {step === 4 && <StepDone imported={imported} selfServe={selfServe} onFinish={finish} onBack={back} disabled={mark.isPending} />}
       </main>
     </div>
   )

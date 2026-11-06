@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { UserPlus } from 'lucide-react'
+import { Check, UserPlus, UserRound } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { InviteMemberModal } from '@/components/sellers/invite-member-modal'
 import { useInvites } from '@/hooks/use-team'
@@ -8,6 +8,8 @@ import { StepHeading } from './step-heading'
 import { StepFooter } from './step-footer'
 
 interface StepTeamProps {
+  selfServe: boolean
+  onSelfServeChange: (value: boolean) => void
   onNext: () => void
   onBack: () => void
 }
@@ -18,7 +20,7 @@ const ROLE_LABEL: Partial<Record<AppRole, string>> = {
   admin: 'Admin',
 }
 
-export const StepTeam = ({ onNext, onBack }: StepTeamProps) => {
+export const StepTeam = ({ selfServe, onSelfServeChange, onNext, onBack }: StepTeamProps) => {
   const [modalOpen, setModalOpen] = useState(false)
   const { data: invites } = useInvites()
   const pending = (invites ?? []).filter((i) => i.status === 'pending')
@@ -32,10 +34,28 @@ export const StepTeam = ({ onNext, onBack }: StepTeamProps) => {
       />
 
       <section className="mt-8 rounded-xl border bg-card p-6">
-        <Button size="lg" onClick={() => setModalOpen(true)}>
-          <UserPlus className="mr-2 h-4 w-4" />
-          Convidar pessoa
-        </Button>
+        <div className="flex flex-wrap gap-2.5">
+          <Button size="lg" onClick={() => setModalOpen(true)}>
+            <UserPlus className="mr-2 h-4 w-4" />
+            Convidar pessoa
+          </Button>
+          <Button
+            variant="outline"
+            size="lg"
+            aria-pressed={selfServe}
+            onClick={() => onSelfServeChange(!selfServe)}
+            className={selfServe ? 'border-primary bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary' : undefined}
+          >
+            {selfServe ? <Check className="mr-2 h-4 w-4" /> : <UserRound className="mr-2 h-4 w-4" />}
+            Eu mesmo atenderei os leads
+          </Button>
+        </div>
+
+        {selfServe && (
+          <p className="mt-3.5 text-sm leading-relaxed">
+            Os leads ficam com você. Quando a equipe crescer, é só convidar por aqui ou em Gestão.
+          </p>
+        )}
 
         {pending.length > 0 && (
           <ul className="mt-5 border-t">
@@ -60,7 +80,7 @@ export const StepTeam = ({ onNext, onBack }: StepTeamProps) => {
       <InviteMemberModal open={modalOpen} onClose={() => setModalOpen(false)} />
 
       <StepFooter onBack={onBack}>
-        {pending.length > 0 ? (
+        {pending.length > 0 || selfServe ? (
           <Button size="lg" onClick={onNext}>Continuar</Button>
         ) : (
           <Button variant="outline" size="lg" onClick={onNext}>Pular esta etapa</Button>
