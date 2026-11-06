@@ -5,12 +5,20 @@ import { timeAgo } from '@/lib/time'
 import { leadDisplayName } from '@/lib/phone'
 import { DeleteConversationButton } from '@/components/inbox/delete-conversation-button'
 import { useRoles } from '@/hooks/use-roles'
+import { Checkbox } from '@/components/ui/checkbox'
 import type { LeadWithLastMessage } from '@/types/database'
 
 interface ConversationItemProps {
   lead: LeadWithLastMessage
   isSelected: boolean
   onClick: () => void
+  /** Selecao em massa (admin/manager). Ausente = linha sem checkbox. */
+  selection?: {
+    checked: boolean
+    /** Ha alguma conversa selecionada: checkbox fixo e clique na linha marca/desmarca. */
+    active: boolean
+    onToggle: () => void
+  }
 }
 
 const statusDot: Record<string, string> = {
@@ -52,7 +60,7 @@ const getWaitingMinutes = (lead: LeadWithLastMessage): number | null => {
   return Math.round(diff / 60000)
 }
 
-const ConversationItem = ({ lead, isSelected, onClick }: ConversationItemProps) => {
+const ConversationItem = ({ lead, isSelected, onClick, selection }: ConversationItemProps) => {
   const avatarSrc = lead.avatar_url || undefined
   const lastTime = lead.last_message?.created_at ?? lead.updated_at
   const waitingMinutes = getWaitingMinutes(lead)
@@ -63,10 +71,12 @@ const ConversationItem = ({ lead, isSelected, onClick }: ConversationItemProps) 
   return (
     <div className="relative group">
       <button
-        onClick={onClick}
+        onClick={selection?.active ? selection.onToggle : onClick}
         className={cn(
           'flex w-full items-start gap-3 px-3 py-3 text-left transition-smooth border-l-4',
-          isSelected
+          selection?.checked
+            ? 'bg-primary/5 border-l-primary/40'
+            : isSelected
             ? 'bg-primary/10 border-l-primary'
             : lead.sla_breached
               ? 'border-l-destructive bg-destructive/5 hover:bg-destructive/10'
@@ -122,6 +132,27 @@ const ConversationItem = ({ lead, isSelected, onClick }: ConversationItemProps) 
           <span className="mt-[18px] h-5 w-5 shrink-0" aria-hidden />
         ) : null}
       </button>
+
+      {/* Checkbox por cima do avatar (16px = borda de 4 + px-3; 12px = py-3),
+          IRMAO do botao da linha pelo mesmo motivo do "x": checkbox do Radix e
+          um <button>, e dentro da linha o clique tambem abriria a conversa.
+          Aparece no hover; com selecao ativa fica fixo em todas as linhas. */}
+      {selection && (
+        <div
+          className={cn(
+            'absolute left-4 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-background/90 transition-opacity',
+            selection.active || selection.checked
+              ? 'opacity-100'
+              : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100',
+          )}
+        >
+          <Checkbox
+            checked={selection.checked}
+            onCheckedChange={selection.onToggle}
+            aria-label={`Selecionar conversa com ${leadDisplayName(lead.name, lead.phone)}`}
+          />
+        </div>
+      )}
 
       {/* So admin/manager apagam. Em toda conversa, com ou sem nao lidas. */}
       {isManager && (

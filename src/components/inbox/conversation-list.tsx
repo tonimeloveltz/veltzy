@@ -5,7 +5,9 @@ import { Input } from '@/components/ui/input'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
+import { Checkbox } from '@/components/ui/checkbox'
 import { ConversationItem } from '@/components/inbox/conversation-item'
+import { ConversationsBulkActionBar } from '@/components/inbox/conversations-bulk-action-bar'
 import { useConversationList } from '@/hooks/use-conversation-list'
 import { useInboxStore } from '@/stores/inbox.store'
 import { useWhatsAppStatus } from '@/hooks/use-whatsapp-status'
@@ -31,6 +33,30 @@ const ConversationList = () => {
     }
     return true
   })
+
+  // Selecao em massa: mesma regra do "x" da linha (isManager inclui admin e
+  // super_admin). So de interface: a RLS de veltzy.messages aceita o DELETE de
+  // qualquer membro da empresa.
+  const canSelect = isManager
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
+  // A acao opera so sobre o que esta VISIVEL e selecionado: trocar busca ou
+  // filtro depois de marcar nao apaga conversa que saiu da tela.
+  const visibleIds = (filteredConversations ?? []).map((c) => c.id)
+  const visibleSelected = visibleIds.filter((id) => selectedIds.has(id))
+  const allSelected = visibleIds.length > 0 && visibleSelected.length === visibleIds.length
+  const someSelected = visibleSelected.length > 0 && !allSelected
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+  const toggleSelectAll = () => setSelectedIds(allSelected ? new Set() : new Set(visibleIds))
+  const clearSelection = () => setSelectedIds(new Set())
 
   return (
     <div className="flex h-full flex-col border-r bg-muted/20">
@@ -98,6 +124,18 @@ const ConversationList = () => {
         </div>
       )}
 
+      {canSelect && visibleIds.length > 0 && (
+        <label className="flex cursor-pointer items-center gap-2 border-b px-4 py-2 text-xs text-muted-foreground">
+          <Checkbox
+            checked={allSelected ? true : someSelected ? 'indeterminate' : false}
+            onCheckedChange={toggleSelectAll}
+          />
+          {visibleSelected.length > 0
+            ? `${visibleSelected.length} de ${visibleIds.length} selecionada${visibleSelected.length > 1 ? 's' : ''}`
+            : `Selecionar todas (${visibleIds.length})`}
+        </label>
+      )}
+
       <div className="flex-1 overflow-y-auto scrollbar-minimal">
         {isLoading && (
           <div className="flex items-center justify-center py-10">
@@ -117,9 +155,18 @@ const ConversationList = () => {
             lead={lead}
             isSelected={lead.id === selectedLeadId}
             onClick={() => navigate(`/inbox/${lead.id}`, { state: { fromList: true } })}
+            selection={canSelect ? {
+              checked: selectedIds.has(lead.id),
+              active: visibleSelected.length > 0,
+              onToggle: () => toggleSelect(lead.id),
+            } : undefined}
           />
         ))}
       </div>
+
+      {canSelect && visibleSelected.length > 0 && (
+        <ConversationsBulkActionBar leadIds={visibleSelected} onClear={clearSelection} />
+      )}
     </div>
   )
 }

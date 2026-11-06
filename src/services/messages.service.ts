@@ -66,6 +66,34 @@ export const deleteLeadMessages = async (companyId: string, leadId: string): Pro
   return data.length
 }
 
+/**
+ * Versao em lote de deleteLeadMessages: apaga TODAS as mensagens das conversas
+ * selecionadas na inbox. Os leads ficam (pipeline e Contatos), so saem da inbox.
+ *
+ * Em lotes de 50 leads para o `in` nao estourar a URL. A contagem vem do
+ * `count: 'exact'` do proprio delete, e nao de `.select().length`: o max_rows
+ * (1000) cortaria as linhas devolvidas em silencio, e um lote de conversas passa
+ * de mil mensagens com facilidade. A contagem e feita no servidor, entao nao
+ * precisa paginar. Zero com ids pedidos = RLS barrando calada.
+ *
+ * Nao apaga nada no WhatsApp, e nao remove os anexos do bucket chat-attachments.
+ */
+export const deleteMessagesByLeads = async (companyId: string, leadIds: string[]): Promise<number> => {
+  const BATCH_SIZE = 50
+  let deleted = 0
+  for (let i = 0; i < leadIds.length; i += BATCH_SIZE) {
+    const batch = leadIds.slice(i, i + BATCH_SIZE)
+    const { count, error } = await db()
+      .from('messages')
+      .delete({ count: 'exact' })
+      .in('lead_id', batch)
+      .eq('company_id', companyId)
+    if (error) throw error
+    deleted += count ?? 0
+  }
+  return deleted
+}
+
 export const markAsRead = async (companyId: string, leadId: string): Promise<void> => {
   const { error } = await db()
     .from('leads')
