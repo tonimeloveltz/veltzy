@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/stores/auth.store'
 import * as campaignsService from '@/services/campaigns.service'
-import type { AudienceFilter } from '@/types/database'
+import type { AudienceFilter, BlastCampaignStatus } from '@/types/database'
 
 export const useCampaigns = () => {
   const companyId = useAuthStore((s) => s.company?.id)
@@ -11,8 +11,15 @@ export const useCampaigns = () => {
     queryFn: () => campaignsService.getCampaigns(companyId!),
     enabled: !!companyId,
     staleTime: 15_000,
+    // O contador de enviados sobe a cada rodada do cron process-blast-followups.
+    // Só busca de novo enquanto alguma campanha está em voo; parada, não gasta request.
+    refetchInterval: (query) =>
+      query.state.data?.some((c) => IN_FLIGHT_STATUSES.has(c.status)) ? 15_000 : false,
   })
 }
+
+// Mesmos status que o passo (2) do cron atualiza.
+const IN_FLIGHT_STATUSES = new Set<BlastCampaignStatus>(['scheduled', 'queued', 'running'])
 
 export const useCampaign = (id: string | undefined) => {
   const companyId = useAuthStore((s) => s.company?.id)

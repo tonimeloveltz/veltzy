@@ -18,6 +18,28 @@ export function isCampaignComplete(recipientStatuses: string[]): boolean {
   return recipientStatuses.length > 0 && recipientStatuses.every((s) => TERMINAL.has(s))
 }
 
+/** Contagens por status de uma campanha, feitas no servidor (count exact, imune ao max_rows). */
+export interface RecipientCounts {
+  total: number
+  /** pending + queued: ainda não saiu nem falhou. */
+  open: number
+  sent: number
+  failed: number
+}
+
+/**
+ * Progresso para gravar em blast_campaigns a cada rodada do cron, e não só no fim:
+ * sent/failed valem para campanha em andamento; complete = tem recipients e nenhum em aberto.
+ * Mesma regra de isCampaignComplete, mas por contagem (a versão por array truncava em 1000).
+ */
+export function campaignProgress(counts: RecipientCounts): { sent: number; failed: number; complete: boolean } {
+  return {
+    sent: counts.sent,
+    failed: counts.failed,
+    complete: counts.total > 0 && counts.open === 0,
+  }
+}
+
 /**
  * Campanha 'scheduled' cujo horário chegou: devolve o started_at (= scheduled_at) para
  * transicionar a 'running'. null = ainda no futuro ou sem horário.
