@@ -889,6 +889,16 @@ export interface PersonalReport {
   revenue: number
 }
 
+export interface LeadTag {
+  id: string
+  company_id: string
+  name: string
+  color: string
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface LeadSourceRecord {
   id: string
   company_id: string | null
