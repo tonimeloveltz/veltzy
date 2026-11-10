@@ -1,5 +1,22 @@
 import { assertEquals } from 'jsr:@std/assert@1'
-import { queueStatusToRecipient, isCampaignComplete, followupTargets, scheduledStartAt } from './blast-followup.ts'
+import { queueStatusToRecipient, isCampaignComplete, followupTargets, scheduledStartAt, campaignProgress } from './blast-followup.ts'
+
+Deno.test('campaignProgress: em andamento já devolve sent/failed parciais e não completa', () => {
+  assertEquals(campaignProgress({ total: 10, open: 6, sent: 3, failed: 1 }), { sent: 3, failed: 1, complete: false })
+})
+
+Deno.test('campaignProgress: completa quando não sobra pending/queued (skipped conta como terminal)', () => {
+  // 10 = 7 sent + 1 failed + 2 skipped
+  assertEquals(campaignProgress({ total: 10, open: 0, sent: 7, failed: 1 }), { sent: 7, failed: 1, complete: true })
+})
+
+Deno.test('campaignProgress: sem recipients não completa', () => {
+  assertEquals(campaignProgress({ total: 0, open: 0, sent: 0, failed: 0 }).complete, false)
+})
+
+Deno.test('campaignProgress: acima de 1000 recipients o número é o real, sem teto', () => {
+  assertEquals(campaignProgress({ total: 2500, open: 0, sent: 2400, failed: 100 }), { sent: 2400, failed: 100, complete: true })
+})
 
 Deno.test('queueStatusToRecipient: mapeia terminais; pending mantém (null)', () => {
   assertEquals(queueStatusToRecipient('sent'), 'sent')

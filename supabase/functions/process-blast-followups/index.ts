@@ -2,11 +2,11 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { isCronAuthorized, cronUnauthorized } from '../_shared/cron-auth.ts'
 import { getCorsHeaders } from '../_shared/cors.ts'
 import { purgeCampaignMedia } from '../_shared/campaign-media-purge.ts'
-import { queueStatusToRecipient, isCampaignComplete, followupTargets, scheduledStartAt, type RecipientLite } from '../_shared/blast-followup.ts'
+import { queueStatusToRecipient, campaignProgress, followupTargets, scheduledStartAt, type RecipientLite } from '../_shared/blast-followup.ts'
 
 // process-blast-followups (mkt-ativo Fase 2, cron): ADITIVO, NÃO toca o process-message-queue.
-// (1) reconcilia blast_recipients.status ← message_queue.status; (2) marca campanha 'completed'
-// quando todos os recipients terminam (inclui 'scheduled': o passo (1b) leva a 'running'
+// (1) reconcilia blast_recipients.status ← message_queue.status; (2) grava sent_count/failed_count
+// a cada rodada e marca campanha 'completed' quando todos os recipients terminam (inclui 'scheduled': o passo (1b) leva a 'running'
 // quando scheduled_at chega) (resolve o débito de acompanhamento da Fase 1);
 // (3) dispara follow-up (immediate | no_reply após delay) inscrevendo os leads na cadência;
 // (4) expurga o anexo de campanhas terminadas há 30+ dias (campanhas-layout-midia).
@@ -24,7 +24,7 @@ Deno.serve(async (req) => {
     const veltzy = createClient(url, key, { db: { schema: 'veltzy' } })
     const storageClient = createClient(url, key)
     const now = new Date()
-    let reconciled = 0, completed = 0, followedUp = 0, mediaPurged = 0
+    let reconciled = 0, progressed = 0, completed = 0, followedUp = 0, mediaPurged = 0
 
     // (1) RECONCILIAÇÃO: recipients ainda não-terminais que já têm item na fila.
     const { data: pend } = await veltzy
@@ -57,20 +57,44 @@ Deno.serve(async (req) => {
         .eq('id', c.id).eq('status', 'scheduled')
     }
 
-    // (2) COMPLETION: campanhas em voo cujos recipients estão todos terminais. Inclui
-    // 'scheduled' para o caso de tudo já estar terminal (ex.: todos skipped).
-    const { data: camps } = await veltzy.from('blast_campaigns').select('id').in('status', ['scheduled', 'queued', 'running']).limit(200)
+    // (2) PROGRESSO + COMPLETION: a cada rodada grava sent_count/failed_count das campanhas
+    // em voo (a lista lê esses campos; antes só eram gravados no fim e ficavam 0 durante o
+    // envio). Inclui 'scheduled' para o caso de tudo já estar terminal (ex.: todos skipped).
+    // Contagem no servidor com head:true: o max_rows (1000) não se aplica a count, então NÃO
+    // trocar por select de linhas + .length (era o que truncava campanhas grandes).
+    const countRecipients = async (campaignId: string, statuses?: string[]): Promise<number> => {
+      let q = veltzy.from('blast_recipients').select('id', { count: 'exact', head: true }).eq('campaign_id', campaignId)
+      if (statuses) q = q.in('status', statuses)
+      const { count, error } = await q
+      if (error) throw error
+      return count ?? 0
+    }
+    const { data: camps } = await veltzy.from('blast_campaigns').select('id, sent_count, failed_count').in('status', ['scheduled', 'queued', 'running']).limit(200)
     for (const c of camps ?? []) {
-      const { data: recs } = await veltzy.from('blast_recipients').select('status').eq('campaign_id', c.id)
-      const statuses = (recs ?? []).map((x: { status: string }) => x.status)
-      if (isCampaignComplete(statuses)) {
-        await veltzy.from('blast_campaigns').update({
-          status: 'completed',
-          completed_at: now.toISOString(),
-          sent_count: statuses.filter((s) => s === 'sent').length,
-          failed_count: statuses.filter((s) => s === 'failed').length,
-        }).eq('id', c.id)
-        completed++
+      // Falha de contagem numa campanha não derruba as outras nem os passos (3) e (4).
+      try {
+        const [total, open, sent, failed] = await Promise.all([
+          countRecipients(c.id),
+          countRecipients(c.id, ['pending', 'queued']),
+          countRecipients(c.id, ['sent']),
+          countRecipients(c.id, ['failed']),
+        ])
+        const progress = campaignProgress({ total, open, sent, failed })
+        if (progress.complete) {
+          await veltzy.from('blast_campaigns').update({
+            status: 'completed',
+            completed_at: now.toISOString(),
+            sent_count: progress.sent,
+            failed_count: progress.failed,
+          }).eq('id', c.id)
+          completed++
+        } else if (progress.sent !== c.sent_count || progress.failed !== c.failed_count) {
+          // Só o contador: status segue com o (1b) e com o dispatch.
+          await veltzy.from('blast_campaigns').update({ sent_count: progress.sent, failed_count: progress.failed }).eq('id', c.id)
+          progressed++
+        }
+      } catch (err) {
+        console.error(`[process-blast-followups] progresso da campanha ${c.id}:`, err)
       }
     }
 
@@ -128,7 +152,7 @@ Deno.serve(async (req) => {
       console.error('[process-blast-followups] purge error:', err)
     }
 
-    return new Response(JSON.stringify({ reconciled, completed, followedUp, mediaPurged }), {
+    return new Response(JSON.stringify({ reconciled, progressed, completed, followedUp, mediaPurged }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (err) {
