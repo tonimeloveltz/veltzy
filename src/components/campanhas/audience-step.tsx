@@ -42,7 +42,7 @@ export function AudienceStep({ draft, onChange }: AudienceStepProps) {
           </SelectContent>
         </Select>
       )}
-      {draft.audienceMode === 'tag' && <LeadTagsInput value={draft.tags} onChange={(tags) => onChange({ tags })} />}
+      {draft.audienceMode === 'tag' && <LeadTagsInput value={draft.tags} onChange={(tags) => onChange({ tags })} allowCreate={false} />}
       {draft.audienceMode === 'manual' && (
         <ManualContactPicker value={draft.manualIds} onChange={(manualIds) => onChange({ manualIds })} />
       )}

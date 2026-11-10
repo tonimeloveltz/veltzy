@@ -147,10 +147,13 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
   fieldsRef.current = { values: fieldValues, touched, firstNameMissing }
   leadIdRef.current = lead.id
 
-  const flushFields = useCallback(async () => {
+  // `leadId` explicito na troca de contato: quando o cleanup roda, o render do
+  // contato NOVO ja atualizou leadIdRef, mas fieldsRef ainda tem os valores do
+  // ANTIGO. Ler o ref aqui gravava as edicoes de um contato no outro.
+  const flushFields = useCallback(async (leadId?: string) => {
     if (!dirtyRef.current || !companyId) return
     const f = fieldsRef.current
-    const lid = leadIdRef.current
+    const lid = leadId ?? leadIdRef.current
     dirtyRef.current = false
     const payload = buildContactPanelPayload(f.values, f.touched, f.firstNameMissing)
     if (Object.keys(payload).length === 0) return
@@ -162,9 +165,10 @@ const ContactPanel = ({ lead }: ContactPanelProps) => {
     }
   }, [companyId, invalidateAll])
 
-  // Flush on lead change
+  // Flush on lead change: salva no contato que estava aberto, capturado aqui.
   useEffect(() => {
-    return () => { flushFields(); flushObservations() }
+    const openLeadId = lead.id
+    return () => { flushFields(openLeadId); flushObservations() }
   }, [lead.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reset local state to new lead

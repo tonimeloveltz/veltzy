@@ -1,19 +1,35 @@
-import { useState } from 'react'
-import { X } from 'lucide-react'
+import { useRef, useState } from 'react'
 import { Input } from '@/components/ui/input'
+import { TagBadge } from '@/components/shared/tag-badge'
+import { TagColorPicker } from '@/components/pipeline/tag-color-picker'
+import { useLeadTags } from '@/hooks/use-lead-tags'
+import { useCreateLeadTag } from '@/hooks/use-create-lead-tag'
+import { DEFAULT_NEW_TAG_COLOR } from '@/lib/tag-colors'
 
 interface LeadTagsInputProps {
   value: string[]
   onChange: (tags: string[]) => void
+  /**
+   * false = so filtra (publico da campanha): mostra as cores, mas tag digitada
+   * nao entra no catalogo e o seletor de cor some.
+   */
+  allowCreate?: boolean
 }
 
-const LeadTagsInput = ({ value, onChange }: LeadTagsInputProps) => {
+const LeadTagsInput = ({ value, onChange, allowCreate = true }: LeadTagsInputProps) => {
   const [input, setInput] = useState('')
+  const [newTagColor, setNewTagColor] = useState(DEFAULT_NEW_TAG_COLOR)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const { getTagColor } = useLeadTags()
+  const createTag = useCreateLeadTag()
 
   const addTag = () => {
     const tag = input.trim()
     if (tag && !value.includes(tag)) {
       onChange([...value, tag])
+      // Tag que ja existe no catalogo mantem a cor dela.
+      if (allowCreate && !getTagColor(tag)) createTag.mutate({ name: tag, color: newTagColor })
     }
     setInput('')
   }
@@ -32,28 +48,36 @@ const LeadTagsInput = ({ value, onChange }: LeadTagsInputProps) => {
     }
   }
 
+  const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    // Ir para o seletor de cor nao confirma a tag: a cor ainda vai ser escolhida.
+    if (e.relatedTarget && containerRef.current?.contains(e.relatedTarget)) return
+    addTag()
+  }
+
   return (
-    <div className="space-y-2">
+    <div ref={containerRef} className="space-y-2">
       <div className="flex flex-wrap gap-1.5">
         {value.map((tag) => (
-          <span
-            key={tag}
-            className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary"
-          >
-            {tag}
-            <button type="button" onClick={() => removeTag(tag)} className="hover:text-destructive">
-              <X className="h-3 w-3" />
-            </button>
-          </span>
+          <TagBadge key={tag} name={tag} color={getTagColor(tag)} onRemove={() => removeTag(tag)} />
         ))}
       </div>
-      <Input
-        placeholder="Digite e pressione Enter"
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        onKeyDown={handleKeyDown}
-        onBlur={addTag}
-      />
+      <div className="flex items-center gap-2">
+        <Input
+          ref={inputRef}
+          placeholder="Digite e pressione Enter"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onBlur={handleBlur}
+        />
+        {allowCreate && (
+          <TagColorPicker
+            value={newTagColor}
+            onChange={setNewTagColor}
+            onClose={() => inputRef.current?.focus()}
+          />
+        )}
+      </div>
     </div>
   )
 }

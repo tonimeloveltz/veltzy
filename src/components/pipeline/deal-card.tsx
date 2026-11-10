@@ -12,6 +12,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useRoles } from '@/hooks/use-roles'
 import { useLeadTaskCount } from '@/hooks/use-tasks'
+import { useLeadTags } from '@/hooks/use-lead-tags'
+import { TagBadge } from '@/components/shared/tag-badge'
 import { usePipelineStages } from '@/hooks/use-pipeline-stages'
 import { useMoveDealStage, useUpdateDealValueAndMove } from '@/hooks/use-deals'
 import { timeAgo } from '@/lib/time'
@@ -61,6 +63,7 @@ const DealCard = ({ deal, onEditDeal, onTransfer, onMovePipeline, onCreateDeal, 
   const { isAdmin, isManager } = useRoles()
   const lead = deal.leads
   const { data: taskCount } = useLeadTaskCount(lead?.id ?? '')
+  const { getTagColor } = useLeadTags()
   const { data: stages } = usePipelineStages()
   const moveDealStage = useMoveDealStage()
   const updateDealValueAndMove = useUpdateDealValueAndMove()
@@ -280,9 +283,7 @@ const DealCard = ({ deal, onEditDeal, onTransfer, onMovePipeline, onCreateDeal, 
         <div className="flex items-center justify-between gap-1">
           <div className="flex flex-wrap gap-1 flex-1 min-w-0">
             {lead?.tags?.slice(0, 3).map((tag) => (
-              <span key={tag} className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                {tag}
-              </span>
+              <TagBadge key={tag} name={tag} color={getTagColor(tag)} size="sm" />
             ))}
             {(lead?.tags?.length ?? 0) > 3 && (
               <span className="text-[10px] text-muted-foreground">+{(lead?.tags?.length ?? 0) - 3}</span>

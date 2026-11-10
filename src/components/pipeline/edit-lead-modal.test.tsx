@@ -21,6 +21,8 @@ vi.mock('@/hooks/use-leads', () => ({
 }))
 vi.mock('@/hooks/use-lead-sources', () => ({ useLeadSources: () => ({ data: [] }) }))
 vi.mock('@/hooks/use-team', () => ({ useTeamMembers: () => ({ data: [] }) }))
+vi.mock('@/hooks/use-lead-tags', () => ({ useLeadTags: () => ({ data: [], getTagColor: () => undefined }) }))
+vi.mock('@/hooks/use-create-lead-tag', () => ({ useCreateLeadTag: () => ({ mutate: vi.fn() }) }))
 vi.mock('@/hooks/use-roles', () => ({ useRoles: () => ({ isAdmin: true, isManager: false, roles: ['admin'] }) }))
 vi.mock('@/hooks/use-tasks', () => ({
   useLeadTasks: () => ({ data: [] }),
