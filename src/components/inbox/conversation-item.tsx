@@ -6,11 +6,14 @@ import { leadDisplayName } from '@/lib/phone'
 import { DeleteConversationButton } from '@/components/inbox/delete-conversation-button'
 import { useRoles } from '@/hooks/use-roles'
 import { Checkbox } from '@/components/ui/checkbox'
+import { hasPendingReply } from '@/lib/response-sla'
 import type { LeadWithLastMessage } from '@/types/database'
 
 interface ConversationItemProps {
   lead: LeadWithLastMessage
   isSelected: boolean
+  /** Resposta pendente ha mais que o prazo de SLA (regra em lib/response-sla). */
+  isOverdue: boolean
   onClick: () => void
   /** Selecao em massa (admin/manager). Ausente = linha sem checkbox. */
   selection?: {
@@ -52,19 +55,16 @@ const messagePreview = (lead: LeadWithLastMessage): string => {
 }
 
 const getWaitingMinutes = (lead: LeadWithLastMessage): number | null => {
-  if (!lead.last_customer_message_at) return null
-  const lastMsg = lead.last_message
-  // Se a ultima mensagem e do vendedor/IA, nao esta aguardando
-  if (lastMsg && (lastMsg.sender_type === 'human' || lastMsg.sender_type === 'ai')) return null
-  const diff = Date.now() - new Date(lead.last_customer_message_at).getTime()
+  if (!hasPendingReply(lead) || !lead.last_message) return null
+  const diff = Date.now() - new Date(lead.last_message.created_at).getTime()
   return Math.round(diff / 60000)
 }
 
-const ConversationItem = ({ lead, isSelected, onClick, selection }: ConversationItemProps) => {
+const ConversationItem = ({ lead, isSelected, isOverdue, onClick, selection }: ConversationItemProps) => {
   const avatarSrc = lead.avatar_url || undefined
   const lastTime = lead.last_message?.created_at ?? lead.updated_at
   const waitingMinutes = getWaitingMinutes(lead)
-  const isWarning = waitingMinutes !== null && waitingMinutes >= 15 && !lead.sla_breached
+  const isWarning = waitingMinutes !== null && waitingMinutes >= 15 && !isOverdue
   const hasUnread = (lead.unread_count ?? 0) > 0
   const { isManager } = useRoles()
 
@@ -78,7 +78,7 @@ const ConversationItem = ({ lead, isSelected, onClick, selection }: Conversation
             ? 'bg-primary/5 border-l-primary/40'
             : isSelected
             ? 'bg-primary/10 border-l-primary'
-            : lead.sla_breached
+            : isOverdue
               ? 'border-l-destructive bg-destructive/5 hover:bg-destructive/10'
               : 'border-l-transparent hover:bg-muted/50'
         )}
@@ -99,12 +99,12 @@ const ConversationItem = ({ lead, isSelected, onClick, selection }: Conversation
           <div className="flex items-center justify-between gap-2">
             <p className="text-sm font-medium truncate">{leadDisplayName(lead.name, lead.phone)}</p>
             <div className="flex items-center gap-1 shrink-0">
-              {lead.sla_breached && (
+              {isOverdue && (
                 <Clock className="h-3 w-3 text-destructive" />
               )}
               <span className={cn(
                 'text-[10px]',
-                lead.sla_breached ? 'text-destructive font-medium' :
+                isOverdue ? 'text-destructive font-medium' :
                 isWarning ? 'text-yellow-600 font-medium' :
                 'text-muted-foreground',
               )}>

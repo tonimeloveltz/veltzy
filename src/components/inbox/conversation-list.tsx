@@ -16,7 +16,7 @@ import { useFailedMessages } from '@/hooks/use-failed-messages'
 import { useRoles } from '@/hooks/use-roles'
 
 const ConversationList = () => {
-  const { data: conversations, isLoading } = useConversationList()
+  const { data: conversations, isLoading, overdueIds } = useConversationList()
   const { filters, setFilters } = useInboxStore()
   const { leadId: selectedLeadId } = useParams<{ leadId: string }>()
   const navigate = useNavigate()
@@ -154,6 +154,7 @@ const ConversationList = () => {
             key={lead.id}
             lead={lead}
             isSelected={lead.id === selectedLeadId}
+            isOverdue={overdueIds.has(lead.id)}
             onClick={() => navigate(`/inbox/${lead.id}`, { state: { fromList: true } })}
             selection={canSelect ? {
               checked: selectedIds.has(lead.id),
