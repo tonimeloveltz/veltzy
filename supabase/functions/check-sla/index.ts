@@ -3,6 +3,11 @@ import { isCronAuthorized, cronUnauthorized } from '../_shared/cron-auth.ts'
 
 import { getCorsHeaders } from '../_shared/cors.ts'
 
+/** Mesmo default de business_rules.sla_hours (2h). */
+const DEFAULT_SLA_MINUTES = 120
+/** Quem conta como resposta ao lead: vendedor ou IA (SDR, automacoes, fila). */
+const REPLY_SENDERS = ['human', 'ai']
+
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req)
   if (req.method === 'OPTIONS') {
@@ -44,23 +49,24 @@ Deno.serve(async (req) => {
           .maybeSingle()
         const rules = settings?.value as Record<string, unknown> | null
         const slaHours = Number(rules?.sla_hours) || 0
-        // sla_hours e em horas no admin, converte para minutos. Fallback: 30min
-        slaByCompany[cid] = slaHours > 0 ? slaHours * 60 : 30
+        // sla_hours e em horas no admin, converte para minutos. Fallback: 2h,
+        // o mesmo default da tela de regras (antes caia em 30 min sem aviso).
+        slaByCompany[cid] = slaHours > 0 ? slaHours * 60 : DEFAULT_SLA_MINUTES
       }
 
       for (const lead of pendingLeads) {
-        const slaMinutes = slaByCompany[lead.company_id] ?? 30
+        const slaMinutes = slaByCompany[lead.company_id] ?? DEFAULT_SLA_MINUTES
         const threshold = new Date(now.getTime() - slaMinutes * 60 * 1000)
 
         // Ainda dentro do prazo
         if (new Date(lead.last_customer_message_at) >= threshold) continue
 
-        // Verifica se ja tem resposta humana apos a ultima mensagem do cliente
+        // Verifica se ja tem resposta (vendedor ou IA) apos a ultima mensagem do cliente
         const { data: lastHumanMsg } = await supabase
           .from('messages')
           .select('created_at')
           .eq('lead_id', lead.id)
-          .eq('sender_type', 'human')
+          .in('sender_type', REPLY_SENDERS)
           .gt('created_at', lead.last_customer_message_at)
           .order('created_at', { ascending: false })
           .limit(1)
@@ -107,15 +113,17 @@ Deno.serve(async (req) => {
 
     if (breachedLeads && breachedLeads.length > 0) {
       for (const lead of breachedLeads) {
+        // Nota interna nao e resposta ao lead nem pendencia: fica de fora.
         const { data: lastMsg } = await supabase
           .from('messages')
           .select('sender_type')
           .eq('lead_id', lead.id)
+          .neq('sender_type', 'internal')
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle()
 
-        if (lastMsg?.sender_type === 'human') {
+        if (lastMsg && REPLY_SENDERS.includes(lastMsg.sender_type)) {
           await supabase
             .from('leads')
             .update({ sla_breached: false })
