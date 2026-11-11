@@ -26,6 +26,21 @@ Deno.serve(async (req) => {
 
     const now = new Date()
     const breached: string[] = []
+    const slaByCompany: Record<string, number> = {}
+
+    const loadSlaMinutes = async (cid: string): Promise<number> => {
+      const { data: settings } = await supabase
+        .from('system_settings')
+        .select('value')
+        .eq('company_id', cid)
+        .eq('key', 'business_rules')
+        .maybeSingle()
+      const rules = settings?.value as Record<string, unknown> | null
+      const slaHours = Number(rules?.sla_hours) || 0
+      // sla_hours e em horas no admin, converte para minutos. Fallback: 2h,
+      // o mesmo default da tela de regras (antes caia em 30 min sem aviso).
+      return slaHours > 0 ? slaHours * 60 : DEFAULT_SLA_MINUTES
+    }
 
     // Busca leads pendentes (nao breached, nao resolvidos, com mensagem do cliente)
     const { data: pendingLeads } = await supabase
@@ -38,20 +53,9 @@ Deno.serve(async (req) => {
     if (pendingLeads && pendingLeads.length > 0) {
       // Busca config de SLA por empresa
       const companyIds = [...new Set(pendingLeads.map((l) => l.company_id))]
-      const slaByCompany: Record<string, number> = {}
 
       for (const cid of companyIds) {
-        const { data: settings } = await supabase
-          .from('system_settings')
-          .select('value')
-          .eq('company_id', cid)
-          .eq('key', 'business_rules')
-          .maybeSingle()
-        const rules = settings?.value as Record<string, unknown> | null
-        const slaHours = Number(rules?.sla_hours) || 0
-        // sla_hours e em horas no admin, converte para minutos. Fallback: 2h,
-        // o mesmo default da tela de regras (antes caia em 30 min sem aviso).
-        slaByCompany[cid] = slaHours > 0 ? slaHours * 60 : DEFAULT_SLA_MINUTES
+        slaByCompany[cid] = await loadSlaMinutes(cid)
       }
 
       for (const lead of pendingLeads) {
@@ -102,10 +106,11 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Limpa sla_breached de leads que ja receberam resposta
+    // Limpa sla_breached de leads que ja receberam resposta, ou cuja pendencia
+    // atual (lead escreveu de novo depois da resposta) ainda esta no prazo.
     const { data: breachedLeads } = await supabase
       .from('leads')
-      .select('id, last_customer_message_at')
+      .select('id, company_id, last_customer_message_at')
       .eq('sla_breached', true)
       .neq('conversation_status', 'resolved')
 
@@ -123,7 +128,18 @@ Deno.serve(async (req) => {
           .limit(1)
           .maybeSingle()
 
-        if (lastMsg && REPLY_SENDERS.includes(lastMsg.sender_type)) {
+        if (!(lead.company_id in slaByCompany)) {
+          slaByCompany[lead.company_id] = await loadSlaMinutes(lead.company_id)
+        }
+        const threshold = now.getTime() - slaByCompany[lead.company_id] * 60 * 1000
+        const lastCustomerAt = lead.last_customer_message_at
+          ? new Date(lead.last_customer_message_at).getTime()
+          : null
+        const answered = !!lastMsg && REPLY_SENDERS.includes(lastMsg.sender_type)
+        // Exatamente no prazo ainda nao e atraso (mesma regra do breach acima).
+        const withinSla = lastCustomerAt !== null && lastCustomerAt >= threshold
+
+        if (answered || withinSla) {
           await supabase
             .from('leads')
             .update({ sla_breached: false })
