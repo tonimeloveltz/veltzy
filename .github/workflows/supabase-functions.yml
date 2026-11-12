@@ -1,0 +1,84 @@
+# Publica as Edge Functions do Veltzy. develop -> staging, main -> producao.
+# Mesmo desenho do deploy-functions do Hub (hub/.github/workflows/supabase-deploy.yml),
+# sem migrations: o Veltzy nunca aplica migration, ela mora no Hub.
+# So publica as functions alteradas desde o ultimo run com sucesso; mudanca em _shared ou no
+# config.toml publica todas. Nunca apaga function do projeto.
+# Nunca adicionar pull_request, pull_request_target ou workflow_run aqui: os dois primeiros
+# entregam os secrets a branch do proprio repo, e workflow_run roda com o ref da main.
+name: supabase-functions
+
+on:
+  push:
+    branches: [develop, main]
+    paths:
+      - 'supabase/functions/**'
+      - 'supabase/config.toml'
+      - '.github/workflows/supabase-functions.yml'
+      - '.github/scripts/supabase_*'
+
+permissions:
+  contents: read
+  actions: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      functions: ${{ steps.detect.outputs.functions }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: detect
+        env:
+          BRANCH: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/supabase_detect_functions.py
+
+  deploy-staging:
+    needs: detect
+    if: needs.detect.outputs.functions != '[]' && github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: veltzy-functions-staging
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
+        with:
+          version: 2.122.0
+      - name: Deploy
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          FUNCTIONS: ${{ needs.detect.outputs.functions }}
+        run: bash .github/scripts/supabase_deploy_functions.sh hfebvugdsztnzgpybdwj "$FUNCTIONS"
+
+  # Job proprio, so com o token de producao: o runner do staging nunca ve esse token.
+  deploy-production:
+    needs: detect
+    if: needs.detect.outputs.functions != '[]' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: veltzy-functions-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
+        with:
+          version: 2.122.0
+      - name: Deploy
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.PROD_SUPABASE_ACCESS_TOKEN }}
+          FUNCTIONS: ${{ needs.detect.outputs.functions }}
+        run: bash .github/scripts/supabase_deploy_functions.sh zxefzegggntfjlfsdgvw "$FUNCTIONS"
