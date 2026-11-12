@@ -386,9 +386,7 @@ verify_jwt = false
 verify_jwt = false
 
 # --- Function-to-function (chamadas internas com service_role) ---
-[functions.evolution-send-message]
-verify_jwt = false
-
+# evolution-send-message e do Hub: o bloco dela mora no config.toml do Hub.
 [functions.sdr-ai]
 verify_jwt = false
 
@@ -550,4 +548,25 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 # via ai-complete do Hub. Chamada so pelo app com JWT do usuario: verify_jwt=true.
 # Papel (admin/manager) e gates (mkt_ativo_enabled, ai_msg_enabled) checados no codigo.
 [functions.campaign-variants]
+verify_jwt = true
+
+# Chamadas pelo app com JWT do usuario. Ficavam sem bloco (default true); explicitas desde o
+# CI de functions, que exige verify_jwt em toda function. sdr-knowledge-ingest estava com
+# false em producao: o front manda o JWT, entao true nao muda o comportamento.
+[functions.ai-copilot]
+verify_jwt = true
+
+[functions.instagram-oauth]
+verify_jwt = true
+
+[functions.sdr-engine]
+verify_jwt = true
+
+[functions.sdr-knowledge-ingest]
+verify_jwt = true
+
+[functions.whatsapp-manager]
+verify_jwt = true
+
+[functions.zapi-send]
 verify_jwt = true
