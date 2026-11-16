@@ -1,5 +1,5 @@
 import { assertEquals } from 'jsr:@std/assert@1'
-import { buildLeadCadastroInsert, decideTranscriptionUpdate } from './lead-inbound-handler.ts'
+import { buildLeadCadastroInsert, decideTranscriptionUpdate, revokeMarketingConsents } from './lead-inbound-handler.ts'
 
 Deno.test('decideTranscriptionUpdate: ok com texto -> aplica', () => {
   const d = decideTranscriptionUpdate(200, { ok: true, data: { text: 'ola mundo' } })
@@ -47,4 +47,37 @@ Deno.test('buildLeadCadastroInsert: tags vazias -> [] (nunca null)', () => {
 Deno.test('buildLeadCadastroInsert: cadastro do webhook preserva campos e tags', () => {
   const c = buildLeadCadastroInsert({ email: 'a@b.com', instagram: '@x', company: 'ACME', tags: ['form'] })
   assertEquals(c, { email: 'a@b.com', instagram_handle: '@x', company_name: 'ACME', tags: ['form'] })
+})
+
+// Fake minimo do query builder: registra a cadeia de chamadas.
+function fakeClient(result: { error: { message: string } | null } = { error: null }) {
+  const calls: Array<[string, unknown[]]> = []
+  const builder: Record<string, unknown> = {}
+  for (const m of ['update', 'eq', 'is']) {
+    builder[m] = (...args: unknown[]) => { calls.push([m, args]); return builder }
+  }
+  builder.then = (resolve: (v: unknown) => void) => resolve(result)
+  const client = { from: (table: string) => { calls.push(['from', [table]]); return builder } }
+  return { client, calls }
+}
+
+Deno.test('revokeMarketingConsents: carimba revogado_em so nos de marketing ativos do contato', async () => {
+  const { client, calls } = fakeClient()
+  await revokeMarketingConsents(client as unknown as Parameters<typeof revokeMarketingConsents>[0], 'co1', 'lead1')
+  assertEquals(calls[0], ['from', ['lead_consents']])
+  assertEquals(calls[1][0], 'update')
+  const patch = calls[1][1][0] as Record<string, unknown>
+  assertEquals(Object.keys(patch), ['revogado_em'])
+  assertEquals(typeof patch.revogado_em, 'string')
+  assertEquals(calls.slice(2), [
+    ['eq', ['company_id', 'co1']],
+    ['eq', ['lead_id', 'lead1']],
+    ['eq', ['finalidade', 'marketing_whatsapp']],
+    ['is', ['revogado_em', null]],
+  ])
+})
+
+Deno.test('revokeMarketingConsents: erro do banco nao lanca', async () => {
+  const { client } = fakeClient({ error: { message: 'boom' } })
+  await revokeMarketingConsents(client as unknown as Parameters<typeof revokeMarketingConsents>[0], 'co1', 'lead1')
 })

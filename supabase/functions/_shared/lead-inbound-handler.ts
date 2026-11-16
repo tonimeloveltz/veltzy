@@ -305,6 +305,8 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
       .update({ marketing_opt_out: true, opt_out_at: new Date().toISOString() })
       .eq('id', lead.id)
       .eq('marketing_opt_out', false) // idempotente: so marca na 1a vez
+    // Eventos (D7): SAIR tambem revoga o consentimento de marketing (prova LGPD; nao apaga).
+    await revokeMarketingConsents(supabase, params.companyId, lead.id)
   }
 
   // 6. Transcricao de audio (async, nao bloqueia)
@@ -440,6 +442,26 @@ export async function handleInboundMessage(params: InboundParams): Promise<Inbou
 
 /** Cadastro vindo de webhook (FB/IG Lead Ads): só grava o que veio (null se ausente).
  *  tags é NOT NULL default '{}' em leads: ausente vira [], nunca null. */
+/**
+ * Revoga os consentimentos de marketing ativos do contato (SAIR). Carimba revogado_em,
+ * nunca apaga: o registro e a prova do consentimento e da revogacao. Idempotente.
+ * Falha aqui nao derruba o inbound: o marketing_opt_out ja barra o envio.
+ */
+export async function revokeMarketingConsents(
+  supabase: Pick<SupabaseClient, 'from'>,
+  companyId: string,
+  leadId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('lead_consents')
+    .update({ revogado_em: new Date().toISOString() })
+    .eq('company_id', companyId)
+    .eq('lead_id', leadId)
+    .eq('finalidade', 'marketing_whatsapp')
+    .is('revogado_em', null)
+  if (error) console.error('[lead-inbound-handler] revogar consentimento de marketing:', error.message)
+}
+
 export function buildLeadCadastroInsert(
   params: Pick<InboundParams, 'email' | 'instagram' | 'company' | 'tags'>,
 ): { email: string | null; instagram_handle: string | null; company_name: string | null; tags: string[] } {

@@ -320,4 +320,9 @@ Tudo da seção 11 do PRD (Fase 2) e da seção 10 (fora da Fase 1). Também: aj
 
 | Data | Decisão | Motivo |
 |---|---|---|
-| | | |
+| 16/11/2026 | Bloco (b): o dispatcher só grava em `veltzy.messages` o que foi enviado; falha com nova tentativa não aparece no Inbox | três tentativas com backoff gerariam três bolhas vermelhas na conversa; o status fica em `event_messages` |
+| 16/11/2026 | Bloco (b): mensagem desligada no editor depois de enfileirada vira `canceled` no envio | o organizador desligou; enviar o texto antigo seria pior |
+| 16/11/2026 | Bloco (b): `event-admin-register` recebe `event_id` (não `slug`), e a empresa do evento tem de ser a do usuário também para super_admin | o admin já tem o id; a RPC exige ator do próprio tenant |
+| 16/11/2026 | Bloco (b): honeypot e tempo mínimo rodam antes do zod | barra robô sem custo de parse; o resultado (`400 rejected`) é o mesmo |
+| 16/11/2026 | Bloco (b): textos de aceite (Política e marketing) montados no servidor, com o nome do organizador; o cliente não manda texto | o registro de consentimento é prova LGPD e não pode vir do navegador |
+| 16/11/2026 | Bloco (b): `_shared/events/clients.ts` tipa os clientes pelo próprio `createClient` | o lint proíbe `any`, e `SupabaseClient` genérico não aceita o schema `veltzy` |
