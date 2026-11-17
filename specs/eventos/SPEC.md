@@ -135,7 +135,7 @@ verify_jwt = false
 ### Secrets (staging; produção só com OK do Toni)
 
 - `EVENT_IP_SALT`: 32 bytes aleatórios, gerados pela Leticia.
-- `PUBLIC_APP_URL`: URL do front do ambiente, sem barra no fim (staging: confirmar se é `https://develop.app.veltzy.com`).
+- `PUBLIC_APP_URL`: URL do front do ambiente, sem barra no fim. Staging: `https://develop.veltzy.com` (igual ao secret `APP_URL` já existente; `develop.app.veltzy.com` não resolve). Gravado em 16/11/2026, junto com o `EVENT_IP_SALT`.
 - Já existem e são reaproveitados: `SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET`, o segredo do Hub usado por `waha-hub.ts`.
 
 O cron lê `edge_base_url` do Vault, que já existe (passo 2 da SPEC do Hub); até o deploy do `event-scheduler` ele bate num 404 sem efeito. Deploy: CI do PR #271 se já estiver ativo no staging; senão manual, `npx --yes supabase@2.122.0 functions deploy <nome> --project-ref hfebvugdsztnzgpybdwj`.

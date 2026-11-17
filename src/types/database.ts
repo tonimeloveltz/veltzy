@@ -23,6 +23,8 @@ export interface CompanyFeatures {
   delivery_metrics_enabled?: boolean
   /** Agente de prospecção em grupos de WhatsApp (feature oculta, v1 só a Veltz). Ausente = false. */
   prospect_groups_enabled?: boolean
+  /** Eventos (pagina de inscricao que vira negocio). Ligada pelo Hub. Ausente = false. */
+  veltzy_events?: boolean
 }
 
 // ---- mkt-ativo (disparo em massa / campanhas) ----
