@@ -4,6 +4,7 @@
 import { z } from 'https://esm.sh/zod@3.23.8'
 import type { PublicClient, VeltzyClient } from './clients.ts'
 import { isValidPhoneBR, normalizePhoneBR } from '../phone.ts'
+import { isMobilePhoneBR } from './mobile-phone.ts'
 import { isValidEmail, validateAnswers, type ValidatableField } from './form-validate.ts'
 
 export const TERMS_VERSION = 'eventos-v1'
@@ -98,7 +99,8 @@ export function prepareRegistration(
   }
 
   const whatsapp = normalizePhoneBR(input.whatsapp)
-  if (!isValidPhoneBR(whatsapp)) errors.whatsapp = 'invalid_phone'
+  // So celular (Toni, 18/11): fixo valido vira not_mobile, para o formulario explicar.
+  if (!isMobilePhoneBR(whatsapp)) errors.whatsapp = isValidPhoneBR(whatsapp) ? 'not_mobile' : 'invalid_phone'
 
   Object.assign(errors, validateAnswers(ev.fields, input.answers))
   if (Object.keys(errors).length > 0) return { ok: false, errors }

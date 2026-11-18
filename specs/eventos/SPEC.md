@@ -27,19 +27,16 @@ Branch: `feat/eventos` a partir da `develop` (com `--no-track`). `npm run prefli
 
 Ao fim de cada bloco: "Rodo o PVO ou seguimos codificando?"
 
-## Pendências do Toni (PRD 9): o que fica em espera
+## Respostas do Toni (PRD 9), 18/11/2026
 
-O resto da SPEC segue sem esperar. Cada pendência mexe só nos pontos listados, e a resposta padrão já está escrita na SPEC. Se o Toni escolher a alternativa, o custo é o da última coluna.
-
-| Pendência | Pontos que dependem dela | Se o Toni escolher a alternativa |
+| Pendência | Resposta | O que muda |
 |---|---|---|
-| 1. Prioridade (D5) | `Deal.priority`, selo em `deal-card.tsx` e na tabela de inscritos, select de prioridade no drawer da opção, regras de qualificação da aba 4 | Tirar a prioridade: não implementar esses pontos; no Hub, deixar a coluna (nula quando nenhuma opção tem prioridade, então sem efeito) ou, antes de produção, uma migration nova que recria `register_for_event` sem `priority` e depois remove a coluna |
-| 2. Elite = enterprise (D9) | toggle do rodapé (aba 3) e trigger `events_guard_powered_by` | Trocar o plano no trigger (migration nova no Hub) e o texto do tooltip |
-| 3. Sobrenome e telefone | campo fixo Sobrenome (aba 2); `isValidPhoneBR` no `event-register` e no formulário público | Sobrenome travado como obrigatório; recusar fixo com uma checagem a mais só no fluxo de evento (`length === 11`), sem mudar o `isValidPhoneBR` compartilhado com o Inbox |
-| 4. Métricas | card "Inscritos qualificados" (aba 7) e colunas da lista `/eventos` | Trocar um card e uma coluna; `event-stats.ts` isola a conta |
-| 5. QR code (D17) | QR da aba 5 e a dependência `qrcode` | Se o QR inteiro for para a Fase 2, remover o QR da aba 5 e a dependência |
+| 1. Prioridade (D5) | "A": mantém a proposta | `deals.priority` fica; selo no `deal-card.tsx` e na tabela de inscritos, select no drawer da opção e regras de qualificação da aba 4 seguem como escritos |
+| 2. Elite = enterprise (D9) | Ninguém esconde o rodapé | Sem toggle "Mostrar Feito com Veltzy" na aba 3. Migration nova no Hub `20261118120000_veltzy_eventos_powered_by_sempre.sql`: remove o trigger `events_guard_powered_by` e prende a coluna em `true` por CHECK |
+| 3. Sobrenome e telefone | Os quatro fixos nascem obrigatórios; Sobrenome e E-mail o organizador pode soltar; WhatsApp não aceita fixo | Rascunho novo com Sobrenome obrigatório. `event-register` e `event-admin-register` usam `_shared/events/mobile-phone.ts` (`isMobilePhoneBR`, com teste): fixo válido devolve `not_mobile`, inválido `invalid_phone`. O `isValidPhoneBR` compartilhado com o Inbox não muda. O formulário público (bloco e) repete a regra com a mensagem "Use um celular com WhatsApp" |
+| 4. Métricas | Sem ICP por enquanto, porque exigiria qualificar o lead | Sai o card "Inscritos qualificados" da aba 7; a lista `/eventos` fica como está (inscritos/vagas, confirmados, presentes) |
+| 5. QR code (D17) | Confirmado | QR do link de divulgação na aba 5 e dependência `qrcode`, como escrito |
 
-Ordem sugerida para a codificadora: começar pelo bloco (b), que não depende de nenhuma das cinco; os pontos da tabela ficam por último dentro do bloco em que aparecem.
 
 ## Convenções que valem para tudo
 
@@ -178,7 +175,7 @@ Abas Próximos (publicado/fechado com fim no futuro), Rascunhos, Encerrados (fin
 - URL da Política de Privacidade obrigatória para publicar, sem pré-preenchimento (PRD 3.14).
 
 **Aba 2, Formulário de inscrição.** Três colunas como no PDF (pág. 4): chips à esquerda, preview no meio, drawer de edição à direita.
-- Fixos: Nome (obrigatório, travado), Sobrenome (opcional por padrão, com opção de tornar obrigatório, PRD 9.2), E-mail (obrigatório por padrão, pode ficar opcional), WhatsApp (obrigatório, travado). Não reordenam nem saem.
+- Fixos: Nome (obrigatório, travado), Sobrenome (obrigatório por padrão, pode ficar opcional, Toni 18/11), E-mail (obrigatório por padrão, pode ficar opcional), WhatsApp (obrigatório, travado). Não reordenam nem saem.
 - Pré-definidos entram uma vez (chip desabilitado depois); personalizáveis, várias vezes. Contador "N de 30 campos".
 - Reordenação com `@dnd-kit/sortable`.
 - Drawer: rótulo, ajuda, placeholder, obrigatório; opções (mínimo 2, máximo 30, reordenáveis) com tag (escolher de `lead_tags` ou digitar nova) e prioridade (Sem prioridade, Baixa, Média, Alta); destino: "Só resposta" ou "Campo do contato" (Empresa → `company_name`, Instagram → `instagram_handle`, LinkedIn → `linkedin_url`). **"Campo do negócio" não aparece na Fase 1**: o negócio não tem campo personalizado compatível, e todas as respostas já vão para as observações do negócio (D6). Empresa nasce com destino `company_name`; Cargo, "só resposta".
@@ -186,7 +183,7 @@ Abas Próximos (publicado/fechado com fim no futuro), Rascunhos, Encerrados (fin
 - Campo com respostas: editar ou excluir mostra "N inscrições já responderam este campo. As respostas antigas ficam preservadas com o rótulo da época." A exclusão é DELETE normal: o trigger do Hub converte em soft delete.
 - Rodapé fixo do preview: aceite da Política (obrigatório, com link) e marketing (desmarcado), textos da seção 12 da especificação.
 
-**Aba 3, Aparência.** Upload de logo e banner com preview (o enquadramento é `object-fit: cover` com posição fixa no centro; ajuste manual fica fora da Fase 1), cor primária, de fundo e do texto do botão (input `color` + hex), tema claro/escuro. Aviso de contraste por `src/lib/events/contrast.ts` (razão WCAG 2.1, com teste): botão (texto do botão sobre a primária) e título (texto do tema sobre o fundo) abaixo de 4,5:1 mostram aviso amarelo, sem bloquear. Toggle "Mostrar Feito com Veltzy" travado fora do `enterprise`, com tooltip "Disponível no plano Elite" (D9). Preview ao vivo com Desktop/Mobile, usando os mesmos componentes da página pública.
+**Aba 3, Aparência.** Upload de logo e banner com preview (o enquadramento é `object-fit: cover` com posição fixa no centro; ajuste manual fica fora da Fase 1), cor primária, de fundo e do texto do botão (input `color` + hex), tema claro/escuro. Aviso de contraste por `src/lib/events/contrast.ts` (razão WCAG 2.1, com teste): botão (texto do botão sobre a primária) e título (texto do tema sobre o fundo) abaixo de 4,5:1 mostram aviso amarelo, sem bloquear. O rodapé "Feito com Veltzy" aparece sempre: não há toggle (Toni, 18/11). Preview ao vivo com Desktop/Mobile, usando os mesmos componentes da página pública.
 
 **Aba 4, Pipeline e automações.** Como o PDF (pág. 6):
 - pipeline e mapeamento Nova inscrição / Confirmou presença / Fez check-in / Sem check-in até o fim (selects das etapas do pipeline escolhido); "Cancelou a inscrição → Marcar como perdido" fixo (D15); contadores por etapa;
@@ -213,7 +210,7 @@ Abas Próximos (publicado/fechado com fim no futuro), Rascunhos, Encerrados (fin
 - Adicionar inscrito: diálogo com o mesmo formulário do evento (`RegistrationFormFields`, compartilhado com a página pública), sem os aceites.
 - CSV (`src/lib/events/csv-export.ts`, com teste): `papaparse.unparse`, separador `;`, prefixo `﻿`, colunas fixas (nome, sobrenome, e-mail, WhatsApp formatado, status, check-in, inscrito em, origem, ref, utm_source, utm_medium, utm_campaign, utm_content, utm_term, marketing) e uma coluna por campo do formulário pelo `label_snapshot`, valor `display`. Busca todas as linhas em páginas de 1000.
 
-**Aba 7, Painel** (PDF pág. 9, com PRD 9.3). Cards: inscritos (de N vagas), vagas restantes, confirmados (% dos inscritos), presentes, taxa de presença (presentes / (presentes + ausentes), "Sem dados" antes do evento), inscritos qualificados (inscrição com pelo menos uma tag de opção, sem card de ICP). Gráfico de barras por dia (Recharts, últimos 14 dias ou desde a criação, dias no fuso do evento). Inscrições e presenças por origem. Funil Inscrito → Confirmado → Presente. Contas em `src/lib/events/event-stats.ts` (puro, com teste), sobre as inscrições não canceladas.
+**Aba 7, Painel** (PDF pág. 9, com PRD 9.3). Cards: inscritos (de N vagas), vagas restantes, confirmados (% dos inscritos), presentes, taxa de presença (presentes / (presentes + ausentes), "Sem dados" antes do evento) (sem card de ICP nem de qualificados, Toni 18/11). Gráfico de barras por dia (Recharts, últimos 14 dias ou desde a criação, dias no fuso do evento). Inscrições e presenças por origem. Funil Inscrito → Confirmado → Presente. Contas em `src/lib/events/event-stats.ts` (puro, com teste), sobre as inscrições não canceladas.
 
 **Modo check-in** `/eventos/:id/check-in` (PDF pág. 14). Tela cheia, sem sidebar, mobile-first: cabeçalho escuro com voltar, "23 de 86 presentes" e barra; busca grande com foco automático; cards com nome, empresa e telefone; botão "Presente" de 48 px de altura ou "✓ 08:52"; tocar no verde pergunta "Desfazer check-in?". Atualização otimista com rollback em erro. Realtime não é exigido: refetch a cada 15 s. "+ Adicionar" só para admin/gestor. Fora da janela (mais de 48 h depois do fim), mensagem e botões desabilitados.
 
@@ -232,7 +229,7 @@ Abas Próximos (publicado/fechado com fim no futuro), Rascunhos, Encerrados (fin
 - Mobile: barra fixa inferior "Gratuito · Inscrições até 28/11 · Inscrever-se", que rola até o formulário.
 - Estados: aberto; "Inscrições abrem em <data>"; "Vagas esgotadas"; "Inscrições encerradas"; "Evento finalizado"; "Evento cancelado"; 404 neutro (`EventNotFound`, sem marca de nenhum tenant).
 - Tema e cores do evento por variáveis CSS locais ao container (`--ev-primary`, `--ev-bg`, `--ev-btn-text`), sem mexer nos tokens globais do app.
-- Rodapé "Feito com Veltzy" (link para o site) quando `show_powered_by`.
+- Rodapé "Feito com Veltzy" (link para o site) sempre.
 - Formulário: `RegistrationFormFields` (compartilhado com o diálogo manual), máscaras (`formatPhoneBR`; CPF/CNPJ por `src/lib/events/document-br.ts`, com teste), ViaCEP no Endereço, UF em select, Data/Hora com `input type="datetime-local"`. Campo honeypot `website` fora da tela (`position:absolute; left:-10000px`, `tabIndex=-1`, `autoComplete="off"`, `aria-hidden`). `rendered_at` gravado ao montar o formulário; `idempotency_key` (`crypto.randomUUID()`) gerada ao montar e mantida entre tentativas. Botão desabilitado durante o envio.
 - Captura `ref` e `utm_*` da URL na montagem (e `document.referrer`) e envia junto.
 - Resultados: `ok` → navega para `/e/<slug>/i/<token>`; `duplicate` → "Este WhatsApp já está inscrito. Reenviamos a confirmação no seu WhatsApp."; `sold_out`/`closed`/`not_open`/`finished`/`canceled` → recarrega e mostra o estado; `rate_limited` → "Muitas tentativas, tente em alguns minutos"; `validation` → erro por campo; `rejected` → mensagem genérica de erro.
@@ -326,3 +323,8 @@ Tudo da seção 11 do PRD (Fase 2) e da seção 10 (fora da Fase 1). Também: aj
 | 16/11/2026 | Bloco (b): honeypot e tempo mínimo rodam antes do zod | barra robô sem custo de parse; o resultado (`400 rejected`) é o mesmo |
 | 16/11/2026 | Bloco (b): textos de aceite (Política e marketing) montados no servidor, com o nome do organizador; o cliente não manda texto | o registro de consentimento é prova LGPD e não pode vir do navegador |
 | 16/11/2026 | Bloco (b): `_shared/events/clients.ts` tipa os clientes pelo próprio `createClient` | o lint proíbe `any`, e `SupabaseClient` genérico não aceita o schema `veltzy` |
+| 18/11/2026 | Bloco (c2): sair do editor pelo menu lateral com alterações pendentes não é bloqueado; `beforeunload` e diálogo só na breadcrumb do próprio editor | `BrowserRouter` não tem `useBlocker` (já previsto na SPEC) |
+| 18/11/2026 | Bloco (c2): a tag do evento acompanha o título ao salvar enquanto for a automática (`Evento: <título>`); personalizada não muda | rascunho nasce com "Evento: Novo evento" e ficaria com a tag do título antigo |
+| 18/11/2026 | Bloco (c2): o slug acompanha o título só em rascunho e só enquanto ninguém editar o slug | publicado, trocar o link quebra quem já recebeu |
+| 18/11/2026 | Bloco (c2): o formulário de inscrição grava em dois passos (DELETE dos removidos e depois um upsert de todos), sem transação | sem RPC de lote no Hub; o DELETE primeiro libera a chave pré-definida e o limite de 30; falha no meio deixa o formulário parcial e o Salvar seguinte corrige |
+| 18/11/2026 | Bloco (c2): opção gravada sem `tag`/`priority` (chave ausente) é lida como `null` | evento criado por SQL no teste do bloco (b) tinha opção sem as chaves e travava a validação |

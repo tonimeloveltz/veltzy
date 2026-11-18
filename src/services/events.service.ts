@@ -1,6 +1,7 @@
 import { veltzy } from '@/lib/supabase'
 import { draftSlug } from '@/lib/events/slug'
 import type { EventListItem } from '@/lib/events/event-list'
+import type { EventPatch } from '@/lib/events/editor-form'
 import type { Event, EventFormField } from '@/types/events'
 
 // Toda query filtra por company_id; a RLS e a ultima linha de defesa, nao a unica.
@@ -70,10 +71,10 @@ export const getEventCounts = async (companyId: string, eventIds: string[]): Pro
   return Object.fromEntries(entries)
 }
 
-/** Campos fixos de todo evento novo (PRD 9.2: Sobrenome opcional por padrao, E-mail obrigatorio por padrao). */
+/** Campos fixos de todo evento novo: os quatro nascem obrigatorios; Sobrenome e E-mail o organizador pode soltar (Toni, 18/11). */
 const FIXED_FIELDS: Array<Pick<EventFormField, 'position' | 'key' | 'type' | 'label' | 'required'>> = [
   { position: 0, key: 'first_name', type: 'text', label: 'Nome', required: true },
-  { position: 1, key: 'last_name', type: 'text', label: 'Sobrenome', required: false },
+  { position: 1, key: 'last_name', type: 'text', label: 'Sobrenome', required: true },
   { position: 2, key: 'email', type: 'email', label: 'E-mail', required: true },
   { position: 3, key: 'whatsapp', type: 'phone', label: 'WhatsApp', required: true },
 ]
@@ -106,6 +107,15 @@ export const createDraftEvent = async (companyId: string, profileId: string): Pr
     throw fieldsError
   }
   return eventId
+}
+
+export const updateEvent = async (companyId: string, id: string, patch: EventPatch): Promise<void> => {
+  const { error } = await veltzy()
+    .from('events')
+    .update(patch)
+    .eq('company_id', companyId)
+    .eq('id', id)
+  if (error) throw error
 }
 
 export const softDeleteEvent = async (companyId: string, id: string): Promise<void> => {

@@ -142,7 +142,7 @@ As decisões da seção 4 da especificação (Toni) valem como estão. Abaixo, s
 
 **D4. Origem "Evento" em `lead_sources`.** A migration cria, por empresa, uma `lead_source` de sistema `slug = 'evento'`, `name = 'Evento'`, e a função cria sob demanda se faltar. O negócio recebe `source_id` dessa origem e `origin_utm_campaign`. Ref e as demais UTMs ficam em `event_registrations`, e a tela do negócio mostra a origem completa lendo a inscrição pelo `deal_id`. Ver D6.
 
-**D5. Prioridade: coluna nova `deals.priority`, a validar com o Toni.** Não existe prioridade no Veltzy e a temperatura é sobrescrita pelo cron (3.1). Proposta: `deals.priority text null check in ('low','medium','high')`, gravada pela inscrição (maior entre as opções escolhidas) e exibida como selo no card do negócio e na tabela de inscritos. Os rótulos ficam "Baixa", "Média" e "Alta", iguais ao PDF. Se o Toni preferir não criar o conceito agora, a prioridade sai da Fase 1 e a qualificação fica só por tag; a migration não depende disso para o resto.
+**D5. Prioridade: coluna nova `deals.priority` (confirmada pelo Toni em 18/11).** Não existe prioridade no Veltzy e a temperatura é sobrescrita pelo cron (3.1). Proposta: `deals.priority text null check in ('low','medium','high')`, gravada pela inscrição (maior entre as opções escolhidas) e exibida como selo no card do negócio e na tabela de inscritos. Os rótulos ficam "Baixa", "Média" e "Alta", iguais ao PDF. Se o Toni preferir não criar o conceito agora, a prioridade sai da Fase 1 e a qualificação fica só por tag; a migration não depende disso para o resto.
 
 **D6. Respostas no negócio:** a função grava em `deals.observations` um bloco no topo, com o título `Inscrição no evento <título> (<data>)` e uma linha `Rótulo: valor` por resposta. Se já houver texto, o bloco entra antes dele, separado por uma linha em branco. As respostas também ficam em `event_registrations.answers` com o snapshot do rótulo. A tela do negócio ganha um bloco "Evento" com origem, ref, UTMs e respostas, lido da inscrição.
 
@@ -150,7 +150,7 @@ As decisões da seção 4 da especificação (Toni) valem como estão. Abaixo, s
 
 **D8. "SAIR" reaproveitado, sem resposta automática.** O tratamento já existe (3.5). Fica como está, inclusive sem mensagem de confirmação, porque essa foi uma decisão anterior e a especificação manda reaproveitar quando existe. Todo envio do evento checa `leads.marketing_opt_out` antes, inclusive os transacionais (critério 14: "descadastrado não recebe nada").
 
-**D9. "Elite" = `enterprise`, a validar com o Toni.** O banco só conhece `trial | starter | pro | enterprise`. O toggle "Mostrar Feito com Veltzy" só pode ser desligado quando `subscriptions.plan = 'enterprise'` do produto `veltzy`, checado no front e também na função de save (`show_powered_by = false` é recusado fora do enterprise).
+**D9. Rodapé "Feito com Veltzy" sempre visível (Toni, 18/11/2026).** A proposta era deixar esconder só no `enterprise` ("Elite"); o Toni decidiu que ninguém esconde. Não há toggle na aba 3, e a migration `20261118120000` do Hub remove o trigger `events_guard_powered_by` e prende `show_powered_by` em `true` por CHECK.
 
 **D10. Descrição em Markdown, não HTML.** Não há editor rico nem sanitizador instalados. O editor é um textarea com barra (negrito, itálico, título, lista, link) que insere Markdown. A página pública renderiza com `react-markdown` sem `rehype-raw`, que não executa HTML cru. No save, o servidor ainda remove tags HTML do texto. Links só com `http(s)`, com `rel="noopener noreferrer nofollow"` e `target="_blank"`. Assim não entra dependência nova e o critério 21 fica garantido por construção.
 
@@ -231,12 +231,12 @@ Os 26 da seção 13 da especificação, sem alteração de texto, com as leitura
 
 O checklist com o resultado de cada um entra na SPEC do Veltzy, na seção de PVO, e na entrega final.
 
-## 9. Pontos a validar (não bloqueiam a SPEC)
+## 9. Pontos validados com o Toni (18/11/2026)
 
-1. **QR code.** A seção 4 da especificação põe "QR code" na Fase 2, mas a 7.5 e o PDF põem o QR do link de divulgação na Fase 1. Recorte adotado (D17): QR de divulgação na Fase 1, QR de ingresso e check-in por câmera na Fase 2. **Toni confirma.**
-2. **Sobrenome e telefone.** O PDF marca Sobrenome obrigatório e pede "DDD + número com 9 dígitos"; a especificação só fixa Nome e WhatsApp obrigatórios e aceita 10 ou 11 dígitos. Proposta: Sobrenome fixo e **opcional por padrão, com opção de tornar obrigatório** (igual ao e-mail); WhatsApp validado por `isValidPhoneBR`, que aceita celular (11 dígitos, começa em 9) e fixo (10 dígitos), com a mensagem `PHONE_ERROR_MSG`. **Toni confirma** se fixo deve ser recusado no campo WhatsApp.
-3. **Métricas.** O PDF mostra "Confirmados" na lista e "Perfil ICP" no painel; a especificação pede presentes na lista e não define ICP. Proposta: a lista mostra inscritos/vagas, confirmados e presentes (presentes só depois do início); o painel segue a 7.7 e **não tem card de ICP**. No lugar, "Inscritos qualificados" = inscritos que receberam ao menos uma tag de opção, sem inventar regra de ICP. **Toni confirma.**
-4. **Prioridade (D5)** e **Elite = enterprise (D9)**. **Toni confirma.**
+1. **QR code.** Confirmado o recorte da D17: QR do link de divulgação na Fase 1; QR de ingresso e check-in por câmera na Fase 2.
+2. **Sobrenome e telefone.** Os quatro fixos (Nome, Sobrenome, E-mail, WhatsApp) nascem obrigatórios. Sobrenome e E-mail podem ficar opcionais por decisão do organizador; Nome e WhatsApp são travados. O WhatsApp do inscrito **não aceita fixo**: só celular (11 dígitos, começa em 9). A regra vale só no fluxo de evento; o `isValidPhoneBR` do Inbox continua aceitando fixo.
+3. **Métricas.** Sem ICP por enquanto, porque exigiria qualificar o lead. O painel não tem card de ICP nem de "Inscritos qualificados". A lista mostra inscritos/vagas, confirmados e presentes (presentes só depois do início).
+4. **Prioridade (D5)** mantida. **Rodapé (D9)**: ninguém esconde, ver D9.
 5. Referências externas: o `anexo-lgpd.md` foi encontrado e usado; o template da trilha G não existe (3.16).
 
 ## 10. Fora da Fase 1
