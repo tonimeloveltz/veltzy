@@ -15,6 +15,12 @@ const event = {
   privacy_policy_url: null, pipeline_id: null, entry_stage_id: null, confirmed_stage_id: null,
   present_stage_id: null, absent_stage_id: null, assignment_mode: 'fixed', fixed_assignee_id: null, rr_cursor: 0,
   event_tag_name: 'Evento: Workshop', whatsapp_session_name: null, show_powered_by: true,
+  appearance: { logo_path: null, banner_path: null, primary_color: '#0E7490', background_color: '#F8FAFC', button_text_color: '#FFFFFF', theme: 'light' },
+  messages: {
+    confirmation: { enabled: true, text: 'Oi {{primeiro_nome}}' }, reminder_d1: { enabled: true, text: 'Amanhã' },
+    post_present: { enabled: true, text: 'Obrigado' }, post_absent: { enabled: true, text: 'Sentimos' },
+    cancel_notice: { enabled: false, text: '' },
+  },
   confirmation_page_message: null, price_cents: 0, currency: 'BRL', is_paid: false, created_by: null,
   published_at: null, finished_at: null, canceled_at: null, deleted_at: null, created_at: '', updated_at: '',
 } as unknown as Event
@@ -51,9 +57,19 @@ describe('valuesToEventPatch', () => {
     expect(valuesToEventPatch({ ...base, title: 'Imersão' }, event, autoTag).event_tag_name).toBe('Evento: Imersão')
   })
 
+  it('tag digitada na aba 4 vale, mesmo com o titulo mudando', () => {
+    expect(valuesToEventPatch({ ...base, title: 'Imersão', event_tag_name: 'vip' }, event, autoTag).event_tag_name).toBe('vip')
+  })
+
+  it('pipeline vazio vira null e mensagens vao inteiras', () => {
+    const p = valuesToEventPatch({ ...base, pipeline_id: '', entry_stage_id: '' }, event, autoTag)
+    expect(p.pipeline_id).toBeNull()
+    expect(p.messages?.cancel_notice.enabled).toBe(false)
+  })
+
   it('tag personalizada nao muda', () => {
     const custom = { ...event, event_tag_name: 'vip' } as Event
-    expect(valuesToEventPatch({ ...base, title: 'Imersão' }, custom, autoTag).event_tag_name).toBeUndefined()
+    expect(valuesToEventPatch({ ...eventToValues(custom, []), title: 'Imersão' }, custom, autoTag).event_tag_name).toBeUndefined()
   })
 
   it('online limpa o endereco e presencial limpa o link', () => {
@@ -82,6 +98,16 @@ describe('editorSchema', () => {
     expect(r.success).toBe(false)
     const paths = r.success ? [] : r.error.issues.map((i) => i.path.join('.'))
     expect(paths).toEqual(expect.arrayContaining(['ends_at', 'capacity']))
+  })
+
+  it('mensagem ligada sem texto e cor invalida sao recusadas', () => {
+    const r = editorSchema.safeParse({
+      ...base,
+      messages: { ...base.messages, reminder_d1: { enabled: true, text: ' ' } },
+      appearance: { ...base.appearance, primary_color: 'azul' },
+    })
+    const paths = r.success ? [] : r.error.issues.map((i) => i.path.join('.'))
+    expect(paths).toEqual(expect.arrayContaining(['messages.reminder_d1.text', 'appearance.primary_color']))
   })
 
   it('termo exige texto e lista exige 2 opcoes', () => {

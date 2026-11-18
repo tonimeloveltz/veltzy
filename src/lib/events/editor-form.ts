@@ -2,14 +2,22 @@
 // Campos de texto ficam como string ("" = nulo no banco); datas como "YYYY-MM-DDTHH:mm" no fuso do evento.
 
 import { z } from 'zod'
-import type { Event, EventFormField, EventFormat } from '@/types/events'
+import type {
+  Event, EventAppearance, EventAssignmentMode, EventFormField, EventFormat, EventMessagesConfig,
+} from '@/types/events'
 import type { DealPriority } from '@/types/database'
 import { isValidSlug } from '@/lib/events/slug'
 import { fromZonedInput, toZonedInput } from '@/lib/events/zoned-time'
 import { hasOptions, MAX_OPTIONS, MIN_OPTIONS, type FieldDraft } from '@/lib/events/field-catalog'
+import { isHexColor } from '@/lib/events/contrast'
 
 const HTTP_RE = /^https?:\/\/\S+$/i
 const optionalUrl = z.string().trim().refine((v) => v === '' || HTTP_RE.test(v), 'Use um link que comece com https://')
+
+const hex = z.string().refine(isHexColor, 'Use uma cor no formato #RRGGBB')
+const messageSchema = z.object({ enabled: z.boolean(), text: z.string().max(1000, 'Até 1.000 caracteres') })
+
+export const MESSAGE_KINDS = ['confirmation', 'reminder_d1', 'post_present', 'post_absent', 'cancel_notice'] as const
 
 const optionSchema = z.object({
   id: z.string(),
@@ -74,7 +82,34 @@ export const editorSchema = z.object({
   privacy_policy_url: optionalUrl,
   confirmation_page_message: z.string().max(1000, 'Até 1.000 caracteres'),
   fields: z.array(fieldSchema),
+  appearance: z.object({
+    logo_path: z.string().nullable(),
+    banner_path: z.string().nullable(),
+    primary_color: hex,
+    background_color: hex,
+    button_text_color: hex,
+    theme: z.enum(['light', 'dark']),
+  }),
+  pipeline_id: z.string(),
+  entry_stage_id: z.string(),
+  confirmed_stage_id: z.string(),
+  present_stage_id: z.string(),
+  absent_stage_id: z.string(),
+  event_tag_name: z.string().max(120, 'Até 120 caracteres'),
+  assignment_mode: z.enum(['fixed', 'round_robin']),
+  fixed_assignee_id: z.string(),
+  assignees: z.array(z.string()),
+  whatsapp_session_name: z.string(),
+  messages: z.object({
+    confirmation: messageSchema, reminder_d1: messageSchema, post_present: messageSchema,
+    post_absent: messageSchema, cancel_notice: messageSchema,
+  }),
 }).superRefine((v, ctx) => {
+  for (const kind of MESSAGE_KINDS) {
+    if (v.messages[kind].enabled && v.messages[kind].text.trim() === '') {
+      ctx.addIssue({ code: 'custom', path: ['messages', kind, 'text'], message: 'Escreva a mensagem ou desligue o envio' })
+    }
+  }
   // Comparacao de "YYYY-MM-DDTHH:mm" no mesmo fuso funciona como texto.
   if (v.starts_at && v.ends_at && v.ends_at <= v.starts_at) {
     ctx.addIssue({ code: 'custom', path: ['ends_at'], message: 'O fim tem de ser depois do início' })
@@ -87,9 +122,12 @@ export const editorSchema = z.object({
   }
 })
 
-export type EditorValues = Omit<z.infer<typeof editorSchema>, 'format' | 'fields'> & {
+export type EditorValues = Omit<z.infer<typeof editorSchema>, 'format' | 'fields' | 'appearance' | 'assignment_mode' | 'messages'> & {
   format: EventFormat
   fields: FieldDraft[]
+  appearance: EventAppearance
+  assignment_mode: EventAssignmentMode
+  messages: EventMessagesConfig
 }
 
 const s = (v: string | null | undefined) => v ?? ''
@@ -110,7 +148,7 @@ export const fieldToDraft = (f: EventFormField): FieldDraft => ({
   destination_field: f.destination === 'contact_field' ? (f.destination_field as FieldDraft['destination_field']) : null,
 })
 
-export const eventToValues = (e: Event, fields: EventFormField[]): EditorValues => ({
+export const eventToValues = (e: Event, fields: EventFormField[], assignees: string[] = []): EditorValues => ({
   title: e.title,
   slug: e.slug,
   category: s(e.category),
@@ -138,6 +176,18 @@ export const eventToValues = (e: Event, fields: EventFormField[]): EditorValues 
   privacy_policy_url: s(e.privacy_policy_url),
   confirmation_page_message: s(e.confirmation_page_message),
   fields: [...fields].sort((a, b) => a.position - b.position).map(fieldToDraft),
+  appearance: { ...e.appearance },
+  pipeline_id: s(e.pipeline_id),
+  entry_stage_id: s(e.entry_stage_id),
+  confirmed_stage_id: s(e.confirmed_stage_id),
+  present_stage_id: s(e.present_stage_id),
+  absent_stage_id: s(e.absent_stage_id),
+  event_tag_name: s(e.event_tag_name),
+  assignment_mode: e.assignment_mode,
+  fixed_assignee_id: s(e.fixed_assignee_id),
+  assignees,
+  whatsapp_session_name: s(e.whatsapp_session_name),
+  messages: Object.fromEntries(MESSAGE_KINDS.map((k) => [k, { ...e.messages[k] }])) as EventMessagesConfig,
 })
 
 const n = (v: string) => (v.trim() === '' ? null : v.trim())
@@ -148,7 +198,8 @@ export type EventPatch = Partial<Omit<Event, 'id' | 'company_id' | 'status' | 'c
 /**
  * Colunas do evento a gravar. So as que o editor controla: estado e ciclo de vida
  * mudam pelas RPCs (o trigger events_guard_state_columns barra o resto).
- * A tag do evento acompanha o titulo enquanto ninguem a personalizou.
+ * A tag do evento: a digitada na aba 4 vale; sem edicao, acompanha o titulo enquanto for a automatica.
+ * Responsaveis do rodizio vao a parte (event_assignees).
  */
 export const valuesToEventPatch = (v: EditorValues, original: Event, autoTag: (title: string) => string): EventPatch => {
   const tz = original.timezone
@@ -180,8 +231,20 @@ export const valuesToEventPatch = (v: EditorValues, original: Event, autoTag: (t
     organizer_contact: n(v.organizer_contact),
     privacy_policy_url: n(v.privacy_policy_url),
     confirmation_page_message: n(v.confirmation_page_message),
+    appearance: v.appearance,
+    pipeline_id: n(v.pipeline_id),
+    entry_stage_id: n(v.entry_stage_id),
+    confirmed_stage_id: n(v.confirmed_stage_id),
+    present_stage_id: n(v.present_stage_id),
+    absent_stage_id: n(v.absent_stage_id),
+    assignment_mode: v.assignment_mode,
+    fixed_assignee_id: n(v.fixed_assignee_id),
+    whatsapp_session_name: n(v.whatsapp_session_name),
+    messages: v.messages,
   }
-  if (original.event_tag_name === null || original.event_tag_name === autoTag(original.title)) {
+  if (v.event_tag_name.trim() !== (original.event_tag_name ?? '')) {
+    patch.event_tag_name = n(v.event_tag_name)
+  } else if (original.event_tag_name === null || original.event_tag_name === autoTag(original.title)) {
     patch.event_tag_name = autoTag(patch.title ?? original.title)
   }
   return patch

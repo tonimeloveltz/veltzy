@@ -3,9 +3,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { EditorHeader } from '@/components/events/editor/editor-header'
 import { PublishChecklistCard } from '@/components/events/editor/publish-checklist-card'
 import { LeaveConfirmDialog } from '@/components/events/editor/leave-confirm-dialog'
-import { ComingSoonTab } from '@/components/events/editor/coming-soon-tab'
 import { OverviewTab } from '@/components/events/editor/overview/overview-tab'
 import { FormTab } from '@/components/events/editor/form/form-tab'
+import { AppearanceTab } from '@/components/events/editor/appearance/appearance-tab'
+import { PipelineTab } from '@/components/events/editor/pipeline/pipeline-tab'
 import { useEventEditor } from '@/hooks/events/use-event-editor'
 import { useRoles } from '@/hooks/use-roles'
 import { useAuthStore } from '@/stores/auth.store'
@@ -22,13 +23,14 @@ const TABS: Array<{ value: EditorTab; label: string }> = [
 interface EventEditorProps {
   event: Event
   fields: EventFormField[]
+  assignees: string[]
 }
 
-export const EventEditor = ({ event, fields }: EventEditorProps) => {
+export const EventEditor = ({ event, fields, assignees }: EventEditorProps) => {
   const { isManager } = useRoles()
   const readOnly = !isManager
   const companyName = useAuthStore((s) => s.company?.name ?? '')
-  const ed = useEventEditor(event, fields)
+  const ed = useEventEditor(event, fields, assignees)
 
   return (
     <FormProvider {...ed.form}>
@@ -54,13 +56,11 @@ export const EventEditor = ({ event, fields }: EventEditorProps) => {
                 <FormTab eventId={event.id} companyName={companyName} readOnly={readOnly} />
               </TabsContent>
               <TabsContent value="appearance" className="mt-0">
-                <ComingSoonTab>Logo, banner, cores e preview chegam na próxima parte.</ComingSoonTab>
+                <AppearanceTab eventId={event.id} timezone={event.timezone} companyName={companyName} />
               </TabsContent>
               <TabsContent value="pipeline" className="mt-0">
-                <ComingSoonTab>
-                  <p>Pipeline, responsáveis, sessão do WhatsApp e mensagens chegam na próxima parte.</p>
-                  <p>{event.pipeline_id ? 'Este evento já tem pipeline e etapa de entrada.' : 'Este evento ainda não tem pipeline: sem ela não dá para publicar.'}</p>
-                </ComingSoonTab>
+                <PipelineTab event={event} savedQueue={assignees} readOnly={readOnly}
+                  creatingPipeline={ed.creatingPipeline} onCreatePipeline={ed.onCreatePipeline} onOpenForm={() => ed.setTab('form')} />
               </TabsContent>
             </fieldset>
           </Tabs>
