@@ -2,7 +2,7 @@
 
 Trilha: G
 Início: 2026-11-20 07:15
-Merge: (preencher no merge)
+Merge: 2026-11-20 10:40
 
 ## Problema e objetivo
 A faixa vermelha do inbox (`sla_breached`) agrupa no topo conversas "atrasadas" com critério errado:
