@@ -440,6 +440,10 @@ verify_jwt = false
 [functions.whatsapp-send]
 verify_jwt = true
 
+# Exclusao de mensagens da inbox (unico caminho; client sem DELETE em veltzy.messages).
+[functions.inbox-delete-messages]
+verify_jwt = true
+
 [functions.whatsapp-instance-manage]
 verify_jwt = false
 

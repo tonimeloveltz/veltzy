@@ -63,12 +63,12 @@ Migration:
 DROP POLICY IF EXISTS messages_company_isolation ON veltzy.messages;
 CREATE POLICY messages_select ON veltzy.messages FOR SELECT TO authenticated
   USING (company_id = get_current_company_id() OR is_super_admin());
-CREATE POLICY messages_insert ON veltzy.messages FOR INSERT TO authenticated
-  WITH CHECK (company_id = get_current_company_id() OR is_super_admin());
 CREATE POLICY messages_update ON veltzy.messages FOR UPDATE TO authenticated
   USING (company_id = get_current_company_id() OR is_super_admin())
   WITH CHECK (company_id = get_current_company_id() OR is_super_admin());
--- Sem policy de DELETE: exclusão só pela edge inbox-delete-messages (service role).
+-- Sem messages_insert: a policy "Members can insert messages" ja cobre.
+-- Sem policy de DELETE: exclusao so pela edge inbox-delete-messages (service role).
+REVOKE DELETE, TRUNCATE ON veltzy.messages FROM authenticated, anon;
 ```
 Antes de escrever: conferir no staging se a policy atual tem `WITH CHECK` próprio e se há outras policies/funções que fazem DELETE em `veltzy.messages` como `authenticated` (RPCs SECURITY INVOKER, triggers). Cascade de FK não é afetado por RLS. `supabase db push` no staging, `gen types` (Veltzy não precisa regenerar: sem mudança de tipo).
 
@@ -88,3 +88,10 @@ Antes de escrever: conferir no staging se a policy atual tem `WITH CHECK` própr
 - Servidor decide por quantidade: 2+ leads = bulk (admin + senha), 1 = unitário (gestor+). A barra, só visível a admin, sempre pede senha, mesmo com 1 selecionada; o servidor ignora a senha extra no unitário. Gestor apagando uma a uma pelo "x" é o comportamento atual, mantido por decisão do Toni.
 - Unitário também migra para a edge: tirar a policy de DELETE quebraria o DELETE direto.
 - Sem tabela de auditoria nova: log estruturado na edge basta para agora.
+- Edge aceita `company_id` no body só para super_admin (impersonação); para os demais vale `profiles.company_id`, e `company_id` divergente no body → 403.
+- `lead_ids` deduplicados e filtrados (só string não vazia) antes da contagem de posse; posse conferida em lotes de 50.
+- Senha errada: só a mensagem inline "Senha incorreta" sob o campo (sem toast duplicado); o hook não tosta `InvalidPasswordError`.
+- Erro diferente de senha fecha o diálogo e mantém a seleção (toast "Erro ao apagar mensagens").
+- Enter no campo de senha confirma (form com submit); botão desabilitado sem senha.
+- `signOut({ scope: 'local' })` no client anon descartável (`persistSession: false`): não revoga a sessão do browser.
+- Débito: a policy "Members can view messages" (vendedor só vê os próprios leads) está anulada pela ALL atual e continua anulada por `messages_select`; decidir em outra frente.
