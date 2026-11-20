@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { isCronAuthorized, cronUnauthorized } from '../_shared/cron-auth.ts'
 import { getWhatsAppConfig, getActiveProvider } from '../_shared/whatsapp-config.ts'
 import { createProvider } from '../_shared/whatsapp-factory.ts'
+import { normalizeWahaMessageId } from '../_shared/waha-message-id.ts'
 import type { WhatsAppConfig } from '../_shared/whatsapp-provider.ts'
 import { resolveOutboundCloudApiNumber } from '../_shared/cloud-api-resolve.ts'
 
@@ -85,7 +86,7 @@ Deno.serve(async (req) => {
 
           try {
             const provider = createProvider('waha')
-            await provider.sendMessage({} as WhatsAppConfig, {
+            const res = await provider.sendMessage({} as WhatsAppConfig, {
               phone: lead.phone,
               content: item.content,
               type: msgType,
@@ -93,6 +94,8 @@ Deno.serve(async (req) => {
               sessionName: item.instance_name,
               companyId: item.company_id,
             })
+            // id do envio: dedupe contra o echo do celular (waha-inbound from_me).
+            externalId = normalizeWahaMessageId(res?.externalId)
           } catch (err) {
             console.error('[process-message-queue] WAHA send failed:', err)
             deliveryStatus = 'failed'
@@ -199,7 +202,7 @@ Deno.serve(async (req) => {
 
         // Salvar mensagem no historico. external_id (wamid) + message_queue_id ligam o
         // receipt (cloud-api-inbound statuses[]) e a tela de detalhe da campanha (Onda 2).
-        await supabase.from('messages').insert({
+        const messageRow = {
           lead_id: item.lead_id,
           company_id: item.company_id,
           content: item.content,
@@ -211,7 +214,16 @@ Deno.serve(async (req) => {
           delivery_status: deliveryStatus,
           external_id: externalId,
           message_queue_id: item.id,
-        })
+        }
+        const { error: insertError } = await supabase.from('messages').insert(messageRow)
+        // Echo do celular (waha-inbound from_me) gravou antes com o mesmo external_id
+        // (UNIQUE parcial): assume a linha com os dados do envio.
+        if (insertError?.code === '23505' && externalId) {
+          const { lead_id: _l, company_id: _c, external_id: _e, ...patch } = messageRow
+          await supabase.from('messages').update(patch)
+            .eq('company_id', item.company_id)
+            .eq('external_id', externalId)
+        }
 
         await supabase
           .from('message_queue')
