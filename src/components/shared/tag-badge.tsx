@@ -1,7 +1,8 @@
+import type { CSSProperties } from 'react'
 import { X } from 'lucide-react'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
-import { getReadableTextColor, isValidTagColor } from '@/lib/tag-colors'
+import { getTagStyleVars, isValidTagColor } from '@/lib/tag-colors'
 
 const tagBadgeVariants = cva('inline-flex items-center gap-1 rounded-full font-medium', {
   variants: {
@@ -12,6 +13,10 @@ const tagBadgeVariants = cva('inline-flex items-center gap-1 rounded-full font-m
   },
   defaultVariants: { size: 'md' },
 })
+
+// Cor cadastrada: fundo translucido da cor + texto da propria cor com contraste AA
+// (vars de getTagStyleVars; dark: troca para as vars do modo escuro). Sem borda.
+const coloredClasses = 'bg-[var(--tag-bg)] text-[color:var(--tag-fg)] dark:bg-[var(--tag-bg-dark)] dark:text-[color:var(--tag-fg-dark)]'
 
 // Sem cor cadastrada: mantem o estilo de antes da feature, com tokens do tema.
 const fallbackBySize = {
@@ -28,11 +33,11 @@ interface TagBadgeProps extends VariantProps<typeof tagBadgeVariants> {
 
 const TagBadge = ({ name, color, size, onRemove, className }: TagBadgeProps) => {
   const hasColor = !!color && isValidTagColor(color)
-  const style = hasColor ? { backgroundColor: color, color: getReadableTextColor(color) } : undefined
+  const style = hasColor ? (getTagStyleVars(color) as CSSProperties) : undefined
 
   return (
     <span
-      className={cn(tagBadgeVariants({ size }), !hasColor && fallbackBySize[size ?? 'md'], className)}
+      className={cn(tagBadgeVariants({ size }), hasColor ? coloredClasses : fallbackBySize[size ?? 'md'], className)}
       style={style}
     >
       {name}
