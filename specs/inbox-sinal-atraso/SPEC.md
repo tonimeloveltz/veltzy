@@ -34,7 +34,8 @@ supabase/functions/process-message-queue/index.ts
 Hub (repo `~/projetos/hub`, SPEC espelho não necessária; arquivos):
 - `supabase/functions/waha-webhook-receiver/index.ts`
 - `supabase/functions/waha-instance-manage/index.ts` (eventos `message` + `message.any` + `session.status`)
-- teste do helper de extração, se houver arquivo de teste do receiver
+- `supabase/functions/waha-webhook-receiver/from-me.ts`
+- `supabase/functions/waha-webhook-receiver/from-me_test.ts`
 
 ## Blocos e ordem
 - **B1 (Veltzy front)**: needs-reply + lista + item + filtro. Independente.
@@ -128,3 +129,9 @@ Payload Hub → Veltzy `waha-inbound` (aditivo):
 - `check-sla`: marcação pula `waiting_client` além de `resolved`; limpeza também limpa `waiting_client`.
 - `whatsapp-send` e `process-message-queue` também publicados no staging (sem eles o `external_id` continua NULL e o dedupe não funciona).
 - RPC `get_conversation_list` mantém `ORDER BY sla_breached`: o front reordena; evita migration.
+
+### Hub (B3, `feature/waha-forward-from-me`, c3957d0)
+- Evento `message` com `fromMe` continua em skip; só `message.any` encaminha `fromMe` (evita duplicar, já que a sessão assina os dois).
+- `message.any` com `fromMe=false` responde 200 sem gravar em `waha_webhook_events` (já chega como `message`).
+- `phone` do `fromMe` = `remoteJidAlt` (LID) ou `to`/`remoteJid`, sem `sender_name`. LID sem `remoteJidAlt`: warn e não encaminha.
+- E2E só em produção (WAHA único): Hub sobe com `WAHA_FORWARD_FROM_ME` desligado; depois o webhook da sessão `veltz-group` ganha `message.any` (OK do Toni); por último liga o secret.
