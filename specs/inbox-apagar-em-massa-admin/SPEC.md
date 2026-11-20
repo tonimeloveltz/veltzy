@@ -2,7 +2,7 @@
 
 Trilha: G
 Início: 2026-11-20 07:50
-Merge: (preencher no merge)
+Merge: 2026-11-20 11:00
 
 ## Contexto
 - Bulk: `src/components/inbox/conversations-bulk-action-bar.tsx` + `use-bulk-delete-lead-messages.ts` → `messagesService.deleteMessagesByLeads` (DELETE direto do client em `veltzy.messages`). Seleção liberada para `isManager` (`conversation-list.tsx:40`).
