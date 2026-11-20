@@ -2,11 +2,14 @@ import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Trash2, X, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
   AlertDialog, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { useBulkDeleteLeadMessages } from '@/hooks/use-bulk-delete-lead-messages'
+import { InvalidPasswordError } from '@/services/messages.service'
 
 interface ConversationsBulkActionBarProps {
   leadIds: string[]
@@ -15,27 +18,44 @@ interface ConversationsBulkActionBarProps {
 
 /**
  * Barra flutuante de selecao da inbox, no mesmo formato da de Contatos.
- * Unica acao: apagar as mensagens das conversas selecionadas (o "x" da linha,
- * em lote). Quem decide se a barra aparece (admin/manager) e a ConversationList.
+ * Unica acao: apagar as mensagens das conversas selecionadas, confirmada com a
+ * senha do admin (validada na edge inbox-delete-messages). Quem decide se a barra
+ * aparece (so admin) e a ConversationList.
  */
 export const ConversationsBulkActionBar = ({ leadIds, onClear }: ConversationsBulkActionBarProps) => {
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [password, setPassword] = useState('')
+  const [wrongPassword, setWrongPassword] = useState(false)
   const navigate = useNavigate()
   const { leadId: openLeadId } = useParams<{ leadId: string }>()
   const bulkDelete = useBulkDeleteLeadMessages()
   const count = leadIds.length
 
+  const setDialogOpen = (open: boolean) => {
+    setConfirmOpen(open)
+    // Fechar (ou abrir) o dialogo sempre limpa a senha.
+    setPassword('')
+    setWrongPassword(false)
+  }
+
   const handleConfirm = async () => {
+    if (!password) return
     try {
-      const deleted = await bulkDelete.mutateAsync({ leadIds })
+      const deleted = await bulkDelete.mutateAsync({ leadIds, password })
       // A conversa aberta sai da lista: nao deixa o chat vazio de um lead que
       // nao esta mais na inbox.
       if (deleted > 0 && openLeadId && leadIds.includes(openLeadId)) navigate('/inbox')
       onClear()
-    } catch {
-      // O toast de erro sai do onError do hook; a selecao fica para tentar de novo.
-    } finally {
-      setConfirmOpen(false)
+      setDialogOpen(false)
+    } catch (err) {
+      // Senha errada: mensagem inline, campo limpo, dialogo aberto.
+      if (err instanceof InvalidPasswordError) {
+        setPassword('')
+        setWrongPassword(true)
+        return
+      }
+      // Outros erros: toast no onError do hook; a selecao fica para tentar de novo.
+      setDialogOpen(false)
     }
   }
 
@@ -47,7 +67,7 @@ export const ConversationsBulkActionBar = ({ leadIds, onClear }: ConversationsBu
         </span>
 
         <div className="flex items-center gap-2 ml-auto">
-          <Button variant="destructive" size="sm" className="gap-1.5" onClick={() => setConfirmOpen(true)}>
+          <Button variant="destructive" size="sm" className="gap-1.5" onClick={() => setDialogOpen(true)}>
             <Trash2 className="h-4 w-4" />
             Apagar mensagens
           </Button>
@@ -57,7 +77,7 @@ export const ConversationsBulkActionBar = ({ leadIds, onClear }: ConversationsBu
         </div>
       </div>
 
-      <AlertDialog open={confirmOpen} onOpenChange={(v) => !bulkDelete.isPending && setConfirmOpen(v)}>
+      <AlertDialog open={confirmOpen} onOpenChange={(v) => !bulkDelete.isPending && setDialogOpen(v)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="text-destructive">
@@ -69,11 +89,40 @@ export const ConversationsBulkActionBar = ({ leadIds, onClear }: ConversationsBu
               e não dá para desfazer.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <form
+            id="bulk-delete-confirm"
+            className="space-y-2"
+            onSubmit={(e) => { e.preventDefault(); handleConfirm() }}
+          >
+            <Label htmlFor="bulk-delete-password">Sua senha</Label>
+            <Input
+              id="bulk-delete-password"
+              type="password"
+              autoComplete="current-password"
+              autoFocus
+              value={password}
+              onChange={(e) => { setPassword(e.target.value); setWrongPassword(false) }}
+              disabled={bulkDelete.isPending}
+              aria-invalid={wrongPassword}
+              aria-describedby="bulk-delete-password-hint"
+            />
+            <p
+              id="bulk-delete-password-hint"
+              className={wrongPassword ? 'text-xs text-destructive' : 'text-xs text-muted-foreground'}
+            >
+              {wrongPassword ? 'Senha incorreta' : 'Para confirmar, digite a sua senha de acesso.'}
+            </p>
+          </form>
           <AlertDialogFooter>
-            <Button variant="outline" onClick={() => setConfirmOpen(false)} disabled={bulkDelete.isPending}>
+            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={bulkDelete.isPending}>
               Cancelar
             </Button>
-            <Button variant="destructive" onClick={handleConfirm} disabled={bulkDelete.isPending}>
+            <Button
+              type="submit"
+              form="bulk-delete-confirm"
+              variant="destructive"
+              disabled={bulkDelete.isPending || !password}
+            >
               {bulkDelete.isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
