@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { isCronAuthorized, cronUnauthorized } from '../_shared/cron-auth.ts'
+import { isAckMessage } from '../_shared/ack-message.ts'
 
 import { getCorsHeaders } from '../_shared/cors.ts'
 
@@ -27,6 +28,7 @@ Deno.serve(async (req) => {
     const now = new Date()
     const breached: string[] = []
     const slaByCompany: Record<string, number> = {}
+    const alertByCompany: Record<string, boolean> = {}
 
     const loadSlaMinutes = async (cid: string): Promise<number> => {
       const { data: settings } = await supabase
@@ -36,10 +38,25 @@ Deno.serve(async (req) => {
         .eq('key', 'business_rules')
         .maybeSingle()
       const rules = settings?.value as Record<string, unknown> | null
+      // Notificacao so com o alerta ligado nas regras (default da tela: desligado).
+      alertByCompany[cid] = rules?.sla_alert_enabled === true
       const slaHours = Number(rules?.sla_hours) || 0
       // sla_hours e em horas no admin, converte para minutos. Fallback: 2h,
       // o mesmo default da tela de regras (antes caia em 30 min sem aviso).
       return slaHours > 0 ? slaHours * 60 : DEFAULT_SLA_MINUTES
+    }
+
+    // Ultima mensagem do lead e fechamento ("Ok", "Combinado", sticker): nao pede resposta.
+    const lastLeadMessageIsAck = async (leadId: string): Promise<boolean> => {
+      const { data: lastLeadMsg } = await supabase
+        .from('messages')
+        .select('content, message_type')
+        .eq('lead_id', leadId)
+        .eq('sender_type', 'lead')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      return !!lastLeadMsg && isAckMessage(lastLeadMsg.content, lastLeadMsg.message_type)
     }
 
     // Busca leads pendentes (nao breached, nao resolvidos, com mensagem do cliente)
@@ -47,7 +64,7 @@ Deno.serve(async (req) => {
       .from('leads')
       .select('id, name, phone, company_id, assigned_to, last_customer_message_at')
       .eq('sla_breached', false)
-      .neq('conversation_status', 'resolved')
+      .not('conversation_status', 'in', '(resolved,waiting_client)')
       .not('last_customer_message_at', 'is', null)
 
     if (pendingLeads && pendingLeads.length > 0) {
@@ -77,6 +94,7 @@ Deno.serve(async (req) => {
           .maybeSingle()
 
         if (lastHumanMsg) continue
+        if (await lastLeadMessageIsAck(lead.id)) continue
 
         // Marca como breached
         await supabase
@@ -84,8 +102,8 @@ Deno.serve(async (req) => {
           .update({ sla_breached: true })
           .eq('id', lead.id)
 
-        // Notifica o responsavel
-        if (lead.assigned_to) {
+        // Notifica o responsavel (so com sla_alert_enabled)
+        if (lead.assigned_to && alertByCompany[lead.company_id]) {
           const minutesWaiting = Math.round(
             (now.getTime() - new Date(lead.last_customer_message_at).getTime()) / 60000,
           )
@@ -110,7 +128,7 @@ Deno.serve(async (req) => {
     // atual (lead escreveu de novo depois da resposta) ainda esta no prazo.
     const { data: breachedLeads } = await supabase
       .from('leads')
-      .select('id, company_id, last_customer_message_at')
+      .select('id, company_id, conversation_status, last_customer_message_at')
       .eq('sla_breached', true)
       .neq('conversation_status', 'resolved')
 
@@ -139,7 +157,11 @@ Deno.serve(async (req) => {
         // Exatamente no prazo ainda nao e atraso (mesma regra do breach acima).
         const withinSla = lastCustomerAt !== null && lastCustomerAt >= threshold
 
-        if (answered || withinSla) {
+        // Aguardando o cliente ou ultima do lead e fechamento: nao ha pendencia.
+        const noPending = lead.conversation_status === 'waiting_client' ||
+          (!answered && await lastLeadMessageIsAck(lead.id))
+
+        if (answered || withinSla || noPending) {
           await supabase
             .from('leads')
             .update({ sla_breached: false })
