@@ -135,3 +135,4 @@ Payload Hub → Veltzy `waha-inbound` (aditivo):
 - `message.any` com `fromMe=false` responde 200 sem gravar em `waha_webhook_events` (já chega como `message`).
 - `phone` do `fromMe` = `remoteJidAlt` (LID) ou `to`/`remoteJid`, sem `sender_name`. LID sem `remoteJidAlt`: warn e não encaminha.
 - E2E só em produção (WAHA único): Hub sobe com `WAHA_FORWARD_FROM_ME` desligado; depois o webhook da sessão `veltz-group` ganha `message.any` (OK do Toni); por último liga o secret.
+- Isolamento Lemya: `fromMe` de sessão `product='lemya'` nunca é encaminhado (`routeMessageEvent` → skip, coberto em `from-me_test.ts:16`); a Iris envia só por sessão `product='lemya'` (`lemya-wa-dispatch`/boas-vindas/instance), número separado do comercial do Veltzy. Conversa da assistente não entra no inbox do Veltzy.
