@@ -3,6 +3,7 @@ import { getWhatsAppConfig, getActiveProvider } from '../_shared/whatsapp-config
 import { createProvider } from '../_shared/whatsapp-factory.ts'
 import { resolveInstanceName } from '../_shared/resolve-instance.ts'
 import { resolveOutboundCloudApiNumber } from '../_shared/cloud-api-resolve.ts'
+import { normalizeWahaMessageId } from '../_shared/waha-message-id.ts'
 
 import { getCorsHeaders } from '../_shared/cors.ts'
 
@@ -166,7 +167,7 @@ Deno.serve(async (req) => {
       // Evolution usa instanceName; WAHA usa sessionName (mesmo valor resolvido).
       try {
         const provider = createProvider(activeProvider)
-        await provider.sendMessage({} as import('../_shared/whatsapp-provider.ts').WhatsAppConfig, {
+        const result = await provider.sendMessage({} as import('../_shared/whatsapp-provider.ts').WhatsAppConfig, {
           phone: lead.phone,
           content: payload.content,
           type: msgType,
@@ -175,6 +176,10 @@ Deno.serve(async (req) => {
           ...(activeProvider === 'waha' ? { sessionName: instanceName } : { instanceName }),
           companyId,
         })
+        // external_id liga o envio ao echo do celular (waha-inbound from_me) no dedupe.
+        externalId = activeProvider === 'waha'
+          ? normalizeWahaMessageId(result?.externalId)
+          : (result?.externalId ?? null)
       } catch (err) {
         console.error(`[whatsapp-send] ${activeProvider} send failed:`, err)
         deliveryStatus = 'failed'
@@ -238,26 +243,40 @@ Deno.serve(async (req) => {
     }
 
     // Salvar mensagem
-    const { data: message } = await supabase
+    const messageRow = {
+      lead_id: payload.leadId,
+      company_id: companyId,
+      content: payload.content,
+      sender_type: senderType,
+      message_type: payload.messageType ?? 'text',
+      file_url: payload.fileUrl ?? null,
+      file_name: payload.fileName ?? null,
+      file_mime_type: payload.mimeType ?? null,
+      source: deliveryStatus === 'failed' ? 'manual' : source,
+      replied_message_id: payload.repliedMessageId ?? null,
+      instance_name: instanceName,
+      delivery_status: deliveryStatus,
+      delivery_error: deliveryError,
+      external_id: externalId,
+    }
+    let { data: message, error: insertError } = await supabase
       .from('messages')
-      .insert({
-        lead_id: payload.leadId,
-        company_id: companyId,
-        content: payload.content,
-        sender_type: senderType,
-        message_type: payload.messageType ?? 'text',
-        file_url: payload.fileUrl ?? null,
-        file_name: payload.fileName ?? null,
-        file_mime_type: payload.mimeType ?? null,
-        source: deliveryStatus === 'failed' ? 'manual' : source,
-        replied_message_id: payload.repliedMessageId ?? null,
-        instance_name: instanceName,
-        delivery_status: deliveryStatus,
-        delivery_error: deliveryError,
-        external_id: externalId,
-      })
+      .insert(messageRow)
       .select()
       .single()
+
+    // Echo do celular (waha-inbound from_me) chegou antes deste INSERT e ja gravou a
+    // linha com o mesmo external_id (UNIQUE parcial): assume a linha com os dados do envio.
+    if (insertError?.code === '23505' && externalId) {
+      const { lead_id: _l, company_id: _c, external_id: _e, ...patch } = messageRow
+      ;({ data: message } = await supabase
+        .from('messages')
+        .update(patch)
+        .eq('company_id', companyId)
+        .eq('external_id', externalId)
+        .select()
+        .single())
+    }
 
     // Atualizar status da conversa
     if (senderType === 'human') {
