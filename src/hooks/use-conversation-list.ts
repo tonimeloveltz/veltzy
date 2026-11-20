@@ -4,7 +4,7 @@ import { useAuthStore } from '@/stores/auth.store'
 import { useInboxStore } from '@/stores/inbox.store'
 import { getConversationList } from '@/services/messages.service'
 import { useBusinessRules } from '@/hooks/use-business-rules'
-import { isResponseOverdue, responseSlaMs } from '@/lib/response-sla'
+import { isOverdue, needsReply } from '@/lib/needs-reply'
 
 /** Reavalia o atraso de resposta mesmo sem refetch (o React Query mantem a mesma referencia se nada mudou). */
 const CLOCK_TICK_MS = 30_000
@@ -26,22 +26,22 @@ export const useConversationList = () => {
   })
 
   const { data: rules } = useBusinessRules()
-  const slaMs = responseSlaMs(rules?.sla_hours)
+  const slaHours = rules?.sla_hours
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), CLOCK_TICK_MS)
     return () => clearInterval(id)
   }, [])
 
-  // Destaque vermelho: derivado da ultima mensagem, nao de leads.sla_breached
-  // (flag do cron check-sla, que ficava presa em true apos a resposta).
+  // Sinal discreto de atraso: derivado da ultima mensagem (lib/needs-reply), nao de
+  // leads.sla_breached (flag do cron, obsoleta com respostas do celular e da IA).
   const overdueIds = useMemo(() => {
     const ids = new Set<string>()
     for (const l of query.data ?? []) {
-      if (isResponseOverdue(l, slaMs, now)) ids.add(l.id)
+      if (isOverdue(l, slaHours, now)) ids.add(l.id)
     }
     return ids
-  }, [query.data, slaMs, now])
+  }, [query.data, slaHours, now])
 
   const filtered = useMemo(() => {
     if (!query.data) return []
@@ -67,7 +67,9 @@ export const useConversationList = () => {
       )
     }
 
-    if (filters.status !== 'all') {
+    if (filters.status === 'needs_reply') {
+      result = result.filter(needsReply)
+    } else if (filters.status !== 'all') {
       result = result.filter((l) => l.conversation_status === filters.status)
     }
 
@@ -77,19 +79,15 @@ export const useConversationList = () => {
       result = result.filter((l) => l.assigned_to === filters.assignedTo)
     }
 
-    // Ordenar por urgencia: resposta atrasada primeiro, depois por ultima mensagem
+    // Ordem por recencia (ultima mensagem). Atraso so muda a cor do horario.
     result.sort((a, b) => {
-      const aOverdue = overdueIds.has(a.id)
-      const bOverdue = overdueIds.has(b.id)
-      if (aOverdue && !bOverdue) return -1
-      if (!aOverdue && bOverdue) return 1
       const aTime = a.last_message?.created_at ?? a.updated_at
       const bTime = b.last_message?.created_at ?? b.updated_at
       return new Date(bTime).getTime() - new Date(aTime).getTime()
     })
 
     return result
-  }, [query.data, filters, profileId, overdueIds])
+  }, [query.data, filters, profileId, isSeller])
 
   useEffect(() => {
     const total = query.data?.reduce((acc, l) => acc + (l.unread_count ?? 0), 0) ?? 0

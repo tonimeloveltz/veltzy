@@ -3,7 +3,8 @@ import type { ConversationStatus } from '@/types/database'
 
 interface InboxFilters {
   search: string
-  status: ConversationStatus | 'all'
+  /** 'needs_reply' = filtro derivado (lib/needs-reply), nao e um conversation_status. */
+  status: ConversationStatus | 'all' | 'needs_reply'
   assignedTo: string | 'mine' | 'all'
   sourceId: string | null
 }
