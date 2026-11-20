@@ -10,9 +10,9 @@ export const useBulkDeleteLeadMessages = () => {
   const companyId = useAuthStore((s) => s.company?.id)
 
   return useMutation({
-    mutationFn: ({ leadIds }: { leadIds: string[] }) => {
+    mutationFn: ({ leadIds, password }: { leadIds: string[]; password: string }) => {
       if (!companyId) throw new Error('Empresa nao encontrada')
-      return messagesService.deleteMessagesByLeads(companyId, leadIds)
+      return messagesService.deleteMessagesByLeads(companyId, leadIds, password)
     },
     onSuccess: (deleted, { leadIds }) => {
       // O realtime de useMessages so escuta INSERT e UPDATE: sem isto, a
@@ -20,7 +20,6 @@ export const useBulkDeleteLeadMessages = () => {
       leadIds.forEach((id) => queryClient.setQueryData<Message[]>(['messages', id], []))
       queryClient.invalidateQueries({ queryKey: ['conversations'] })
 
-      // Zero apagadas sem erro e a RLS barrando calada, nao sucesso.
       if (deleted === 0) {
         toast.error('Nenhuma mensagem foi apagada')
         return
@@ -29,7 +28,9 @@ export const useBulkDeleteLeadMessages = () => {
       const mensagens = deleted === 1 ? '1 mensagem apagada' : `${deleted} mensagens apagadas`
       toast.success(`${mensagens} em ${conversas}`)
     },
-    onError: () => {
+    onError: (err) => {
+      // Senha errada: o dialogo mostra "Senha incorreta" inline e continua aberto.
+      if (err instanceof messagesService.InvalidPasswordError) return
       toast.error('Erro ao apagar mensagens')
     },
   })

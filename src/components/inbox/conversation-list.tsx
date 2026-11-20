@@ -34,10 +34,9 @@ const ConversationList = () => {
     return true
   })
 
-  // Selecao em massa: mesma regra do "x" da linha (isManager inclui admin e
-  // super_admin). So de interface: a RLS de veltzy.messages aceita o DELETE de
-  // qualquer membro da empresa.
-  const canSelect = isManager
+  // Selecao em massa so para admin (inclui super_admin), com senha na confirmacao;
+  // a edge inbox-delete-messages repete a regra. O "x" da linha segue isManager.
+  const canSelect = isAdmin
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   // A acao opera so sobre o que esta VISIVEL e selecionado: trocar busca ou
