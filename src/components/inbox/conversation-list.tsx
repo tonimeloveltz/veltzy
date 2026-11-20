@@ -80,6 +80,7 @@ const ConversationList = () => {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos</SelectItem>
+              <SelectItem value="needs_reply">Aguardando resposta</SelectItem>
               <SelectItem value="unread">Nao lidas</SelectItem>
               <SelectItem value="replied">Respondidas</SelectItem>
               <SelectItem value="waiting_client">Aguardando cliente</SelectItem>

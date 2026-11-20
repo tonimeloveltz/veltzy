@@ -11,19 +11,29 @@ Ver PRD (diagnóstico e estado atual). Sem migration. Dois repos: Veltzy (front 
 
 ## Arquivos
 <!-- arquivos -->
+specs/inbox-sinal-atraso/SPEC.md
+specs/inbox-sinal-atraso/PRD.md
 src/lib/needs-reply.ts
 src/lib/needs-reply.test.ts
+src/lib/response-sla.ts
+src/lib/response-sla.test.ts
 src/hooks/use-conversation-list.ts
 src/components/inbox/conversation-item.tsx
 src/components/inbox/conversation-list.tsx
 src/stores/inbox.store.ts
 supabase/functions/_shared/ack-message.ts
+supabase/functions/_shared/ack-message.test.ts
+supabase/functions/_shared/waha-message-id.ts
+supabase/functions/_shared/waha-message-id.test.ts
 supabase/functions/check-sla/index.ts
 supabase/functions/waha-inbound/index.ts
+supabase/functions/whatsapp-send/index.ts
+supabase/functions/process-message-queue/index.ts
 <!-- /arquivos -->
 
 Hub (repo `~/projetos/hub`, SPEC espelho não necessária; arquivos):
 - `supabase/functions/waha-webhook-receiver/index.ts`
+- `supabase/functions/waha-instance-manage/index.ts` (eventos `message` + `message.any` + `session.status`)
 - teste do helper de extração, se houver arquivo de teste do receiver
 
 ## Blocos e ordem
@@ -67,6 +77,10 @@ export const isOverdue = (lead: LeadWithLastMessage, slaHours: number, now?: num
 **`supabase/functions/waha-inbound/index.ts`**:
 - `from_me?: boolean` no payload.
 - `from_me === true` → `senderType: 'human'`, `skipSideEffects: true`, `senderName: null`, `profilePicUrl: null`.
+- **Achado da leitura (Hub, 2026-11-20)**: todo outbound do Veltzy via WAHA grava `external_id` NULL (`whatsapp-send/index.ts:168` descarta `result.externalId` no ramo evolution/waha; Central: 93 human + 227 ai em 20 dias, todos NULL). O receiver encaminha `message_id = key.id` cru (ex.: `A555FB...`); o `waha-send-message` do NOWEB devolve o mesmo `key.id`.
+- **`whatsapp-send/index.ts`**: gravar `externalId = result.externalId` no ramo evolution/waha. Mesmo conserto em `process-message-queue` e `prospect-dm-send` se o caminho waha deles descartar o id.
+- **`waha-inbound`**: normalizar `message_id` (se vier `true_...`/`false_..._<id>`, usar o sufixo após o último `_`).
+- **`lead-inbound-handler.ts`, só quando `senderType='human'` e `skipSideEffects`**: defesa contra corrida (echo chegando antes do INSERT do envio): se não achou por `external_id`, descartar se existir mensagem do mesmo lead com `sender_type in ('human','ai')`, mesmo `content` e `message_type`, criada nos últimos 120 s. Não muda o caminho do cliente (`senderType='lead'`).
 - **Dedupe obrigatório**: conferir no `whatsapp-send` (ramo waha) e em `waha-send-message` do Hub qual id é gravado em `messages.external_id` para envios do Veltzy (SDR, vendedor, campanha) e comparar com o `key.id`/`p.id` que o receiver encaminha como `message_id`. Se o formato divergir (ex.: `true_5511...@c.us_3EB0...` vs `3EB0...`), normalizar no `waha-inbound` antes de chamar o handler (extrair o id final) e registrar a regra em "Decisões tomadas". Sem dedupe garantido, B3 não liga.
 - Deploy no staging.
 
@@ -75,7 +89,7 @@ export const isOverdue = (lead: LeadWithLastMessage, slaHours: number, now?: num
 - `const forwardFromMe = Deno.env.get('WAHA_FORWARD_FROM_ME') === 'true'`.
 - `skip = (fromMe && !forwardFromMe) || isStatus || isGroup || isNewsletter || isHistory`.
 - Para `fromMe`: só produto Veltzy (Lemya continua ignorando `fromMe`); `phone` = destinatário (`p.to` ou `key.remoteJid`, mesmo `extractPhone` aplicado ao destino); `normalized.from_me = true`; sem `sender_name`.
-- Conferir se o NOWEB entrega `fromMe` no evento `message` ou só em `message.any`. Se só em `message.any`: tratar `eventType === 'message.any' && fromMe` pelo mesmo caminho (ignorar `message.any` com `fromMe=false`, que já chega como `message`) e listar na entrega a mudança de eventos do webhook da sessão `veltz-group` (é produção, a copiloto pede OK ao Toni).
+- Confirmado: NOWEB só entrega `fromMe` em `message.any`; a sessão assina hoje `['message','session.status']` (`waha-instance-manage/index.ts:94`). Decisão: assinar os dois (`message` + `message.any`). `waha-instance-manage` passa a criar sessões com `message.any`; a sessão de produção `veltz-group` é atualizada na promoção, com OK do Toni. Tratar `eventType === 'message.any' && fromMe` pelo mesmo caminho (ignorar `message.any` com `fromMe=false`, que já chega como `message`) e listar na entrega a mudança de eventos do webhook da sessão `veltz-group` (é produção, a copiloto pede OK ao Toni).
 - Mídia do `fromMe` usa o mesmo `persistWahaMedia`.
 
 ## Contratos não óbvios
@@ -103,4 +117,14 @@ Payload Hub → Veltzy `waha-inbound` (aditivo):
 - `isAckMessage` duplicada front/edge em vez de pacote compartilhado: arquivo pequeno, sem build cruzado.
 - Âmbar em vez de vermelho: sinal discreto, alinhado ao pedido. Sem token `warning` no DS; `text-amber-600` já é o padrão de fato (15 usos em `src/`).
 - `sla_hours` inválido cai em 2h (default do hook), não 30 min como o `check-sla` fazia.
+- Sessão WAHA assina `message` + `message.any` (não só `message.any`): o caminho atual do cliente fica intacto e o novo depende só do secret.
+- Dedupe do echo só por `external_id` (UNIQUE parcial `(company_id, external_id)` em `veltzy.messages`). Corrida echo-antes-do-INSERT: o envio (`whatsapp-send`, `process-message-queue`) trata `23505` fazendo UPDATE da linha do echo com os dados do envio (sender_type, instance_name, delivery). Substitui a defesa por conteúdo em 120 s; `lead-inbound-handler.ts` fica fora do escopo.
+- Id WAHA normalizado nos dois lados (`_shared/waha-message-id.ts`): sufixo após o último `_`. Receiver manda `_data.key.id` cru (conferido em `waha_webhook_events`); o envio pode vir serializado (`true_<jid>_<id>`).
+- `prospect-dm-send` não grava em `messages` (só `prospect_dm_log.waha_external_id`): sem mudança. Com B3 ligado, o echo da DM entra no histórico do lead como `human`, sem efeitos colaterais.
+- `whatsapp-send` grava `externalId` também no ramo evolution (o provider devolve `{}` hoje: sem efeito); normalização só no waha.
+- `needs-reply.ts` reaproveita `responseSlaMs` de `response-sla.ts`; `hasPendingReply`/`isResponseOverdue` saíram (substituídos por `needsReply`/`isOverdue`) e os testes de limite migraram para `needs-reply.test.ts`.
+- `overdueIds` continua calculado uma vez no hook da lista (tick de 30 s) e passado ao item por prop.
+- `isAckMessage`: risada (`kkk`, `rsrs`, `haha`) conta como fechamento; "não" isolado não (pode ser resposta que pede continuação).
+- `check-sla`: marcação pula `waiting_client` além de `resolved`; limpeza também limpa `waiting_client`.
+- `whatsapp-send` e `process-message-queue` também publicados no staging (sem eles o `external_id` continua NULL e o dedupe não funciona).
 - RPC `get_conversation_list` mantém `ORDER BY sla_breached`: o front reordena; evita migration.
