@@ -232,12 +232,12 @@ Abas Próximos (publicado/fechado com fim no futuro), Rascunhos, Encerrados (fin
 - Rodapé "Feito com Veltzy" (link para o site) sempre.
 - Formulário: `RegistrationFormFields` (compartilhado com o diálogo manual), máscaras (`formatPhoneBR`; CPF/CNPJ por `src/lib/events/document-br.ts`, com teste), ViaCEP no Endereço, UF em select, Data/Hora com `input type="datetime-local"`. Campo honeypot `website` fora da tela (`position:absolute; left:-10000px`, `tabIndex=-1`, `autoComplete="off"`, `aria-hidden`). `rendered_at` gravado ao montar o formulário; `idempotency_key` (`crypto.randomUUID()`) gerada ao montar e mantida entre tentativas. Botão desabilitado durante o envio.
 - Captura `ref` e `utm_*` da URL na montagem (e `document.referrer`) e envia junto.
-- Resultados: `ok` → navega para `/e/<slug>/i/<token>`; `duplicate` → "Este WhatsApp já está inscrito. Reenviamos a confirmação no seu WhatsApp."; `sold_out`/`closed`/`not_open`/`finished`/`canceled` → recarrega e mostra o estado; `rate_limited` → "Muitas tentativas, tente em alguns minutos"; `validation` → erro por campo; `rejected` → mensagem genérica de erro.
+- Resultados: `ok` → navega para `/e/<slug>/i/<token>`; `duplicate` → "Este WhatsApp já está inscrito neste evento." (sem prometer reenvio: a confirmação pode estar desligada ou a sessão desconectada; quando ligada, o reenvio sai igual); `sold_out`/`closed`/`not_open`/`finished`/`canceled` → recarrega e mostra o estado; `rate_limited` → "Muitas tentativas, tente em alguns minutos"; `validation` → erro por campo; `rejected` → mensagem genérica de erro.
 
 ### `/e/:slug/i/:token` (PDF pág. 13)
 
 - `event-registration` GET. Token inválido → 404 neutro.
-- "Inscrição confirmada" (ou "Presença confirmada" com status `confirmed`), "<Nome>, enviamos os detalhes no seu WhatsApp.", resumo, link da transmissão quando houver, mensagem do organizador.
+- "Inscrição confirmada" (ou "Presença confirmada" com status `confirmed`), "<Nome>, guarde este link: aqui ficam os detalhes da sua inscrição." (texto neutro: a página não sabe se a confirmação saiu), resumo, link da transmissão quando houver, mensagem do organizador.
 - "Adicionar ao Google Agenda" (`src/lib/events/google-calendar.ts`, URL `calendar.google.com/calendar/render?action=TEMPLATE...` em UTC) e "Baixar arquivo de agenda (.ics)" (`src/lib/events/ics.ts`, gerado no client, `UID` = token, `DTSTART`/`DTEND` em UTC, texto escapado). Os dois com teste.
 - "Confirmar presença" quando `can_confirm` e faltam menos de 48 h. Com `?confirmar=1` e `can_confirm`, confirma sozinho ao abrir e mostra o sucesso.
 - "Cancelar minha inscrição" quando `can_cancel`, com diálogo.

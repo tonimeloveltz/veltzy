@@ -11,7 +11,7 @@ import { readTracking } from '@/lib/events/public-event'
 import type { EventPublic } from '@/types/events'
 
 const MESSAGE: Record<string, string> = {
-  duplicate: 'Este WhatsApp já está inscrito. Reenviamos a confirmação no seu WhatsApp.',
+  duplicate: 'Este WhatsApp já está inscrito neste evento.',
   rate_limited: 'Muitas tentativas. Tente de novo em alguns minutos.',
   rejected: 'Não foi possível enviar a inscrição. Tente de novo.',
   error: 'Não foi possível enviar a inscrição. Tente de novo.',

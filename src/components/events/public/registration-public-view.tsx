@@ -38,7 +38,7 @@ export const RegistrationPublicView = ({ reg, token }: { reg: RegistrationPublic
         <div className="space-y-2 text-center">
           {!canceled && <CheckCircle2 className="mx-auto h-12 w-12" style={{ color: ev.appearance.primary_color }} />}
           <h1 className="text-2xl font-bold">{title}</h1>
-          {!canceled && <p>{reg.first_name}, enviamos os detalhes no seu WhatsApp.</p>}
+          {!canceled && <p>{reg.first_name}, guarde este link: aqui ficam os detalhes da sua inscrição.</p>}
         </div>
         <section className="space-y-2 rounded-xl border bg-card p-5 text-card-foreground">
           <p className="text-lg font-semibold">{ev.title}</p>
