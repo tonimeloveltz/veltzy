@@ -36,6 +36,8 @@ const TermosPage = lazy(() => import('@/pages/termos'))
 const EventosPage = lazy(() => import('@/pages/eventos'))
 const EventoEditorPage = lazy(() => import('@/pages/evento-editor'))
 const EventoCheckInPage = lazy(() => import('@/pages/evento-check-in'))
+const EventoPublicoPage = lazy(() => import('@/pages/evento-publico'))
+const EventoInscricaoPage = lazy(() => import('@/pages/evento-inscricao'))
 const NotFoundPage = lazy(() => import('@/pages/not-found'))
 const OnboardingPage = lazy(() => import('@/pages/onboarding'))
 
@@ -79,6 +81,10 @@ const App = () => {
               <Route path="/privacy" element={<PrivacidadePage />} />
               <Route path="/termos" element={<TermosPage />} />
               <Route path="/terms" element={<TermosPage />} />
+
+              {/* Eventos: pagina publica e pagina da inscricao, sem auth e sem o layout do app */}
+              <Route path="/e/:slug" element={<EventoPublicoPage />} />
+              <Route path="/e/:slug/i/:token" element={<EventoInscricaoPage />} />
 
 
               <Route

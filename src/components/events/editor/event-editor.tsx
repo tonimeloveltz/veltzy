@@ -7,10 +7,13 @@ import { OverviewTab } from '@/components/events/editor/overview/overview-tab'
 import { FormTab } from '@/components/events/editor/form/form-tab'
 import { AppearanceTab } from '@/components/events/editor/appearance/appearance-tab'
 import { PipelineTab } from '@/components/events/editor/pipeline/pipeline-tab'
+import { ShareTab } from '@/components/events/editor/share/share-tab'
+import { RegistrantsTab } from '@/components/events/editor/registrants/registrants-tab'
+import { DashboardTab } from '@/components/events/editor/dashboard/dashboard-tab'
 import { useEventEditor } from '@/hooks/events/use-event-editor'
 import { useRoles } from '@/hooks/use-roles'
 import { useAuthStore } from '@/stores/auth.store'
-import type { EditorTab } from '@/lib/events/publish-checklist'
+import { FORM_TABS, type EditorTab } from '@/lib/events/publish-checklist'
 import type { Event, EventFormField } from '@/types/events'
 
 const TABS: Array<{ value: EditorTab; label: string }> = [
@@ -18,6 +21,9 @@ const TABS: Array<{ value: EditorTab; label: string }> = [
   { value: 'form', label: 'Formulário de inscrição' },
   { value: 'appearance', label: 'Aparência' },
   { value: 'pipeline', label: 'Pipeline e automações' },
+  { value: 'share', label: 'Divulgação' },
+  { value: 'registrants', label: 'Inscritos' },
+  { value: 'dashboard', label: 'Painel' },
 ]
 
 interface EventEditorProps {
@@ -43,7 +49,7 @@ export const EventEditor = ({ event, fields, assignees }: EventEditorProps) => {
             Modo leitura: só administradores e gestores editam o evento.
           </p>
         )}
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
+        <div className={FORM_TABS.includes(ed.tab) && !readOnly ? 'grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]' : 'grid gap-4'}>
           <Tabs value={ed.tab} onValueChange={(v) => ed.setTab(v as EditorTab)} className="min-w-0">
             <TabsList className="h-auto flex-wrap justify-start">
               {TABS.map((t) => <TabsTrigger key={t.value} value={t.value}>{t.label}</TabsTrigger>)}
@@ -63,8 +69,14 @@ export const EventEditor = ({ event, fields, assignees }: EventEditorProps) => {
                   creatingPipeline={ed.creatingPipeline} onCreatePipeline={ed.onCreatePipeline} onOpenForm={() => ed.setTab('form')} />
               </TabsContent>
             </fieldset>
+            {/* Fora do fieldset: vendedor tambem faz check-in e ve o painel. */}
+            <TabsContent value="share" className="mt-4"><ShareTab event={event} canEdit={isManager} /></TabsContent>
+            <TabsContent value="registrants" className="mt-4">
+              <RegistrantsTab event={event} fields={fields} isManager={isManager} />
+            </TabsContent>
+            <TabsContent value="dashboard" className="mt-4"><DashboardTab event={event} /></TabsContent>
           </Tabs>
-          {!readOnly && (
+          {!readOnly && FORM_TABS.includes(ed.tab) && (
             <div className="order-first xl:order-none xl:sticky xl:top-4 xl:self-start">
               <PublishChecklistCard items={ed.items} missing={ed.missing} onGo={ed.goTo} />
             </div>

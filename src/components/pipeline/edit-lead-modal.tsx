@@ -35,6 +35,7 @@ import { useLeadTasks, useCompleteTask } from '@/hooks/use-tasks'
 import { CreateTaskModal } from '@/components/tarefas/create-task-modal'
 import { leadTemperatureConfig } from '@/lib/lead-config'
 import type { LeadWithDetails, TaskType, UpdateLeadInput } from '@/types/database'
+import { DealEventInfo } from '@/components/events/deal-event-info'
 
 // Nome obrigatorio so quando o lead ja tem primeiro nome (nao deixa apagar).
 // Lead sem nome (placeholder de inbound) segue editavel sem obrigar a preencher.
@@ -278,6 +279,9 @@ const EditLeadModal = ({ lead, open, onClose, dealId }: EditLeadModalProps) => {
                       {...register('deal_name')}
                     />
                   </div>
+
+                  {/* Negocio que veio de inscricao em evento (D6). */}
+                  <DealEventInfo dealId={activeDeal.id} />
 
                   {/* Anotacoes do negocio: distintas das Observações do contato,
                       que ficam na secao de baixo e vivem em leads.observations. */}

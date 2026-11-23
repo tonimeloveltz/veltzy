@@ -12,7 +12,10 @@ export type PublishMissingKey =
   | 'pipeline'
   | 'privacy_policy_url'
 
-export type EditorTab = 'overview' | 'form' | 'appearance' | 'pipeline'
+export type EditorTab = 'overview' | 'form' | 'appearance' | 'pipeline' | 'share' | 'registrants' | 'dashboard'
+
+/** Abas que editam o evento (formulario unico); as demais operam sobre dados ja salvos. */
+export const FORM_TABS: EditorTab[] = ['overview', 'form', 'appearance', 'pipeline']
 
 export interface ChecklistInput {
   title: string
