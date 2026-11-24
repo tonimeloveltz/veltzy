@@ -5,6 +5,7 @@ import { createProvider } from '../_shared/whatsapp-factory.ts'
 import { normalizeWahaMessageId } from '../_shared/waha-message-id.ts'
 import type { WhatsAppConfig } from '../_shared/whatsapp-provider.ts'
 import { resolveOutboundCloudApiNumber } from '../_shared/cloud-api-resolve.ts'
+import { listCompanyInstances, pickInstance } from '../_shared/resolve-instance.ts'
 
 import { getCorsHeaders } from '../_shared/cors.ts'
 
@@ -70,12 +71,22 @@ Deno.serve(async (req) => {
         // wamid do envio (Cloud API): guardado em messages.external_id p/ casar o receipt (Onda 2).
         let externalId: string | null = null
 
+        // Numero de envio (Evolution/WAHA): o carimbado no item so vale se ainda
+        // existe na empresa; numero removido (reconexao x -> x-2) cai no unico
+        // conectado, em vez de falhar com "Instancia nao encontrada".
+        const sendInstance = activeProvider === 'waha' || activeProvider === 'evolution'
+          ? pickInstance(
+            [item.instance_name],
+            await listCompanyInstances(supabasePublic, item.company_id, activeProvider),
+          )
+          : (item.instance_name ?? null)
+
         if (activeProvider === 'waha') {
           // WAHA: espelha o ramo evolution, mas o provider usa sessionName (mesmo
           // valor do nome do numero) + companyId. Sem este ramo, a fila de empresa
           // waha caia no else->zapi (getWhatsAppConfig=null) e marcava 'failed'
           // "WhatsApp not connected". Alinha com o ramo waha do whatsapp-send.
-          if (!item.instance_name) {
+          if (!sendInstance) {
             await supabase
               .from('message_queue')
               .update({ status: 'failed', error_message: 'No session for WAHA' })
@@ -91,7 +102,7 @@ Deno.serve(async (req) => {
               content: item.content,
               type: msgType,
               mediaUrl: item.file_url ?? undefined,
-              sessionName: item.instance_name,
+              sessionName: sendInstance,
               companyId: item.company_id,
             })
             // id do envio: dedupe contra o echo do celular (waha-inbound from_me).
@@ -101,7 +112,7 @@ Deno.serve(async (req) => {
             deliveryStatus = 'failed'
           }
         } else if (activeProvider === 'evolution') {
-          if (!item.instance_name) {
+          if (!sendInstance) {
             await supabase
               .from('message_queue')
               .update({ status: 'failed', error_message: 'No instance_name for Evolution' })
@@ -117,7 +128,7 @@ Deno.serve(async (req) => {
               content: item.content,
               type: msgType,
               mediaUrl: item.file_url ?? undefined,
-              instanceName: item.instance_name,
+              instanceName: sendInstance,
             })
           } catch (err) {
             console.error('[process-message-queue] Evolution send failed:', err)
@@ -210,7 +221,7 @@ Deno.serve(async (req) => {
           message_type: msgType,
           file_url: item.file_url ?? null,
           source: deliveryStatus === 'failed' ? 'manual' : 'whatsapp',
-          instance_name: item.instance_name ?? null,
+          instance_name: sendInstance,
           delivery_status: deliveryStatus,
           external_id: externalId,
           message_queue_id: item.id,
