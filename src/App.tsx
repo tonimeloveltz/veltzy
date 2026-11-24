@@ -33,6 +33,11 @@ const CadenciasPage = lazy(() => import('@/pages/cadencias'))
 const ProspeccaoPage = lazy(() => import('@/pages/prospeccao'))
 const PrivacidadePage = lazy(() => import('@/pages/privacidade'))
 const TermosPage = lazy(() => import('@/pages/termos'))
+const EventosPage = lazy(() => import('@/pages/eventos'))
+const EventoEditorPage = lazy(() => import('@/pages/evento-editor'))
+const EventoCheckInPage = lazy(() => import('@/pages/evento-check-in'))
+const EventoPublicoPage = lazy(() => import('@/pages/evento-publico'))
+const EventoInscricaoPage = lazy(() => import('@/pages/evento-inscricao'))
 const NotFoundPage = lazy(() => import('@/pages/not-found'))
 const OnboardingPage = lazy(() => import('@/pages/onboarding'))
 
@@ -77,6 +82,10 @@ const App = () => {
               <Route path="/termos" element={<TermosPage />} />
               <Route path="/terms" element={<TermosPage />} />
 
+              {/* Eventos: pagina publica e pagina da inscricao, sem auth e sem o layout do app */}
+              <Route path="/e/:slug" element={<EventoPublicoPage />} />
+              <Route path="/e/:slug/i/:token" element={<EventoInscricaoPage />} />
+
 
               <Route
                 path="/update-password"
@@ -92,6 +101,18 @@ const App = () => {
                 element={
                   <ProtectedRoute requireRole={['admin', 'super_admin']}>
                     <OnboardingPage />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* Modo check-in: tela cheia, sem sidebar. Gate de feature na propria pagina (sem redirecionar). */}
+              <Route
+                path="/eventos/:id/check-in"
+                element={
+                  <ProtectedRoute>
+                    <OnboardingGate>
+                      <EventoCheckInPage />
+                    </OnboardingGate>
                   </ProtectedRoute>
                 }
               />
@@ -112,6 +133,9 @@ const App = () => {
                 <Route path="/tarefas" element={<TarefasPage />} />
                 <Route path="/deals" element={<DealsPage />} />
                 <Route path="/contatos" element={<ContatosPage />} />
+                {/* Gate de feature (veltzy_events) na propria pagina: mostra a tela de plano, nao redireciona. */}
+                <Route path="/eventos" element={<EventosPage />} />
+                <Route path="/eventos/:id" element={<EventoEditorPage />} />
                 <Route path="/gestao" element={<ProtectedRoute requireRole={['manager', 'admin', 'super_admin']}><GestaoPage /></ProtectedRoute>} />
                 {/* Aliases legados mantidos de proposito: preservam links salvos/bookmarks antigos. Nao remover. */}
                 <Route path="/sellers" element={<Navigate to="/gestao?tab=vendedores" replace />} />

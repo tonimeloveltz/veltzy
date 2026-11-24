@@ -574,3 +574,25 @@ verify_jwt = true
 
 [functions.zapi-send]
 verify_jwt = true
+
+# Eventos (Fase 1, specs/eventos/SPEC.md bloco b). Publicas: a pagina /e/:slug nao tem login;
+# a defesa e honeypot + tempo minimo + rate limit por ip_hash + token de 32 bytes.
+[functions.event-public]
+verify_jwt = false
+
+[functions.event-register]
+verify_jwt = false
+
+[functions.event-registration]
+verify_jwt = false
+
+# Cron (pg_cron -> invoke_event_scheduler) e disparo interno: isCronAuthorized no codigo.
+[functions.event-scheduler]
+verify_jwt = false
+
+[functions.event-dispatcher]
+verify_jwt = false
+
+# "Adicionar inscrito" pelo app, com JWT do usuario; papel e tenant checados no codigo.
+[functions.event-admin-register]
+verify_jwt = true

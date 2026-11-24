@@ -23,6 +23,8 @@ export interface CompanyFeatures {
   delivery_metrics_enabled?: boolean
   /** Agente de prospecção em grupos de WhatsApp (feature oculta, v1 só a Veltz). Ausente = false. */
   prospect_groups_enabled?: boolean
+  /** Eventos (pagina de inscricao que vira negocio). Ligada pelo Hub. Ausente = false. */
+  veltzy_events?: boolean
 }
 
 // ---- mkt-ativo (disparo em massa / campanhas) ----
@@ -480,6 +482,8 @@ export interface UpdateLeadInput {
 
 export type DealStatus = 'open' | 'won' | 'lost' | 'archived' | 'pending_assignment'
 
+export type DealPriority = 'low' | 'medium' | 'high'
+
 export interface Deal {
   id: string
   company_id: string
@@ -499,6 +503,8 @@ export interface Deal {
   origin_campaign_id: string | null
   origin_utm_campaign: string | null
   routing_rule_id: string | null
+  // prioridade gravada pela inscricao em evento (D5, a validar); null = sem prioridade
+  priority?: DealPriority | null
   created_at: string
   updated_at: string
   // joins

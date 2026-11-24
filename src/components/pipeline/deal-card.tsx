@@ -14,6 +14,7 @@ import { useRoles } from '@/hooks/use-roles'
 import { useLeadTaskCount } from '@/hooks/use-tasks'
 import { useLeadTags } from '@/hooks/use-lead-tags'
 import { TagBadge } from '@/components/shared/tag-badge'
+import { DealPriorityBadge } from '@/components/shared/deal-priority-badge'
 import { usePipelineStages } from '@/hooks/use-pipeline-stages'
 import { useMoveDealStage, useUpdateDealValueAndMove } from '@/hooks/use-deals'
 import { timeAgo } from '@/lib/time'
@@ -265,6 +266,7 @@ const DealCard = ({ deal, onEditDeal, onTransfer, onMovePipeline, onCreateDeal, 
         <div className="flex items-center justify-between gap-2">
           <LeadSourceBadge source={lead?.lead_sources ?? null} />
           <div className="flex items-center gap-2">
+            <DealPriorityBadge priority={deal.priority} />
             {deal.value ? (
               <span className="text-xs font-semibold text-primary">
                 R$ {deal.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}

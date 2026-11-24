@@ -17,6 +17,7 @@ import {
   Megaphone,
   Workflow,
   Radar,
+  CalendarDays,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useIsMobile } from '@/hooks/use-mobile'
@@ -90,6 +91,7 @@ const SidebarContent = ({ onNavigate }: SidebarContentProps) => {
     { label: 'Inbox', href: '/inbox', icon: MessageSquare },
     { label: 'Negócios', href: '/deals', icon: Handshake },
     { label: 'Contatos', href: '/contatos', icon: Contact },
+    { label: 'Eventos', href: '/eventos', icon: CalendarDays, visible: company?.features?.veltzy_events === true },
     { label: 'Tarefas', href: '/tarefas', icon: ListTodo },
     { label: 'SDR IA', href: '/sdr-ia', icon: Zap, visible: (canAccessAdmin || isManager) && isSdrAgentV2 },
     { label: 'Campanhas', href: '/campanhas', icon: Megaphone, visible: (canAccessAdmin || isManager) && !!company?.features?.mkt_ativo_enabled },
