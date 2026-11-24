@@ -6,13 +6,12 @@ import { leadDisplayName } from '@/lib/phone'
 import { DeleteConversationButton } from '@/components/inbox/delete-conversation-button'
 import { useRoles } from '@/hooks/use-roles'
 import { Checkbox } from '@/components/ui/checkbox'
-import { hasPendingReply } from '@/lib/response-sla'
 import type { LeadWithLastMessage } from '@/types/database'
 
 interface ConversationItemProps {
   lead: LeadWithLastMessage
   isSelected: boolean
-  /** Resposta pendente ha mais que o prazo de SLA (regra em lib/response-sla). */
+  /** Espera resposta ha mais que o prazo de SLA (regra em lib/needs-reply). */
   isOverdue: boolean
   onClick: () => void
   /** Selecao em massa (admin/manager). Ausente = linha sem checkbox. */
@@ -54,17 +53,9 @@ const messagePreview = (lead: LeadWithLastMessage): string => {
   return prefix + msg.content
 }
 
-const getWaitingMinutes = (lead: LeadWithLastMessage): number | null => {
-  if (!hasPendingReply(lead) || !lead.last_message) return null
-  const diff = Date.now() - new Date(lead.last_message.created_at).getTime()
-  return Math.round(diff / 60000)
-}
-
 const ConversationItem = ({ lead, isSelected, isOverdue, onClick, selection }: ConversationItemProps) => {
   const avatarSrc = lead.avatar_url || undefined
   const lastTime = lead.last_message?.created_at ?? lead.updated_at
-  const waitingMinutes = getWaitingMinutes(lead)
-  const isWarning = waitingMinutes !== null && waitingMinutes >= 15 && !isOverdue
   const hasUnread = (lead.unread_count ?? 0) > 0
   const { isManager } = useRoles()
 
@@ -78,9 +69,7 @@ const ConversationItem = ({ lead, isSelected, isOverdue, onClick, selection }: C
             ? 'bg-primary/5 border-l-primary/40'
             : isSelected
             ? 'bg-primary/10 border-l-primary'
-            : isOverdue
-              ? 'border-l-destructive bg-destructive/5 hover:bg-destructive/10'
-              : 'border-l-transparent hover:bg-muted/50'
+            : 'border-l-transparent hover:bg-muted/50'
         )}
       >
         <div className="relative shrink-0">
@@ -98,18 +87,15 @@ const ConversationItem = ({ lead, isSelected, isOverdue, onClick, selection }: C
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2">
             <p className="text-sm font-medium truncate">{leadDisplayName(lead.name, lead.phone)}</p>
-            <div className="flex items-center gap-1 shrink-0">
-              {isOverdue && (
-                <Clock className="h-3 w-3 text-destructive" />
+            <div
+              className={cn(
+                'flex items-center gap-1 shrink-0 text-[10px]',
+                isOverdue ? 'text-amber-600 dark:text-amber-500' : 'text-muted-foreground',
               )}
-              <span className={cn(
-                'text-[10px]',
-                isOverdue ? 'text-destructive font-medium' :
-                isWarning ? 'text-yellow-600 font-medium' :
-                'text-muted-foreground',
-              )}>
-                {timeAgo(lastTime)}
-              </span>
+              title={isOverdue ? `Aguardando resposta há ${timeAgo(lastTime)}` : undefined}
+            >
+              {isOverdue && <Clock className="h-3 w-3" aria-hidden />}
+              <span>{timeAgo(lastTime)}</span>
             </div>
           </div>
           <div className="flex items-center gap-1">

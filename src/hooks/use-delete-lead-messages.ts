@@ -17,7 +17,6 @@ export const useDeleteLeadMessages = () => {
       queryClient.setQueryData<Message[]>(['messages', leadId], [])
       queryClient.invalidateQueries({ queryKey: ['conversations'] })
 
-      // Zero apagadas sem erro e a RLS barrando calada, nao sucesso.
       if (deleted === 0) {
         toast.error('Nenhuma mensagem foi apagada')
         return

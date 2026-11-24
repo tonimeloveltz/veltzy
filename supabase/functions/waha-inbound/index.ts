@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { handleInboundMessage } from '../_shared/lead-inbound-handler.ts'
 import { normalizePhoneBR } from '../_shared/phone.ts'
+import { normalizeWahaMessageId } from '../_shared/waha-message-id.ts'
 
 import { getCorsHeaders } from '../_shared/cors.ts'
 
@@ -30,6 +31,9 @@ interface WahaInboundPayload {
   reaction_emoji?: string
   ad_context?: Record<string, unknown>
   profile_pic_url?: string
+  /** true = mensagem enviada pelo próprio número (celular/WhatsApp Web). Encaminhado
+   *  pelo Hub só com WAHA_FORWARD_FROM_ME; `phone` é o destinatário (o lead). */
+  from_me?: boolean
 }
 
 Deno.serve(async (req) => {
@@ -58,6 +62,7 @@ Deno.serve(async (req) => {
       session_name: payload.session_name,
       phone: payload.phone,
       message_type: payload.message_type,
+      from_me: payload.from_me === true,
     }))
 
     const url = Deno.env.get('SUPABASE_URL')!
@@ -118,15 +123,19 @@ Deno.serve(async (req) => {
     }
 
     // 4. Delegar para o handler compartilhado, carimbando o provider da conversa.
+    //    from_me (enviada pelo celular do vendedor): grava como 'human' e não aciona
+    //    SDR/oportunidade/automação, igual ao echo da coexistence. O external_id
+    //    normalizado casa com o gravado pelo envio do Veltzy (dedupe do echo).
+    const fromMe = payload.from_me === true
     const result = await handleInboundMessage({
       supabaseUrl: url,
       supabaseKey: key,
       companyId: payload.company_id,
       phone: normalizedPhone,
-      senderName: payload.sender_name ?? null,
+      senderName: fromMe ? null : (payload.sender_name ?? null),
       content,
       messageType,
-      externalId: payload.message_id,
+      externalId: normalizeWahaMessageId(payload.message_id),
       fileUrl: payload.media_url ?? null,
       fileName: payload.file_name ?? null,
       fileMimeType: payload.media_mime_type ?? null,
@@ -134,7 +143,8 @@ Deno.serve(async (req) => {
       instanceName: payload.session_name,
       whatsappProvider: 'waha',
       adContext: payload.ad_context ?? null,
-      profilePicUrl: payload.profile_pic_url ?? null,
+      profilePicUrl: fromMe ? null : (payload.profile_pic_url ?? null),
+      ...(fromMe ? { senderType: 'human' as const, skipSideEffects: true } : {}),
     })
 
     console.log(`[waha-inbound] Processed: leadId=${result.leadId}, isNew=${result.isNewLead}`)

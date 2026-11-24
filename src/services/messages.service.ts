@@ -46,53 +46,49 @@ export const sendMessage = async (companyId: string, payload: SendMessagePayload
   return data
 }
 
-/**
- * Apaga TODAS as mensagens de uma conversa. O lead fica: continua no pipeline e
- * em Contatos, so sai da inbox (useConversationList descarta lead sem mensagem).
- *
- * Devolve quantas linhas o banco apagou de fato, lidas do .select() do delete, e
- * nao quantas se pediu: se a RLS barrar, o delete "passa" sem erro e apaga zero.
- *
- * Nao apaga nada no WhatsApp, e nao remove os anexos do bucket chat-attachments.
- */
-export const deleteLeadMessages = async (companyId: string, leadId: string): Promise<number> => {
-  const { data, error } = await db()
-    .from('messages')
-    .delete()
-    .eq('lead_id', leadId)
-    .eq('company_id', companyId)
-    .select('id')
-  if (error) throw error
-  return data.length
+/** Senha de confirmacao recusada pela edge inbox-delete-messages (401 senha_invalida). */
+export class InvalidPasswordError extends Error {
+  constructor() {
+    super('Senha incorreta')
+    this.name = 'InvalidPasswordError'
+  }
 }
 
 /**
- * Versao em lote de deleteLeadMessages: apaga TODAS as mensagens das conversas
- * selecionadas na inbox. Os leads ficam (pipeline e Contatos), so saem da inbox.
+ * Exclusao de mensagens so pela edge inbox-delete-messages (o client nao tem
+ * policy de DELETE em veltzy.messages). A edge decide pela quantidade: 2+ leads
+ * exige admin + senha; 1 lead aceita gestor sem senha. Devolve quantas linhas o
+ * banco apagou de fato (count no servidor).
  *
- * Em lotes de 50 leads para o `in` nao estourar a URL. A contagem vem do
- * `count: 'exact'` do proprio delete, e nao de `.select().length`: o max_rows
- * (1000) cortaria as linhas devolvidas em silencio, e um lote de conversas passa
- * de mil mensagens com facilidade. A contagem e feita no servidor, entao nao
- * precisa paginar. Zero com ids pedidos = RLS barrando calada.
- *
- * Nao apaga nada no WhatsApp, e nao remove os anexos do bucket chat-attachments.
+ * Os leads ficam (pipeline e Contatos), so saem da inbox. Nao apaga nada no
+ * WhatsApp nem os anexos do bucket chat-attachments.
  */
-export const deleteMessagesByLeads = async (companyId: string, leadIds: string[]): Promise<number> => {
-  const BATCH_SIZE = 50
-  let deleted = 0
-  for (let i = 0; i < leadIds.length; i += BATCH_SIZE) {
-    const batch = leadIds.slice(i, i + BATCH_SIZE)
-    const { count, error } = await db()
-      .from('messages')
-      .delete({ count: 'exact' })
-      .in('lead_id', batch)
-      .eq('company_id', companyId)
-    if (error) throw error
-    deleted += count ?? 0
+const invokeDeleteMessages = async (
+  companyId: string,
+  leadIds: string[],
+  password?: string,
+): Promise<number> => {
+  const { data, error } = await supabase.functions.invoke<{ deleted: number }>('inbox-delete-messages', {
+    body: { company_id: companyId, lead_ids: leadIds, ...(password ? { password } : {}) },
+  })
+  if (error) {
+    const ctx = (error as { context?: Response }).context
+    if (ctx?.status === 401) {
+      const payload = await ctx.clone().json().catch(() => null) as { error?: string } | null
+      if (payload?.error === 'senha_invalida') throw new InvalidPasswordError()
+    }
+    throw error
   }
-  return deleted
+  return data?.deleted ?? 0
 }
+
+/** Apaga TODAS as mensagens de uma conversa ("x" da linha). */
+export const deleteLeadMessages = (companyId: string, leadId: string): Promise<number> =>
+  invokeDeleteMessages(companyId, [leadId])
+
+/** Versao em lote (barra de selecao, so admin): exige a senha do admin logado. */
+export const deleteMessagesByLeads = (companyId: string, leadIds: string[], password: string): Promise<number> =>
+  invokeDeleteMessages(companyId, leadIds, password)
 
 export const markAsRead = async (companyId: string, leadId: string): Promise<void> => {
   const { error } = await db()
