@@ -19,6 +19,7 @@ export interface SendMessagePayload {
   type: 'text' | 'image' | 'audio' | 'video' | 'document'
   mediaUrl?: string
   fileName?: string
+  mimeType?: string
   // Metadados de roteamento opcionais, resolvidos por whatsapp-send e lidos pelo
   // provider correspondente. Ignorados pelos providers que nao os usam.
   instanceName?: string   // Evolution: instancia do Hub
