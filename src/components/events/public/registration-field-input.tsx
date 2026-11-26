@@ -4,6 +4,7 @@ import { PhoneInput } from '@/components/ui/phone-input'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import type { FormFieldSpec } from '@/lib/events/registration-form'
+import { formatCep } from '@/lib/events/cep'
 import { formatDocumentBR } from '@/lib/events/document-br'
 import { fetchViaCep } from '@/services/viacep.service'
 import { UfSelect } from '@/components/events/public/uf-select'
@@ -23,10 +24,29 @@ const ADDRESS: Array<{ key: string; label: string; span: string }> = [
   { key: 'district', label: 'Bairro', span: 'col-span-3' }, { key: 'city', label: 'Cidade', span: 'col-span-3' },
 ]
 
-/** ViaCEP so preenche o que esta vazio; erro e silencioso. */
-const fillFromCep = async (rec: Rec, onChange: (v: unknown) => void) => {
-  const addr = await fetchViaCep(rec.cep ?? '').catch(() => null)
-  if (!addr) return
+const CLEARED_ON_UNKNOWN_CEP = ['street', 'number', 'complement', 'district', 'city', 'state'] as const
+const digitsOf = (v: string) => v.replace(/\D/g, '')
+
+/**
+ * ViaCEP so preenche o que esta vazio; CEP alterado e inexistente apaga o endereco;
+ * erro de rede e silencioso. cepOnFocus: valor do CEP no foco, para saber se mudou.
+ */
+const fillFromCep = async (rec: Rec, cepOnFocus: string, onChange: (v: unknown) => void) => {
+  const digits = digitsOf(rec.cep ?? '')
+  if (digits.length !== 8) return
+  let addr: Awaited<ReturnType<typeof fetchViaCep>>
+  try {
+    addr = await fetchViaCep(digits)
+  } catch {
+    return
+  }
+  if (!addr) {
+    if (digits === digitsOf(cepOnFocus)) return
+    const next = { ...rec }
+    for (const k of CLEARED_ON_UNKNOWN_CEP) next[k] = ''
+    onChange(next)
+    return
+  }
   const next = { ...rec }
   for (const k of ['street', 'district', 'city', 'state'] as const) if (!next[k]?.trim() && addr[k]) next[k] = addr[k]
   onChange(next)
@@ -93,8 +113,9 @@ export const RegistrationFieldInput = ({ field, value, invalid, onChange }: Regi
           {ADDRESS.map((p) => (
             <Input key={p.key} aria-label={p.label} placeholder={p.label} className={cn(p.span, ring)} value={rec[p.key] ?? ''}
               maxLength={p.key === 'cep' ? 9 : 120} inputMode={p.key === 'cep' ? 'numeric' : undefined}
-              onChange={(e) => onChange({ ...rec, [p.key]: e.target.value })}
-              onBlur={p.key === 'cep' ? () => fillFromCep(rec, onChange) : undefined} />
+              onChange={(e) => onChange({ ...rec, [p.key]: p.key === 'cep' ? formatCep(e.target.value) : e.target.value })}
+              onFocus={p.key === 'cep' ? (e) => { e.currentTarget.dataset.cepOnFocus = e.currentTarget.value } : undefined}
+              onBlur={p.key === 'cep' ? (e) => fillFromCep(rec, e.currentTarget.dataset.cepOnFocus ?? '', onChange) : undefined} />
           ))}
           <UfSelect className="col-span-6 sm:col-span-2" value={rec.state ?? ''} invalid={invalid}
             onChange={(uf) => onChange({ ...rec, state: uf })} />
