@@ -7,6 +7,7 @@ import type {
   QrCodeResult,
   ChatEntry,
 } from '../whatsapp-provider.ts'
+import { buildHubMedia } from './hub-media.ts'
 
 /**
  * Provider WAHA que envia via Edge Function do Hub (Supabase Central).
@@ -58,7 +59,7 @@ export class WahaHubProvider implements WhatsAppProvider {
       company_id: payload.companyId ?? _config.company_id,
       to: payload.phone,
       message: isMedia
-        ? { media: { type: payload.type, url: payload.mediaUrl, caption: payload.content } }
+        ? { media: buildHubMedia(payload) }
         : { text: payload.content },
     }) as { external_id?: string } | null
 
