@@ -173,6 +173,7 @@ Deno.serve(async (req) => {
           type: msgType,
           mediaUrl: payload.fileUrl,
           fileName: payload.fileName,
+          mimeType: payload.mimeType,
           ...(activeProvider === 'waha' ? { sessionName: instanceName } : { instanceName }),
           companyId,
         })
@@ -209,6 +210,7 @@ Deno.serve(async (req) => {
           type: msgType,
           mediaUrl: payload.fileUrl,
           fileName: payload.fileName,
+          mimeType: payload.mimeType,
           phoneNumberId: outbound.phoneNumberId,
           companyId,
         })
@@ -231,6 +233,7 @@ Deno.serve(async (req) => {
             type: msgType,
             mediaUrl: payload.fileUrl,
             fileName: payload.fileName,
+            mimeType: payload.mimeType,
           })
         } catch (err) {
           console.error('[whatsapp-send] Z-API send failed:', err)
