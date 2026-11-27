@@ -17,7 +17,13 @@ const optionalUrl = z.string().trim().refine((v) => v === '' || HTTP_RE.test(v),
 const hex = z.string().refine(isHexColor, 'Use uma cor no formato #RRGGBB')
 const messageSchema = z.object({ enabled: z.boolean(), text: z.string().max(1000, 'Até 1.000 caracteres') })
 
-export const MESSAGE_KINDS = ['confirmation', 'reminder_d1', 'post_present', 'post_absent', 'cancel_notice'] as const
+export const MESSAGE_KINDS = ['confirmation', 'reminder_d1', 'post_present', 'post_absent', 'cancel_notice', 'date_change'] as const
+
+/** Igual ao default do banco (migration 20261127094832): evento salvo antes dela nao tem a chave. */
+export const DATE_CHANGE_DEFAULT = {
+  enabled: true,
+  text: 'Oi, {{primeiro_nome}}! O {{evento}} mudou de data.\n📅 Agora: {{data}} às {{hora}} (antes: {{data_anterior}} às {{hora_anterior}})\n📍 {{local}}\nDetalhes e agenda: {{link_inscricao}}',
+}
 
 const optionSchema = z.object({
   id: z.string(),
@@ -102,7 +108,7 @@ export const editorSchema = z.object({
   whatsapp_session_name: z.string(),
   messages: z.object({
     confirmation: messageSchema, reminder_d1: messageSchema, post_present: messageSchema,
-    post_absent: messageSchema, cancel_notice: messageSchema,
+    post_absent: messageSchema, cancel_notice: messageSchema, date_change: messageSchema,
   }),
 }).superRefine((v, ctx) => {
   for (const kind of MESSAGE_KINDS) {
@@ -187,7 +193,10 @@ export const eventToValues = (e: Event, fields: EventFormField[], assignees: str
   fixed_assignee_id: s(e.fixed_assignee_id),
   assignees,
   whatsapp_session_name: s(e.whatsapp_session_name),
-  messages: Object.fromEntries(MESSAGE_KINDS.map((k) => [k, { ...e.messages[k] }])) as EventMessagesConfig,
+  // date_change pode faltar em evento salvo antes da migration do aviso
+  messages: Object.fromEntries(MESSAGE_KINDS.map((k) => [k, {
+    ...((e.messages as Partial<EventMessagesConfig>)[k] ?? (k === 'date_change' ? DATE_CHANGE_DEFAULT : { enabled: false, text: '' })),
+  }])) as EventMessagesConfig,
 })
 
 const n = (v: string) => (v.trim() === '' ? null : v.trim())

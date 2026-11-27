@@ -12,6 +12,9 @@ export interface EventMessageVars {
   link_inscricao: string
   link_confirmar: string
   link_online: string
+  /** so no aviso de data alterada */
+  data_anterior: string
+  hora_anterior: string
 }
 
 /**
@@ -40,6 +43,14 @@ export function formatEventDate(iso: string | null, timeZone: string): string {
   }).formatToParts(new Date(iso))
   const clean = (s: string) => s.replace('.', '').toLowerCase()
   return `${clean(part(parts, 'weekday'))}, ${part(parts, 'day')} de ${clean(part(parts, 'month'))}`
+}
+
+/** Os dois instantes caem no mesmo dia do calendario no fuso do evento. Nulo nunca e o mesmo dia. */
+export function isSameEventDay(a: string | null, b: string | null, timeZone: string): boolean {
+  if (!a || !b) return false
+  const day = (iso: string) => new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' })
+    .format(new Date(iso))
+  return day(a) === day(b)
 }
 
 /** "09:00" no fuso do evento. */

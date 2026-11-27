@@ -13,9 +13,11 @@ interface MessageCardProps {
   title: string
   when: string
   sample: Partial<EventMessageVars>
+  /** botoes de variavel so deste card */
+  extraVariables?: Array<{ key: keyof EventMessageVars; label: string }>
 }
 
-export const MessageCard = ({ kind, title, when, sample }: MessageCardProps) => {
+export const MessageCard = ({ kind, title, when, sample, extraVariables = [] }: MessageCardProps) => {
   const { control, setValue, formState: { errors } } = useFormContext<EditorValues>()
   const msg = useWatch({ control, name: `messages.${kind}` })
   const area = useRef<HTMLTextAreaElement>(null)
@@ -48,7 +50,7 @@ export const MessageCard = ({ kind, title, when, sample }: MessageCardProps) => 
             <Textarea ref={area} rows={6} value={msg.text} maxLength={1000} aria-label={`Texto: ${title}`}
               onChange={(e) => setText(e.target.value)} />
             <div className="flex flex-wrap gap-1">
-              {MESSAGE_VARIABLES.map((v) => (
+              {[...MESSAGE_VARIABLES, ...extraVariables].map((v) => (
                 <button key={v.key} type="button" onClick={() => insert(v.key)}
                   className="rounded-full border px-2 py-0.5 text-xs hover:border-primary hover:text-primary">
                   {v.label}

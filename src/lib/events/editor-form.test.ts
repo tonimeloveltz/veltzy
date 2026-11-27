@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Event, EventFormField } from '@/types/events'
-import { draftsToRows, editorSchema, eventToValues, valuesToEventPatch } from './editor-form'
+import { DATE_CHANGE_DEFAULT, draftsToRows, editorSchema, eventToValues, valuesToEventPatch } from './editor-form'
 import { newFieldDraft, PREDEFINED_FIELDS, CUSTOM_FIELDS } from './field-catalog'
 
 const autoTag = (t: string) => `Evento: ${t}`
@@ -37,6 +37,13 @@ describe('eventToValues', () => {
     expect(v.starts_at).toBe('2026-11-24T09:00')
     expect(v.unlimited).toBe(true)
     expect(v.fields.map((f) => f.key)).toEqual(['first_name', 'email'])
+  })
+
+  it('evento salvo antes do aviso de data ganha o aviso ligado com o texto padrao', () => {
+    const v = eventToValues(event, [])
+    expect(v.messages.date_change).toEqual(DATE_CHANGE_DEFAULT)
+    const saved = { ...event, messages: { ...event.messages, date_change: { enabled: false, text: 'x' } } } as Event
+    expect(eventToValues(saved, []).messages.date_change).toEqual({ enabled: false, text: 'x' })
   })
 })
 

@@ -19,6 +19,7 @@ export type EventMessageKind =
   | 'post_absent'
   | 'cancel_notice'
   | 'duplicate_resend'
+  | 'date_change'
 
 export type EventMessageStatus =
   | 'pending'
@@ -243,6 +244,8 @@ export interface EventMessage {
   instance_name: string | null
   provider_message_id: string | null
   rendered_text: string | null
+  /** so em date_change: inicio que o inscrito conhecia */
+  ref_starts_at: string | null
   created_at: string
   updated_at: string
 }

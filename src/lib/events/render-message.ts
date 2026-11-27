@@ -13,6 +13,9 @@ export interface EventMessageVars {
   link_inscricao: string
   link_confirmar: string
   link_online: string
+  /** so no aviso de data alterada */
+  data_anterior: string
+  hora_anterior: string
 }
 
 export function renderEventMessage(template: string, vars: Partial<EventMessageVars>): string {
@@ -71,4 +74,10 @@ export const MESSAGE_VARIABLES: Array<{ key: keyof EventMessageVars; label: stri
   { key: 'link_inscricao', label: 'Link da inscrição' },
   { key: 'link_confirmar', label: 'Link para confirmar' },
   { key: 'link_online', label: 'Link da transmissão' },
+]
+
+/** Botoes extras so do card do aviso de data alterada. */
+export const DATE_CHANGE_VARIABLES: Array<{ key: keyof EventMessageVars; label: string }> = [
+  { key: 'data_anterior', label: 'Data anterior' },
+  { key: 'hora_anterior', label: 'Hora anterior' },
 ]

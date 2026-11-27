@@ -1,5 +1,5 @@
 import { assertEquals, assertStringIncludes } from 'jsr:@std/assert@1'
-import { formatEventDate, formatEventLocation, formatEventTime, OPT_OUT_FOOTER, renderEventMessage } from './render.ts'
+import { formatEventDate, formatEventLocation, formatEventTime, isSameEventDay, OPT_OUT_FOOTER, renderEventMessage } from './render.ts'
 
 const TPL = 'Oi, {{primeiro_nome}}! {{evento}}\n📍 {{local}}\nLink: {{link_online}}\nDetalhes: {{link_inscricao}}'
 
@@ -43,4 +43,20 @@ Deno.test('local: online vira "Online"; presencial junta so o que existe', () =>
   assertEquals(formatEventLocation({ ...base, format: 'online' }), 'Online')
   assertEquals(formatEventLocation({ ...base, format: 'presencial' }), 'Hub Inovação - Rua A, 10 - Recife/PE')
   assertEquals(formatEventLocation({ format: 'hibrido', venue_name: null, street: null, number: null, district: null, city: 'Recife', state: null }), 'Recife')
+})
+
+Deno.test('mesmo dia: compara no fuso do evento, nao em UTC', () => {
+  const tz = 'America/Sao_Paulo'
+  // 27/11 09:00 e 27/11 22:30 em SP (01:30 de 28/11 em UTC): mesmo dia
+  assertEquals(isSameEventDay('2026-11-27T12:00:00Z', '2026-11-28T01:30:00Z', tz), true)
+  // 27/11 09:00 e 28/11 09:00 em SP: dias diferentes
+  assertEquals(isSameEventDay('2026-11-27T12:00:00Z', '2026-11-28T12:00:00Z', tz), false)
+  assertEquals(isSameEventDay(null, '2026-11-28T12:00:00Z', tz), false)
+})
+
+Deno.test('render: variaveis do aviso de data', () => {
+  const out = renderEventMessage('{{data}} às {{hora}} (antes: {{data_anterior}} às {{hora_anterior}})', {
+    data: 'sáb, 28 de nov', hora: '09:00', data_anterior: 'sex, 27 de nov', hora_anterior: '10:00',
+  })
+  assertEquals(out, 'sáb, 28 de nov às 09:00 (antes: sex, 27 de nov às 10:00)' + OPT_OUT_FOOTER)
 })

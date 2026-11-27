@@ -1,14 +1,23 @@
 import { useMutation } from '@tanstack/react-query'
-import { fetchViaCep } from '@/services/viacep.service'
+import { fetchViaCep, type ViaCepAddress } from '@/services/viacep.service'
 
-/** Erro de rede ou CEP inexistente devolvem null: o preenchimento e silencioso (SPEC aba 1). */
+export type ViaCepLookup =
+  | { status: 'found'; address: ViaCepAddress }
+  | { status: 'not_found' }
+  | { status: 'error' }
+
+/**
+ * CEP inexistente e erro de rede saem separados: so o primeiro autoriza apagar
+ * o endereco. Erro de rede continua silencioso (SPEC aba 1).
+ */
 export const useViaCep = () =>
   useMutation({
-    mutationFn: async (cep: string) => {
+    mutationFn: async (cep: string): Promise<ViaCepLookup> => {
       try {
-        return await fetchViaCep(cep)
+        const address = await fetchViaCep(cep)
+        return address ? { status: 'found', address } : { status: 'not_found' }
       } catch {
-        return null
+        return { status: 'error' }
       }
     },
   })
