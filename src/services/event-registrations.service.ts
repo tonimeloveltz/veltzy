@@ -48,6 +48,18 @@ export const listRegistrations = async (
 }
 
 /** Todas as inscricoes do evento, em paginas de 1000 (painel, CSV e check-in). */
+/** Inscricoes ativas (inscrito ou confirmado): quem recebe o aviso de data alterada. */
+export const countActiveRegistrations = async (companyId: string, eventId: string): Promise<number> => {
+  const { count, error } = await veltzy()
+    .from('event_registrations')
+    .select('id', { count: 'exact', head: true })
+    .eq('company_id', companyId)
+    .eq('event_id', eventId)
+    .in('status', ['registered', 'confirmed'])
+  if (error) throw error
+  return count ?? 0
+}
+
 export const listAllRegistrations = async (companyId: string, eventId: string): Promise<RegistrationRow[]> => {
   const all: RegistrationRow[] = []
   for (let from = 0; ; from += 1000) {

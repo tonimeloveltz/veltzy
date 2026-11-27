@@ -8,6 +8,8 @@ import { usePublishEvent } from '@/hooks/events/use-publish-event'
 import { useBeforeUnload } from '@/hooks/events/use-before-unload'
 import { useCreateEventPipeline } from '@/hooks/events/use-create-event-pipeline'
 import { editorSchema, eventToValues, type EditorValues } from '@/lib/events/editor-form'
+import { willNotifyDateChange } from '@/lib/events/date-change-notice'
+import { countActiveRegistrations } from '@/services/event-registrations.service'
 import {
   checklistItems, publishMissing, type ChecklistItem, type EditorTab,
 } from '@/lib/events/publish-checklist'
@@ -26,6 +28,8 @@ export const useEventEditor = (event: Event, fields: EventFormField[], assignees
   const createPipeline = useCreateEventPipeline()
   const [tab, setTab] = useState<EditorTab>('overview')
   const [pendingTo, setPendingTo] = useState<string | null>(null)
+  // Salvar que vai avisar os inscritos da nova data espera a confirmacao do diálogo.
+  const [dateNotice, setDateNotice] = useState<{ values: EditorValues; count: number } | null>(null)
 
   const defaults = useMemo(() => eventToValues(event, fields, assignees), [event, fields, assignees])
   const form = useForm<EditorValues>({
@@ -63,12 +67,35 @@ export const useEventEditor = (event: Event, fields: EventFormField[], assignees
   const persist = (values: EditorValues) =>
     save.mutateAsync({ values, original: event, savedFieldIds: fields.map((f) => f.id), savedAssignees: assignees })
 
-  const onSave = form.handleSubmit(async (values) => {
+  const saveNow = async (values: EditorValues) => {
     try {
       await persist(values)
       toast.success('Alterações salvas.')
     } catch { /* toast no hook */ }
+  }
+
+  const onSave = form.handleSubmit(async (values) => {
+    const notify = willNotifyDateChange({
+      status: event.status, savedStartsAt: defaults.starts_at, newStartsAt: values.starts_at,
+      timezone: event.timezone, noticeEnabled: values.messages.date_change.enabled,
+    })
+    if (notify) {
+      try {
+        const count = await countActiveRegistrations(event.company_id, event.id)
+        if (count > 0) { setDateNotice({ values, count }); return }
+      } catch {
+        toast.error('Não foi possível contar os inscritos. Tente salvar de novo.')
+        return
+      }
+    }
+    await saveNow(values)
   }, onInvalid)
+
+  const confirmDateNotice = async () => {
+    const pending = dateNotice
+    setDateNotice(null)
+    if (pending) await saveNow(pending.values)
+  }
 
   const onPublish = form.handleSubmit(async (values) => {
     if (missing.length > 0) {
@@ -106,5 +133,6 @@ export const useEventEditor = (event: Event, fields: EventFormField[], assignees
     onSave, onPublish, onUnpublish, onCreatePipeline, creatingPipeline: createPipeline.isPending,
     saving: save.isPending, publishing: publish.isPending,
     leave: { open: pendingTo !== null, request: requestNavigate, confirm: confirmLeave, cancel: () => setPendingTo(null) },
+    dateNotice: { count: dateNotice?.count ?? null, confirm: confirmDateNotice, cancel: () => setDateNotice(null) },
   }
 }

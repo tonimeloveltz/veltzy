@@ -7,6 +7,7 @@ const msgs = {
   post_present: { enabled: true, text: 'Obrigado' },
   post_absent: { enabled: true, text: 'Sentimos sua falta' },
   cancel_notice: { enabled: false, text: 'Cancelado' },
+  date_change: { enabled: true, text: 'Mudou: {{data}} (antes {{data_anterior}})' },
 }
 const base: DecisionInput = {
   kind: 'confirmation', registrationStatus: 'registered', eventStatus: 'published', messages: msgs,
@@ -56,4 +57,23 @@ Deno.test('sem sessao ou sessao desconectada', () => {
 Deno.test('limite de 20 por minuto por sessao adia', () => {
   assertEquals(decideMessageAction({ ...base, sentLastMinute: 19 }).action, 'send')
   assertEquals(decideMessageAction({ ...base, sentLastMinute: 20 }).action, 'deferred')
+})
+
+Deno.test('aviso de data: transacional, sai sem consentimento de marketing', () => {
+  assertEquals(decideMessageAction({ ...base, kind: 'date_change', eventStatus: 'closed' }),
+    { action: 'send', kind: 'date_change', template: 'Mudou: {{data}} (antes {{data_anterior}})' })
+})
+
+Deno.test('aviso de data: dia de volta ao conhecido ou evento fora do ar cancela', () => {
+  assertEquals(decideMessageAction({ ...base, kind: 'date_change', dateUnchanged: true }).action, 'canceled')
+  for (const eventStatus of ['draft', 'finished', 'canceled']) {
+    assertEquals(decideMessageAction({ ...base, kind: 'date_change', eventStatus }).action, 'canceled')
+  }
+})
+
+Deno.test('aviso de data: descadastrado e inscricao cancelada nao recebem; desligado cancela', () => {
+  assertEquals(decideMessageAction({ ...base, kind: 'date_change', leadOptOut: true }).action, 'skipped_opt_out')
+  assertEquals(decideMessageAction({ ...base, kind: 'date_change', registrationStatus: 'canceled' }).action, 'canceled')
+  const off = { ...msgs, date_change: { enabled: false, text: 'x' } }
+  assertEquals(decideMessageAction({ ...base, kind: 'date_change', messages: off }).action, 'canceled')
 })

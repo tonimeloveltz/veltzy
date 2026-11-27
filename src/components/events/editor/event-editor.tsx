@@ -3,6 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { EditorHeader } from '@/components/events/editor/editor-header'
 import { PublishChecklistCard } from '@/components/events/editor/publish-checklist-card'
 import { LeaveConfirmDialog } from '@/components/events/editor/leave-confirm-dialog'
+import { DateNoticeConfirmDialog } from '@/components/events/editor/date-notice-confirm-dialog'
 import { OverviewTab } from '@/components/events/editor/overview/overview-tab'
 import { FormTab } from '@/components/events/editor/form/form-tab'
 import { AppearanceTab } from '@/components/events/editor/appearance/appearance-tab'
@@ -83,6 +84,7 @@ export const EventEditor = ({ event, fields, assignees }: EventEditorProps) => {
           )}
         </div>
         <LeaveConfirmDialog open={ed.leave.open} onConfirm={ed.leave.confirm} onCancel={ed.leave.cancel} />
+        <DateNoticeConfirmDialog count={ed.dateNotice.count} onConfirm={ed.dateNotice.confirm} onCancel={ed.dateNotice.cancel} />
       </div>
     </FormProvider>
   )

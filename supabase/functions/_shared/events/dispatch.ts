@@ -8,11 +8,12 @@
 import type { PublicClient, VeltzyClient } from './clients.ts'
 import { createProvider } from '../whatsapp-factory.ts'
 import type { WhatsAppConfig } from '../whatsapp-provider.ts'
-import { formatEventDate, formatEventLocation, formatEventTime, renderEventMessage } from './render.ts'
+import { formatEventDate, formatEventLocation, formatEventTime, isSameEventDay, renderEventMessage } from './render.ts'
 import { confirmUrl, registrationUrl } from './public-urls.ts'
 
 export type MessageKind =
   | 'confirmation' | 'reminder_d1' | 'post_present' | 'post_absent' | 'cancel_notice' | 'duplicate_resend'
+  | 'date_change'
 
 export const SESSION_RATE_LIMIT = 20 // envios 'sent' por sessao a cada 60 s
 
@@ -29,6 +30,8 @@ export interface DecisionInput {
   sessionName: string | null
   sessionConnected: boolean
   sentLastMinute: number
+  /** date_change: o inicio atual cai no mesmo dia que o inscrito ja conhecia (ref_starts_at) */
+  dateUnchanged?: boolean
 }
 
 export type Decision =
@@ -43,6 +46,10 @@ export function decideMessageAction(i: DecisionInput): Decision {
 
   // 1. inscricao cancelada, ou evento cancelado e nao e o aviso de cancelamento
   if (i.registrationStatus === 'canceled' || (i.eventStatus === 'canceled' && kind !== 'cancel_notice')) {
+    return { action: 'canceled', kind }
+  }
+  // aviso de data: evento fora do ar, ou o dia voltou ao que o inscrito ja conhecia
+  if (kind === 'date_change' && (!['published', 'closed'].includes(i.eventStatus) || i.dateUnchanged)) {
     return { action: 'canceled', kind }
   }
   // 2. descadastrado (SAIR) nao recebe nada, nem transacional
@@ -95,6 +102,8 @@ interface QueuedMessage {
   event_id: string
   registration_id: string
   kind: MessageKind
+  /** so em date_change: inicio que o inscrito conhecia */
+  ref_starts_at: string | null
 }
 
 interface RegRow {
@@ -243,6 +252,7 @@ export async function runDispatch(
           sessionName: session,
           sessionConnected: session ? sessionStatus.get(session) === true : false,
           sentLastMinute,
+          dateUnchanged: msg.kind === 'date_change' && isSameEventDay(msg.ref_starts_at, event.starts_at, event.timezone),
         })
 
         if (decision.action !== 'send') {
@@ -258,6 +268,8 @@ export async function runDispatch(
           evento: event.title,
           data: formatEventDate(event.starts_at, event.timezone),
           hora: formatEventTime(event.starts_at, event.timezone),
+          data_anterior: formatEventDate(msg.ref_starts_at, event.timezone),
+          hora_anterior: formatEventTime(msg.ref_starts_at, event.timezone),
           local: formatEventLocation(event),
           link_inscricao: registrationUrl(event.slug, reg.public_token),
           link_confirmar: confirmUrl(event.slug, reg.public_token),

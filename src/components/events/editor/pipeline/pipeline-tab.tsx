@@ -21,6 +21,6 @@ export const PipelineTab = (p: PipelineTabProps) => (
     <AssignmentSection eventId={p.event.id} rrCursor={p.event.rr_cursor} savedQueue={p.savedQueue} />
     <QualificationRules onOpenForm={p.onOpenForm} />
     <WhatsappSessionSection readOnly={p.readOnly} />
-    <MessagesSection timezone={p.event.timezone} />
+    <MessagesSection timezone={p.event.timezone} savedStartsAt={p.event.starts_at} />
   </div>
 )
